@@ -8,7 +8,7 @@ template <typename value_at>
 struct generator_gt {
     using value_span_t = value_at;
 
-    virtual ~generator_gt() = 0;
+    virtual ~generator_gt() {}
 
     virtual value_span_t generate() = 0;
     virtual value_span_t last() = 0;

@@ -13,7 +13,7 @@ enum class operation_kind_t {
     insert_k,
     update_k,
     read_k,
-    delete_k,
+    remove_k,
     batch_read_k,
     range_select_k,
     scan_k,

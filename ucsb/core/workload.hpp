@@ -3,6 +3,7 @@
 #include <cstddef>
 #include <string>
 #include <vector>
+#include <fstream>
 #include <nlohmann/json.hpp>
 
 #include "types.hpp"
@@ -13,13 +14,15 @@ using json = nlohmann::json;
 namespace ucsb {
 
 struct workload_t {
+    std::string name;
+
     size_t records_count = 0;
     size_t operations_count = 0;
 
     double insert_proportion = 0;
     double update_proportion = 0;
     double read_proportion = 0;
-    double delete_proportion = 0;
+    double remove_proportion = 0;
     double batch_read_proportion = 0;
     double range_select_proportion = 0;
     double scan_proportion = 0;
@@ -72,30 +75,32 @@ bool load(fs::path const& path, workloads_t& workloads) {
     for (auto j_workload = j_workloads.begin(); j_workload != j_workloads.end(); ++j_workload) {
         workload_t workload;
 
-        workload.records_count = j_workload["records_count"].get<size_t>();
-        workload.operations_count = j_workload["operations_count"].get<size_t>();
+        workload.name = (*j_workload)["name"].get<std::string>();
 
-        workload.insert_proportion = j_workload["insert_proportion"].get<double>();
-        workload.update_proportion = j_workload["update_proportion"].get<double>();
-        workload.read_proportion = j_workload["read_proportion"].get<double>();
-        workload.delete_proportion = j_workload["delete_proportion"].get<double>();
-        workload.batch_read_proportion = j_workload["batch_read_proportion"].get<double>();
-        workload.range_select_proportion = j_workload["range_select_proportion"].get<double>();
-        workload.scan_proportion = j_workload["scan_proportion"].get<double>();
+        workload.records_count = (*j_workload)["records_count"].get<size_t>();
+        workload.operations_count = (*j_workload)["operations_count"].get<size_t>();
 
-        workload.key_dist = parse_distribution(j_workload["key_dist"].get<std::string>());
+        workload.insert_proportion = (*j_workload)["insert_proportion"].get<double>();
+        workload.update_proportion = (*j_workload)["update_proportion"].get<double>();
+        workload.read_proportion = (*j_workload)["read_proportion"].get<double>();
+        workload.remove_proportion = (*j_workload)["remove_proportion"].get<double>();
+        workload.batch_read_proportion = (*j_workload)["batch_read_proportion"].get<double>();
+        workload.range_select_proportion = (*j_workload)["range_select_proportion"].get<double>();
+        workload.scan_proportion = (*j_workload)["scan_proportion"].get<double>();
 
-        workload.value_length = j_workload["value_length"].get<size_t>();
-        workload.value_length_dist = parse_distribution(j_workload["value_length_dist"].get<std::string>());
+        workload.key_dist = parse_distribution((*j_workload)["key_dist"].get<std::string>());
 
-        workload.batch_length_dist = parse_distribution(j_workload["batch_length_dist"].get<std::string>());
-        workload.batch_min_length = j_workload["batch_min_length"].get<size_t>();
-        workload.batch_max_length = j_workload["batch_max_length"].get<size_t>();
+        workload.value_length = (*j_workload)["value_length"].get<size_t>();
+        workload.value_length_dist = parse_distribution((*j_workload)["value_length_dist"].get<std::string>());
 
-        workload.range_select_min_length = j_workload["range_select_min_length"].get<size_t>();
-        workload.range_select_max_length = j_workload["range_select_max_length"].get<size_t>();
+        workload.batch_length_dist = parse_distribution((*j_workload)["batch_length_dist"].get<std::string>());
+        workload.batch_min_length = (*j_workload)["batch_min_length"].get<size_t>();
+        workload.batch_max_length = (*j_workload)["batch_max_length"].get<size_t>();
+
+        workload.range_select_min_length = (*j_workload)["range_select_min_length"].get<size_t>();
+        workload.range_select_max_length = (*j_workload)["range_select_max_length"].get<size_t>();
         workload.range_select_length_dist =
-            parse_distribution(j_workload["range_select_length_dist"].get<std::string>());
+            parse_distribution((*j_workload)["range_select_length_dist"].get<std::string>());
     }
 
     return true;

@@ -2,11 +2,12 @@
 
 #include <memory>
 #include <vector>
-#include <format>
+#include <fmt/format.h>
 
 #include "types.hpp"
 #include "ucsb/core/workload.hpp"
 #include "ucsb/core/db.hpp"
+#include "ucsb/core/helpers.hpp"
 #include "ucsb/core/generators/generator.hpp"
 #include "ucsb/core/generators/const_generator.hpp"
 #include "ucsb/core/generators/counter_generator.hpp"
@@ -19,6 +20,7 @@
 namespace ucsb {
 
 struct transaction_t {
+    using generator_t = std::unique_ptr<generator_gt<size_t>>;
     using key_generator_t = std::unique_ptr<generator_gt<key_t>>;
     using value_length_generator_t = std::unique_ptr<generator_gt<value_length_t>>;
 
@@ -27,14 +29,14 @@ struct transaction_t {
     operation_result_t do_insert();
     operation_result_t do_update();
     operation_result_t do_read();
-    operation_result_t do_delete();
+    operation_result_t do_remove();
     operation_result_t do_batch_read();
     operation_result_t do_range_select();
     operation_result_t do_scan();
 
   private:
-    inline key_generator_t create_key_generator(workload_t const& workload);
-    inline generator_t create_value_length_generator(workload_t const& workload);
+    inline key_generator_t create_key_generator(workload_t const& workload, counter_generator_t& counter_generator);
+    inline value_length_generator_t create_value_length_generator(workload_t const& workload);
     inline generator_t create_batch_length_generator(workload_t const& workload);
     inline generator_t create_range_select_length_generator(workload_t const& workload);
 
@@ -45,7 +47,8 @@ struct transaction_t {
     workload_t workload_;
     db_t* db_;
 
-    key_generator_t insert_key_sequence_;
+    key_generator_t insert_key_sequence_counter_generator;
+    key_generator_t insert_key_sequence_generator;
     key_generator_t key_generator_;
     keys_t keys_;
 
@@ -58,13 +61,15 @@ struct transaction_t {
 };
 
 inline transaction_t::transaction_t(workload_t const& workload, db_t& db)
-    : workload_(workload), db_(&db), insert_key_sequence_(nullptr) {
+    : workload_(workload), db_(&db), insert_key_sequence_generator(nullptr) {
 
-    if (workload.insert_proportion == 1.0)
-        insert_key_sequence_.reset(new counter_generator_t(0));
-    else
-        insert_key_sequence_.reset(new acknowledged_counter_generator_t(workload.records_count));
-    key_generator_ = create_key_generator(workload);
+    if (workload.insert_proportion == 1.0) // Initialization case
+        insert_key_sequence_generator.reset(new counter_generator_t(0));
+    else {
+        auto acknowledged_counter_generator = new acknowledged_counter_generator_t(workload.records_count);
+        insert_key_sequence_generator.reset(acknowledged_counter_generator);
+        key_generator_ = create_key_generator(workload, *acknowledged_counter_generator);
+    }
     keys_ = keys_t(workload.batch_max_length);
 
     batch_length_generator_ = create_batch_length_generator(workload);
@@ -75,7 +80,7 @@ inline transaction_t::transaction_t(workload_t const& workload, db_t& db)
 }
 
 operation_result_t transaction_t::do_insert() {
-    key_t key = insert_key_sequence_->generate();
+    key_t key = insert_key_sequence_generator->generate();
     value_span_t value = generate_value();
     return db_->insert(key, value);
 }
@@ -86,9 +91,9 @@ operation_result_t transaction_t::do_update() {
     return db_->update(key, value);
 }
 
-operation_result_t transaction_t::do_delete() {
+operation_result_t transaction_t::do_remove() {
     key_t key = generate_key();
-    return db_->delete (key);
+    return db_->remove(key);
 }
 
 operation_result_t transaction_t::do_read() {
@@ -115,7 +120,8 @@ operation_result_t transaction_t::do_scan() {
     return db_->scan(single_value);
 }
 
-inline key_generator_t transaction_t::create_key_generator(workload_t const& workload) {
+inline transaction_t::key_generator_t transaction_t::create_key_generator(workload_t const& workload,
+                                                                          counter_generator_t& counter_generator) {
     key_generator_t generator;
     switch (workload.key_dist) {
     case distribution_kind_t::uniform_k: generator.reset(new uniform_generator_t(0, workload.records_count - 1)); break;
@@ -124,10 +130,8 @@ inline key_generator_t transaction_t::create_key_generator(workload_t const& wor
         generator.reset(new scrambled_zipfian_generator_t(workload.records_count + new_keys));
         break;
     }
-    case distribution_kind_t::skewed_latest_k:
-        generator.reset(new skewed_latest_generator_t(*insert_key_sequence_));
-        break;
-    default: throw exception_t(std::format("Unknown key distribution: {}", int(workload.key_dist)));
+    case distribution_kind_t::skewed_latest_k: generator.reset(new skewed_latest_generator_t(counter_generator)); break;
+    default: throw exception_t(format("Unknown key distribution: {}", int(workload.key_dist)));
     }
     return generator;
 }
@@ -140,12 +144,12 @@ inline transaction_t::value_length_generator_t transaction_t::create_value_lengt
     case distribution_kind_t::const_k: generator.reset(new const_generator_t(workload.value_length)); break;
     case distribution_kind_t::uniform_k: generator.reset(new uniform_generator_t(1, workload.value_length)); break;
     case distribution_kind_t::zipfian_k: generator.reset(new zipfian_generator_t(1, workload.value_length)); break;
-    default: throw exception_t(std::format("Unknown value length distribution: {}", int(workload.value_length_dist)));
+    default: throw exception_t(format("Unknown value length distribution: {}", int(workload.value_length_dist)));
     }
     return generator;
 }
 
-inline generator_t transaction_t::create_batch_length_generator(workload_t const& workload) {
+inline transaction_t::generator_t transaction_t::create_batch_length_generator(workload_t const& workload) {
     generator_t generator;
     switch (workload.batch_length_dist) {
     case distribution_kind_t::uniform_k:
@@ -154,13 +158,12 @@ inline generator_t transaction_t::create_batch_length_generator(workload_t const
     case distribution_kind_t::zipfian_k:
         generator.reset(new zipfian_generator_t(workload.batch_min_length, workload.batch_max_length));
         break;
-    default:
-        throw exception_t(std::format("Unknown range select length distribution: {}", int(workload.batch_length_dist)));
+    default: throw exception_t(format("Unknown range select length distribution: {}", int(workload.batch_length_dist)));
     }
     return generator;
 }
 
-inline generator_t transaction_t::create_range_select_length_generator(workload_t const& workload) {
+inline transaction_t::generator_t transaction_t::create_range_select_length_generator(workload_t const& workload) {
     generator_t generator;
     switch (workload.range_select_length_dist) {
     case distribution_kind_t::uniform_k:
@@ -171,7 +174,7 @@ inline generator_t transaction_t::create_range_select_length_generator(workload_
         break;
     default:
         throw exception_t(
-            std::format("Unknown range select length distribution: {}", int(workload.range_select_length_dist)));
+            format("Unknown range select length distribution: {}", int(workload.range_select_length_dist)));
     }
     return generator;
 }
@@ -180,14 +183,14 @@ inline key_t transaction_t::generate_key() {
     key_t key = 0;
     do {
         key = key_generator_->generate();
-    } while (key > insert_key_sequence_->last());
+    } while (key > insert_key_sequence_generator->last());
     return key;
 }
 
 inline keys_span_t transaction_t::generate_batch_keys() {
     size_t batch_length = batch_length_generator_->generate();
     keys_span_t keys(keys_.data(), batch_length);
-    for (size_t i = 0 < batch_length; ++i)
+    for (size_t i = 0; i < batch_length; ++i)
         keys[i] = generate_key();
     return keys;
 }
@@ -195,8 +198,8 @@ inline keys_span_t transaction_t::generate_batch_keys() {
 inline value_span_t transaction_t::generate_value() {
     value_span_t value(value_buffer_.data(), value_buffer_.size());
     for (size_t i = 0; i < value.size(); ++i)
-        value[i] = value_generator_.generate();
-    return value
+        value[i] = std::byte(value_generator_.generate());
+    return value;
 }
 
 } // namespace ucsb

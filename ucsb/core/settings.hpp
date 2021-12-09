@@ -1,5 +1,6 @@
 #pragma once
 
+#include <fstream>
 #include <nlohmann/json.hpp>
 
 #include "ucsb/core/types.hpp"

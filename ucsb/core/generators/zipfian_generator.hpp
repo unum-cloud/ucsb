@@ -15,19 +15,7 @@ struct zipfian_generator_t : public generator_gt<size_t> {
     inline zipfian_generator_t(size_t items_count) : zipfian_generator_t(0, items_count - 1) {}
     inline zipfian_generator_t(size_t min, size_t max, double zipfian_const = zipfian_const_k)
         : zipfian_generator_t(min, max, zipfian_const, zeta(max - min + 1, zipfian_const)) {}
-    inline zipfian_generator_t(size_t min, size_t max, double zipfian_const, double zeta_n)
-        : items_count_(max - min + 1), base_(min), theta_(zipfian_const), allow_count_decrease_(false),
-          generator_(0.0, 1.0) {
-        assert(items_count_ >= 2 && items_count_ < items_max_count);
-
-        zeta_2_ = zeta(2, theta_);
-        alpha_ = 1.0 / (1.0 - theta_);
-        zeta_n_ = zeta_n;
-        count_for_zeta_ = items_count_;
-        eta_ = eta();
-
-        generate();
-    }
+    inline zipfian_generator_t(size_t min, size_t max, double zipfian_const, double zeta_n);
 
     size_t generate() override { return generate(items_count_); }
     size_t last() override { return last_; }
@@ -47,6 +35,20 @@ struct zipfian_generator_t : public generator_gt<size_t> {
     double theta_, zeta_n_, eta_, alpha_, zeta_2_;
     bool allow_count_decrease_;
 };
+
+inline zipfian_generator_t::zipfian_generator_t(size_t min, size_t max, double zipfian_const, double zeta_n)
+    : items_count_(max - min + 1), base_(min), theta_(zipfian_const), allow_count_decrease_(false),
+      generator_(0.0, 1.0) {
+    assert(items_count_ >= 2 && items_count_ < items_max_count);
+
+    zeta_2_ = zeta(2, theta_);
+    alpha_ = 1.0 / (1.0 - theta_);
+    zeta_n_ = zeta_n;
+    count_for_zeta_ = items_count_;
+    eta_ = eta();
+
+    generate();
+}
 
 inline size_t zipfian_generator_t::generate(size_t num) {
     assert(num >= 2 && num < items_max_count);
