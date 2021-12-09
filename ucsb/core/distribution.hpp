@@ -8,7 +8,7 @@ enum class distribution_kind_t {
     uniform_k,
     zipfian_k,
     scrambled_zipfian_k,
-    skewed_zipfian_k,
+    skewed_latest_k,
     acknowledged_counter_k,
 };
 

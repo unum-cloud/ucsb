@@ -19,16 +19,22 @@ enum class operation_kind_t {
     scan_k,
 };
 
-struct operation_status_t {
+enum class operation_status_t {
+    success_k,
+    error_k,
+    not_implemented_k,
+};
+
+struct operation_result_t {
     size_t depth = 0;
-    bool success = false;
+    operation_status_t status = operation_status_t::success_k;
 };
 
 struct operation_chooser_t {
     inline operation_chooser_t() : sum_(0), generator_(0.0, 1.0) {}
 
     inline void add(operation_kind_t op, double weight);
-    inline operation_kind_t generate();
+    inline operation_kind_t choose();
 
   private:
     randome_double_generator_t generator_;
@@ -41,7 +47,7 @@ inline void operation_chooser_t::add(operation_kind_t op, double weight) {
     sum_ += weight;
 }
 
-inline operation_kind_t operation_chooser_t::generate() {
+inline operation_kind_t operation_chooser_t::choose() {
     double chooser = generator_.generate();
     for (auto op = ops_.cbegin(); op != ops_.cend(); ++op) {
         double part = op->second / sum_;

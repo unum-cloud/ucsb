@@ -8,9 +8,9 @@
 
 namespace ucsb {
 
-struct skewed_zipfian_generator_t : public generator_gt<size_t> {
+struct skewed_latest_generator_t : public generator_gt<size_t> {
   public:
-    skewed_zipfian_generator_t(counter_generator_t& counter) : basis_(counter), zipfian_(basis_.last()) { generate(); }
+    skewed_latest_generator_t(counter_generator_t& counter) : basis_(counter), zipfian_(basis_.last()) { generate(); }
 
     size_t generate() override;
     size_t last() override { return last_; }
@@ -21,7 +21,7 @@ struct skewed_zipfian_generator_t : public generator_gt<size_t> {
     size_t last_;
 };
 
-inline size_t skewed_zipfian_generator_t::generate() {
+inline size_t skewed_latest_generator_t::generate() {
 
     size_t max = basis_.generate();
     return last_ = max - zipfian_.generate(max);

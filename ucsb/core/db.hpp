@@ -11,13 +11,13 @@ struct db_t {
     virtual bool init(fs::path const& dir_path, fs::path const& config_file_path) = 0;
     virtual void destroy() = 0;
 
-    virtual operation_status_t insert(key_t key, value_t value) = 0;
-    virtual operation_status_t update(key_t key, value_t value) = 0;
-    virtual operation_status_t read(key_t key) = 0;
-    virtual operation_status_t delete (key_t key) = 0;
-    virtual operation_status_t batch_read(keys_t keys) = 0;
-    virtual operation_status_t range_select(key_t key, size_t depth) = 0;
-    virtual operation_status_t scan() = 0;
+    virtual operation_result_t insert(key_t key, value_span_t value) = 0;
+    virtual operation_result_t update(key_t key, value_span_t value) = 0;
+    virtual operation_result_t read(key_t key, value_span_t value) const = 0;
+    virtual operation_result_t delete (key_t key) = 0;
+    virtual operation_result_t batch_read(keys_span_t keys, value_span_t single_value) const = 0;
+    virtual operation_result_t range_select(key_t key, size_t length, value_span_t single_value) const = 0;
+    virtual operation_result_t scan(value_span_t single_value) const = 0;
 };
 
 } // namespace ucsb
