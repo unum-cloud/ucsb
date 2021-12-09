@@ -3,6 +3,8 @@
 namespace ucsb {
 
 enum class distribution_kind_t {
+    unknown_k,
+
     const_k,
     counter_k,
     uniform_k,
