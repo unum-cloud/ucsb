@@ -1,4 +1,5 @@
 #include <string>
+#include <memory>
 #include <fmt/format.h>
 #include <benchmark/benchmark.h>
 
@@ -111,7 +112,7 @@ int main(int argc, char** argv) {
         fmt::print("Failed to load workloads. path: {}\n", settings.workload_path.c_str());
 
     db_kind_t kind = ucsb::parse_db(settings.db_name);
-    db_t* db = factory_t {}.create(kind);
+    std::unique_ptr<db_t> db(factory_t {}.create(kind));
     if (db == nullptr)
         fmt::print("Failed to create db: {}\n", settings.db_name);
     if (db->init(settings.db_dir_path, settings.db_config_path))
@@ -120,15 +121,15 @@ int main(int argc, char** argv) {
     for (auto const& workload : workloads) {
         std::string name = ucsb::format("{}_{}", settings.db_name, workload.name);
         register_benchmark(name, workload.operations_count, [&](bm::State& state) {
-            transaction(state, workload, *db);
+            transaction(state, workload, *db.get());
         });
     }
 
     bm::Initialize(&argc, argv);
     bm::RunSpecifiedBenchmarks();
 
-    // db->destroy();
-    delete db;
+    if (settings.delete_db_at_the_end)
+        db->destroy();
 
     return 0;
 }

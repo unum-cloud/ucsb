@@ -1,0 +1,8 @@
+{
+    "db_name": "<name>",
+    "db_config_path": "./bench/configs/<folder>/config.json",
+    "db_dir_path": "./tmp/<folder>/",
+    "workload_path": "./bench/workloads/default.json",
+    "result_dir_path": "./bench/results/",
+    "delete_db_at_the_end": false
+}

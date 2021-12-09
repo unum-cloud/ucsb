@@ -15,6 +15,7 @@ struct settings_t {
     fs::path db_dir_path;
     fs::path workload_path;
     fs::path result_dir_path;
+    bool delete_db_at_the_end = false;
 };
 
 bool load(fs::path const& path, settings_t& settings) {
