@@ -15,7 +15,6 @@
 #include "ucsb/core/exception.hpp"
 
 namespace bm = benchmark;
-namespace fs = ucsb::fs;
 
 using settings_t = ucsb::settings_t;
 using workload_t = ucsb::workload_t;
@@ -110,7 +109,8 @@ void transaction(bm::State& state, workload_t const& workload, db_t& db) {
         }
 
         operations_done = result.depth;
-        failes = size_t(result.status != operation_status_t::success_k) * result.depth;
+        bool ok = result.status == operation_status_t::ok_k || result.status == operation_status_t::not_found_k;
+        failes = size_t(!ok) * result.depth;
     }
 
     state.counters["operations/s"] = bm::Counter(operations_done - failes, bm::Counter::kIsRate);
@@ -126,8 +126,8 @@ int main(int argc, char** argv) {
     if (ucsb::load(settings_path, settings))
         fmt::print("Failed to load settings: {}\n", settings_path);
 
-    fs::create_directories(settings.db_dir_path);
-    fs::create_directories(settings.result_dir_path);
+    ucsb::fs::create_directories(settings.db_dir_path);
+    ucsb::fs::create_directories(settings.result_dir_path);
 
     workloads_t workloads;
     if (ucsb::load(settings.workload_path, workloads))
@@ -151,7 +151,7 @@ int main(int argc, char** argv) {
 
     if (settings.delete_db_at_the_end) {
         db->destroy();
-        fs::remove_all(settings.db_dir_path);
+        ucsb::fs::remove_all(settings.db_dir_path);
     }
 
     return 0;

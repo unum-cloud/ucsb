@@ -20,14 +20,15 @@ enum class operation_kind_t {
 };
 
 enum class operation_status_t {
-    success_k,
+    ok_k,
     error_k,
+    not_found_k,
     not_implemented_k,
 };
 
 struct operation_result_t {
     size_t depth = 0;
-    operation_status_t status = operation_status_t::success_k;
+    operation_status_t status = operation_status_t::ok_k;
 };
 
 struct operation_chooser_t {

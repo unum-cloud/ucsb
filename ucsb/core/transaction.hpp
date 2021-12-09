@@ -104,8 +104,7 @@ operation_result_t transaction_t::do_read() {
 
 operation_result_t transaction_t::do_batch_read() {
     keys_span_t keys = generate_batch_keys();
-    value_span_t single_value(value_buffer_.data(), value_buffer_.size());
-    return db_->batch_read(keys, single_value);
+    return db_->batch_read(keys);
 }
 
 operation_result_t transaction_t::do_range_select() {

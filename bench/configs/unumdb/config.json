@@ -4,5 +4,6 @@
     "files_size_enlarge_factor": 8,
     "max_file_cnt": 32,
     "files_count_enlarge_factor": 1,
+    "max_files_cnt_k": 1000,
     "uring_queue_depth": 256
 }
