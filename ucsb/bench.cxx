@@ -4,8 +4,8 @@
 #include <benchmark/benchmark.h>
 
 #include "ucsb/core/types.hpp"
+#include "ucsb/core/helpers.hpp"
 #include "ucsb/core/settings.hpp"
-
 #include "ucsb/core/types.hpp"
 #include "ucsb/core/db.hpp"
 #include "ucsb/core/workload.hpp"
@@ -52,6 +52,28 @@ inline void register_section(std::string const& name) {
         for (auto _ : s)
             ;
     });
+}
+
+void run_benchmarks(int argc, char* argv[], settings_t const& settings) {
+    int bm_argc = 4;
+    char* bm_argv[4];
+    std::string arg0(argv[0]);
+    bm_argv[0] = const_cast<char*>(arg0.c_str());
+
+    std::string arg1("--benchmark_format=console");
+    bm_argv[1] = const_cast<char*>(arg1.c_str());
+
+    std::string arg2(ucsb::format("--benchmark_out={}", settings.result_dir_path));
+    bm_argv[2] = const_cast<char*>(arg2.c_str());
+
+    std::string arg3("--benchmark_out_format=json");
+    bm_argv[3] = const_cast<char*>(arg3.c_str());
+
+    bm::Initialize(&bm_argc, bm_argv);
+    if (!bm::ReportUnrecognizedArguments(bm_argc, bm_argv))
+        fmt::print("Invalid Input Arguments");
+
+    benchmark::RunSpecifiedBenchmarks();
 }
 
 operation_chooser_t create_operation_chooser(workload_t const& workload) {
@@ -125,11 +147,12 @@ int main(int argc, char** argv) {
         });
     }
 
-    bm::Initialize(&argc, argv);
-    bm::RunSpecifiedBenchmarks();
+    run_benchmarks(argc, argv, settings);
 
-    if (settings.delete_db_at_the_end)
+    if (settings.delete_db_at_the_end) {
         db->destroy();
+        fs::remove_all(settings.db_dir_path);
+    }
 
     return 0;
 }
