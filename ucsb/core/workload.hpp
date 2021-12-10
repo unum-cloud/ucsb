@@ -1,8 +1,7 @@
 #pragma once
-
-#include <cstddef>
-#include <string>
 #include <vector>
+#include <string>
+#include <cstddef>
 #include <fstream>
 #include <nlohmann/json.hpp>
 
