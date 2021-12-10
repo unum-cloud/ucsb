@@ -1,5 +1,4 @@
 #pragma once
-
 #include <cstddef>
 
 const size_t fnv_offset_basis64 = 0xCBF29CE484222325ull;

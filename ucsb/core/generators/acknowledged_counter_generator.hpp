@@ -1,5 +1,4 @@
 #pragma once
-
 #include <random>
 
 #include "ucsb/core/exception.hpp"
@@ -17,7 +16,7 @@ struct acknowledged_counter_generator_t : public counter_generator_t {
     size_t generate() override { return counter_++; }
     size_t last() override { return limit_; }
 
-    void Acknowledge(uint64_t value) {
+    void acknowledge(uint64_t value) {
         size_t cur_slot = value & window_mask_k;
         if (ack_window_[cur_slot]) {
             throw exception_t("Not enough window size");

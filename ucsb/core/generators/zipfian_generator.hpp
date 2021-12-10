@@ -1,7 +1,6 @@
 #pragma once
-
-#include <cassert>
 #include <random>
+#include <cassert>
 
 #include "ucsb/core/generators/generator.hpp"
 #include "ucsb/core/generators/random_generator.hpp"

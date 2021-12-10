@@ -1,5 +1,4 @@
 #pragma once
-
 #include <random>
 
 #include "ucsb/core/generators/generator.hpp"
@@ -60,6 +59,7 @@ inline char random_byte_generator_t::generate() {
         buf_[5] = static_cast<char>(((bytes >> 25) & 95) + ' ');
         off_ = 0;
     }
+    
     return buf_[off_++];
 }
 

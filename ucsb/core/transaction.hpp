@@ -1,12 +1,11 @@
 #pragma once
-
 #include <memory>
 #include <vector>
 #include <fmt/format.h>
 
 #include "types.hpp"
-#include "ucsb/core/workload.hpp"
 #include "ucsb/core/db.hpp"
+#include "ucsb/core/workload.hpp"
 #include "ucsb/core/generators/generator.hpp"
 #include "ucsb/core/generators/const_generator.hpp"
 #include "ucsb/core/generators/counter_generator.hpp"
