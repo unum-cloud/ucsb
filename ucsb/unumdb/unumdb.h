@@ -16,6 +16,7 @@ using keys_span_t = ucsb::keys_span_t;
 using value_span_t = ucsb::value_span_t;
 using operation_status_t = ucsb::operation_status_t;
 using operation_result_t = ucsb::operation_result_t;
+using exception_t = ucsb::exception_t;
 
 using fingerprint_t = key_t;
 using region_t = region_gt<key_t, data_source_t::unfixed_size_k>;
@@ -45,15 +46,9 @@ struct unumdb_t : public ucsb::db_t {
     bool load(region_config_t& config, region_schema_t& schema, string_t const& name);
     void unumdb_t::dump_fingerprint(fingerprint_t const& fingerprint, std::vector<uint8_t>& data);
     void unumdb_t::parse_fingerprint(std::vector<uint8_t> const& data, fingerprint_t& fingerprint);
-    region_config_t create_config(string_t city_name,
-                                  size_t fixed_citizen_size,
-                                  size_t migration_capacity,
-                                  size_t migration_max_cnt,
-                                  size_t files_size_enlarge_factor,
-                                  size_t max_files_cnt,
-                                  size_t files_count_enlarge_factor);
+    region_config_t load_config();
 
-    std::string name_;
+    string_t name_;
     fs::path config_path_;
     fs::path dir_path_;
     region_t region_;
@@ -64,7 +59,7 @@ unumdb_t::~unumdb_t() {
     if (region_.population_count()) {
         region_config_t config = region_.get_config();
         region_schema_t schema = region_.get_schema();
-        save(config, schema, name_.c_str());
+        save(config, schema, name_);
     }
 }
 
@@ -78,16 +73,10 @@ bool unumdb_t::init(fs::path const& config_path, fs::path const& dir_path) {
 
     region_config_t config;
     region_schema_t schema;
-    if (load(config, schema, name_.c_str()))
+    if (load(config, schema, name_))
         region_ = std::move(region_t(config, schema));
     else {
-        // config = create_config(name_,
-        //                        0,
-        //                        migration_capacity,
-        //                        migration_max_cnt,
-        //                        files_size_enlarge_factor,
-        //                        max_file_cnt,
-        //                        files_count_enlarge_factor);
+        config = load_config();
         region_ = std::move(region_t(config));
     }
 
@@ -96,8 +85,8 @@ bool unumdb_t::init(fs::path const& config_path, fs::path const& dir_path) {
 
 void unumdb_t::destroy() {
     region_.destroy();
-    std::string config_path = ucsb::format("{}{}.cfg", dir_path_.c_str(), name_);
-    std::string schema_path = ucsb::format("{}{}.sch", dir_path_.c_str(), name_);
+    std::string config_path = ucsb::format("{}{}.cfg", dir_path_.c_str(), name_.c_str());
+    std::string schema_path = ucsb::format("{}{}.sch", dir_path_.c_str(), name_.c_str());
     fs::remove(config_path);
     fs::remove(schema_path);
 }
@@ -264,9 +253,8 @@ bool unumdb_t::load(region_config_t& config, region_schema_t& schema, string_t c
     config = region_config_t();
     schema = region_schema_t();
 
-    string_t aaaa(dir_path_.c_str());
-    string_t config_path = string_t::format("{}{}.cfg", aaaa, name);
-    string_t schema_path = string_t::format("{}{}.sch", aaaa, name);
+    string_t config_path = string_t::format("{}{}.cfg", dir_path_.c_str(), name);
+    string_t schema_path = string_t::format("{}{}.sch", dir_path_.c_str(), name);
     if (!jbod->exists(config_path) || !jbod->exists(schema_path))
         return false;
 
@@ -330,27 +318,28 @@ bool unumdb_t::load(region_config_t& config, region_schema_t& schema, string_t c
     return true;
 }
 
-region_config_t unumdb_t::create_config(string_t city_name,
-                                        size_t fixed_citizen_size,
-                                        size_t migration_capacity,
-                                        size_t migration_max_cnt,
-                                        size_t files_size_enlarge_factor,
-                                        size_t max_files_cnt,
-                                        size_t files_count_enlarge_factor) {
+region_config_t unumdb_t::load_config() {
+    if (!jbod->exists(config_path_.c_str()))
+        throw exception_t("UnumSB: Failed to load configuration");
+
+    std::ifstream i_config(config_path_);
+    nlohmann::json j_config;
+    i_config >> j_config;
+
     region_config_t config;
     config.uuid = unum::algo::rand::uuid4_t {}();
-    config.fixed_citizen_size = fixed_citizen_size;
-    config.migration_capacity = migration_capacity;
-    config.migration_max_cnt = migration_max_cnt;
+    config.fixed_citizen_size = 0;
+    config.migration_capacity = j_config["migration_capacity"].get<size_t>();
+    config.migration_max_cnt = j_config["migration_max_cnt"].get<size_t>();
 
-    config.city.name = city_name;
-    config.city.fixed_citizen_size = fixed_citizen_size;
-    config.city.files_size_enlarge_factor = files_size_enlarge_factor;
+    config.city.name = name_;
+    config.city.fixed_citizen_size = 0;
+    config.city.files_size_enlarge_factor = j_config["files_size_enlarge_factor"].get<size_t>();
 
-    config.city.street.fixed_citizen_size = fixed_citizen_size;
-    config.city.street.max_files_cnt = max_files_cnt;
-    config.city.street.files_count_enlarge_factor = files_count_enlarge_factor;
-    config.city.street.building.fixed_citizen_size = fixed_citizen_size;
+    config.city.street.fixed_citizen_size = 0;
+    config.city.street.max_files_cnt = j_config["max_files_cnt"].get<size_t>();
+    config.city.street.files_count_enlarge_factor = j_config["files_count_enlarge_factor"].get<size_t>();
+    config.city.street.building.fixed_citizen_size = 0;
 
     return config;
 }
