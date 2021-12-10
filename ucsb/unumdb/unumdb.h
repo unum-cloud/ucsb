@@ -118,7 +118,7 @@ operation_result_t unumdb_t::read(key_t key, value_span_t value) const {
     citizen_t citizen {reinterpret_cast<byte_t*>(value.data()), value.size()};
     region_.select<caching_t::io_k>(location, citizen, read_notifier);
     if (!countdown.wait())
-        return {1, operation_status_t::error_k};
+        return {0, operation_status_t::error_k};
 
     return {1, operation_status_t::ok_k};
 }
@@ -147,7 +147,7 @@ operation_result_t unumdb_t::batch_read(keys_span_t keys) const {
     notifier_t notifier(countdown);
     region_.select(locations.view(), {batch_buffer_.span()}, notifier);
     if (!countdown.wait())
-        return {batch_size, operation_status_t::error_k};
+        return {0, operation_status_t::error_k};
 
     return {batch_size, operation_status_t::ok_k};
 }
