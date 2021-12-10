@@ -4,7 +4,6 @@
 #include <cstring>
 #include <string>
 #include <vector>
-#include <mutex>
 #include <fmt/format.h>
 
 #include <rocksdb/status.h>

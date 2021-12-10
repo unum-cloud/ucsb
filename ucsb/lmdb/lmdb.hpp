@@ -45,22 +45,7 @@ struct lmdb_t : public ucsb::db_t {
         bool write_map = false;
     };
 
-    bool load_config(fs::path const& config_path, config_t& config) {
-        if (!fs::exists(config_path.c_str()))
-            return false;
-
-        std::ifstream i_config(config_path);
-        nlohmann::json j_config;
-        i_config >> j_config;
-
-        config.map_size = j_config["map_size"].get<size_t>();
-        config.no_sync = j_config["no_sync"].get<bool>();
-        config.no_meta_sync = j_config["no_meta_sync"].get<bool>();
-        config.no_read_a_head = j_config["no_read_a_head"].get<bool>();
-        config.write_map = j_config["write_map"].get<bool>();
-
-        return true;
-    }
+    bool load_config(fs::path const& config_path, config_t& config);
 
     MDB_env* env_;
     MDB_dbi dbi_;
@@ -188,7 +173,7 @@ operation_result_t lmdb_t::remove(key_t key) {
 
 operation_result_t lmdb_t::batch_read(keys_span_t keys) const {
 
-    // Imitation of batch read?!
+    // Imitation of batch read!
     for (auto const& key : keys) {
         MDB_txn* txn = nullptr;
         MDB_val key_slice, val_slice;
@@ -266,6 +251,23 @@ operation_result_t lmdb_t::scan(value_span_t single_value) const {
     mdb_cursor_close(cursor);
     mdb_txn_abort(txn);
     return {scaned_records_count, operation_status_t::ok_k};
+}
+
+bool lmdb_t::load_config(fs::path const& config_path, config_t& config) {
+    if (!fs::exists(config_path.c_str()))
+        return false;
+
+    std::ifstream i_config(config_path);
+    nlohmann::json j_config;
+    i_config >> j_config;
+
+    config.map_size = j_config.value("map_size", -1);
+    config.no_sync = j_config.value("no_sync", false);
+    config.no_meta_sync = j_config.value("no_meta_sync", false);
+    config.no_read_a_head = j_config.value("no_read_a_head", false);
+    config.write_map = j_config.value("write_map", false);
+
+    return true;
 }
 
 } // namespace symas
