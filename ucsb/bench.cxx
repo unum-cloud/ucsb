@@ -54,8 +54,10 @@ void run_benchmarks(int argc, char* argv[], settings_t const& settings) {
     std::string arg1("--benchmark_format=console");
     bm_argv[1] = const_cast<char*>(arg1.c_str());
 
-    std::string arg2(
-        fmt::format("--benchmark_out={}{}.json", settings.result_dir_path.c_str(), settings.db_name.c_str()));
+    std::string arg2(fmt::format("--benchmark_out={}{}/{}.json",
+                                 settings.result_dir_path.c_str(),
+                                 settings.db_name.c_str(),
+                                 settings.workload_path.stem().c_str()));
     bm_argv[2] = const_cast<char*>(arg2.c_str());
 
     std::string arg3("--benchmark_out_format=json");
@@ -125,14 +127,14 @@ int main(int argc, char** argv) {
         return 1;
     }
 
-    ucsb::fs::create_directories(settings.db_dir_path);
-    ucsb::fs::create_directories(settings.result_dir_path);
-
     workloads_t workloads;
     if (!ucsb::load(settings.workload_path, workloads)) {
         fmt::print("Failed to load workloads. path: {}\n", settings.workload_path.c_str());
         return 1;
     }
+
+    ucsb::fs::create_directories(settings.db_dir_path);
+    ucsb::fs::create_directories(fmt::format("{}{}", settings.result_dir_path.c_str(), settings.db_name.c_str()));
 
     db_kind_t kind = ucsb::parse_db(settings.db_name);
     std::unique_ptr<db_t> db(factory_t {}.create(kind));

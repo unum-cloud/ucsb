@@ -55,8 +55,8 @@ distribution_kind_t parse_distribution(std::string const& name) {
         dist = distribution_kind_t::zipfian_k;
     else if (name == "scrambled")
         dist = distribution_kind_t::scrambled_zipfian_k;
-    else if (name == "skewed")
-        dist = distribution_kind_t::scrambled_zipfian_k;
+    else if (name == "latest")
+        dist = distribution_kind_t::skewed_latest_k;
     else if (name == "acknowledged")
         dist = distribution_kind_t::acknowledged_counter_k;
     return dist;
@@ -90,6 +90,7 @@ bool load(fs::path const& path, workloads_t& workloads) {
 
         workload.key_dist = parse_distribution((*j_workload).value("key_dist", "uniform"));
         if (workload.key_dist == distribution_kind_t::unknown_k) {
+            fmt::print("{}\n", workload.name);
             workloads.clear();
             return false;
         }
