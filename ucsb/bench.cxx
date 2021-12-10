@@ -4,7 +4,6 @@
 #include <benchmark/benchmark.h>
 
 #include "ucsb/core/types.hpp"
-#include "ucsb/core/helpers.hpp"
 #include "ucsb/core/settings.hpp"
 #include "ucsb/core/types.hpp"
 #include "ucsb/core/db.hpp"
@@ -46,13 +45,6 @@ inline void register_benchmark(std::string const& name, size_t iterations_count,
     bm::RegisterBenchmark(name.c_str(), func)->Iterations(iterations_count)->Unit(bm::kMicrosecond)->UseRealTime();
 }
 
-inline void register_section(std::string const& name) {
-    bm::RegisterBenchmark(name.c_str(), [=](bm::State& s) {
-        for (auto _ : s)
-            ;
-    });
-}
-
 void run_benchmarks(int argc, char* argv[], settings_t const& settings) {
     int bm_argc = 4;
     char* bm_argv[4];
@@ -62,15 +54,18 @@ void run_benchmarks(int argc, char* argv[], settings_t const& settings) {
     std::string arg1("--benchmark_format=console");
     bm_argv[1] = const_cast<char*>(arg1.c_str());
 
-    std::string arg2(ucsb::format("--benchmark_out={}", settings.result_dir_path));
+    std::string arg2(
+        fmt::format("--benchmark_out={}{}.json", settings.result_dir_path.c_str(), settings.db_name.c_str()));
     bm_argv[2] = const_cast<char*>(arg2.c_str());
 
     std::string arg3("--benchmark_out_format=json");
     bm_argv[3] = const_cast<char*>(arg3.c_str());
 
     bm::Initialize(&bm_argc, bm_argv);
-    if (!bm::ReportUnrecognizedArguments(bm_argc, bm_argv))
-        fmt::print("Invalid Input Arguments");
+    if (bm::ReportUnrecognizedArguments(bm_argc, bm_argv)) {
+        fmt::print("GoogleBM: Invalid Input Arguments\n");
+        return;
+    }
 
     benchmark::RunSpecifiedBenchmarks();
 }
@@ -108,9 +103,9 @@ void transaction(bm::State& state, workload_t const& workload, db_t& db) {
         default: throw exception_t("Unknown operation"); break;
         }
 
-        operations_done = result.depth;
+        operations_done += result.depth;
         bool ok = result.status == operation_status_t::ok_k || result.status == operation_status_t::not_found_k;
-        failes = size_t(!ok) * result.depth;
+        failes += size_t(!ok) * result.depth;
     }
 
     state.counters["operations/s"] = bm::Counter(operations_done - failes, bm::Counter::kIsRate);
@@ -120,29 +115,38 @@ void transaction(bm::State& state, workload_t const& workload, db_t& db) {
 int main(int argc, char** argv) {
 
     std::string settings_path = parse_settings_path(argc, argv);
-    if (settings_path.empty())
-        fmt::print("Settings path not specified\n");
+    if (settings_path.empty()) {
+        fmt::print("Settings path is not specified\n");
+        return 1;
+    }
     settings_t settings;
-    if (ucsb::load(settings_path, settings))
+    if (!ucsb::load(settings_path, settings)) {
         fmt::print("Failed to load settings: {}\n", settings_path);
+        return 1;
+    }
 
     ucsb::fs::create_directories(settings.db_dir_path);
     ucsb::fs::create_directories(settings.result_dir_path);
 
     workloads_t workloads;
-    if (ucsb::load(settings.workload_path, workloads))
+    if (!ucsb::load(settings.workload_path, workloads)) {
         fmt::print("Failed to load workloads. path: {}\n", settings.workload_path.c_str());
+        return 1;
+    }
 
     db_kind_t kind = ucsb::parse_db(settings.db_name);
     std::unique_ptr<db_t> db(factory_t {}.create(kind));
-    if (db == nullptr)
-        fmt::print("Failed to create db: {}\n", settings.db_name);
-    if (db->init(settings.db_dir_path, settings.db_config_path))
-        fmt::print("Failed to init db: {}\n", settings.db_name);
+    if (db == nullptr) {
+        fmt::print("Failed to create DB: {}\n", settings.db_name);
+        return 1;
+    }
+    if (!db->init(settings.db_config_path, settings.db_dir_path)) {
+        fmt::print("Failed to init DB: {}\n", settings.db_name);
+        return 1;
+    }
 
     for (auto const& workload : workloads) {
-        std::string name = ucsb::format("{}_{}", settings.db_name, workload.name);
-        register_benchmark(name, workload.operations_count, [&](bm::State& state) {
+        register_benchmark(workload.name, workload.operations_count, [&](bm::State& state) {
             transaction(state, workload, *db.get());
         });
     }

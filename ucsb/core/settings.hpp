@@ -33,6 +33,7 @@ bool load(fs::path const& path, settings_t& settings) {
     settings.db_dir_path = fs::path(j_settings["db_dir_path"].get<std::string>());
     settings.workload_path = fs::path(j_settings["workload_path"].get<std::string>());
     settings.result_dir_path = fs::path(j_settings["result_dir_path"].get<std::string>());
+    settings.delete_db_at_the_end = j_settings["delete_db_at_the_end"].get<bool>();
 
     return true;
 }

@@ -7,7 +7,6 @@
 #include "types.hpp"
 #include "ucsb/core/workload.hpp"
 #include "ucsb/core/db.hpp"
-#include "ucsb/core/helpers.hpp"
 #include "ucsb/core/generators/generator.hpp"
 #include "ucsb/core/generators/const_generator.hpp"
 #include "ucsb/core/generators/counter_generator.hpp"
@@ -130,7 +129,7 @@ inline transaction_t::key_generator_t transaction_t::create_key_generator(worklo
         break;
     }
     case distribution_kind_t::skewed_latest_k: generator.reset(new skewed_latest_generator_t(counter_generator)); break;
-    default: throw exception_t(format("Unknown key distribution: {}", int(workload.key_dist)));
+    default: throw exception_t(fmt::format("Unknown key distribution: {}", int(workload.key_dist)));
     }
     return generator;
 }
@@ -143,7 +142,7 @@ inline transaction_t::value_length_generator_t transaction_t::create_value_lengt
     case distribution_kind_t::const_k: generator.reset(new const_generator_t(workload.value_length)); break;
     case distribution_kind_t::uniform_k: generator.reset(new uniform_generator_t(1, workload.value_length)); break;
     case distribution_kind_t::zipfian_k: generator.reset(new zipfian_generator_t(1, workload.value_length)); break;
-    default: throw exception_t(format("Unknown value length distribution: {}", int(workload.value_length_dist)));
+    default: throw exception_t(fmt::format("Unknown value length distribution: {}", int(workload.value_length_dist)));
     }
     return generator;
 }
@@ -157,7 +156,8 @@ inline transaction_t::generator_t transaction_t::create_batch_length_generator(w
     case distribution_kind_t::zipfian_k:
         generator.reset(new zipfian_generator_t(workload.batch_min_length, workload.batch_max_length));
         break;
-    default: throw exception_t(format("Unknown range select length distribution: {}", int(workload.batch_length_dist)));
+    default:
+        throw exception_t(fmt::format("Unknown range select length distribution: {}", int(workload.batch_length_dist)));
     }
     return generator;
 }
@@ -173,7 +173,7 @@ inline transaction_t::generator_t transaction_t::create_range_select_length_gene
         break;
     default:
         throw exception_t(
-            format("Unknown range select length distribution: {}", int(workload.range_select_length_dist)));
+            fmt::format("Unknown range select length distribution: {}", int(workload.range_select_length_dist)));
     }
     return generator;
 }
