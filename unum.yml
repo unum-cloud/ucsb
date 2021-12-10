@@ -12,3 +12,7 @@ conan:
   - rocksdb/6.20.3
   - leveldb/1.23
   - lmdb/0.9.29
+
+packages:
+  pkg-config:
+    - wiredtiger

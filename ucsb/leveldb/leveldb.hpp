@@ -127,7 +127,7 @@ operation_result_t leveldb_t::remove(key_t key) {
 
 operation_result_t leveldb_t::batch_read(keys_span_t keys) const {
 
-    // Imitation of batch read!
+    // Note: imitation of batch read!
     for (auto const& key : keys) {
         std::string data;
         leveldb::Slice slice {std::to_string(key)};

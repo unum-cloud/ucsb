@@ -6,6 +6,7 @@
 #include "ucsb/unumdb/unumdb.hpp"
 #include "ucsb/rocksdb/rocksdb.hpp"
 #include "ucsb/leveldb/leveldb.hpp"
+#include "ucsb/wiredtiger/wiredtiger.hpp"
 #include "ucsb/lmdb/lmdb.hpp"
 
 namespace ucsb {
@@ -16,6 +17,7 @@ enum class db_kind_t {
     unumdb_k,
     rocksdb_k,
     leveldb_k,
+    wiredtiger_k,
     lmdb_k,
 };
 
@@ -28,6 +30,7 @@ db_t* factory_t::create(db_kind_t kind) {
     case db_kind_t::unumdb_k: return new unum::unumdb_t();
     case db_kind_t::rocksdb_k: return new facebook::rocksdb_t();
     case db_kind_t::leveldb_k: return new google::leveldb_t();
+    case db_kind_t::wiredtiger_k: return new mongodb::wiredtiger_t();
     case db_kind_t::lmdb_k: return new symas::lmdb_t();
     default: break;
     }
@@ -42,6 +45,8 @@ db_kind_t parse_db(std::string const& name) {
         return db_kind_t::rocksdb_k;
     if (name == "leveldb")
         return db_kind_t::leveldb_k;
+    if (name == "wiredtiger")
+        return db_kind_t::wiredtiger_k;
     if (name == "lmdb")
         return db_kind_t::lmdb_k;
     return dist;

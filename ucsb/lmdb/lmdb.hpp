@@ -173,7 +173,7 @@ operation_result_t lmdb_t::remove(key_t key) {
 
 operation_result_t lmdb_t::batch_read(keys_span_t keys) const {
 
-    // Imitation of batch read!
+    // Note: imitation of batch read!
     for (auto const& key : keys) {
         MDB_txn* txn = nullptr;
         MDB_val key_slice, val_slice;
