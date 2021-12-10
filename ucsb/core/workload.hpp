@@ -80,27 +80,45 @@ bool load(fs::path const& path, workloads_t& workloads) {
         workload.records_count = (*j_workload)["records_count"].get<size_t>();
         workload.operations_count = (*j_workload)["operations_count"].get<size_t>();
 
-        workload.insert_proportion = (*j_workload)["insert_proportion"].get<double>();
-        workload.update_proportion = (*j_workload)["update_proportion"].get<double>();
-        workload.read_proportion = (*j_workload)["read_proportion"].get<double>();
-        workload.remove_proportion = (*j_workload)["remove_proportion"].get<double>();
-        workload.batch_read_proportion = (*j_workload)["batch_read_proportion"].get<double>();
-        workload.range_select_proportion = (*j_workload)["range_select_proportion"].get<double>();
-        workload.scan_proportion = (*j_workload)["scan_proportion"].get<double>();
+        workload.insert_proportion = (*j_workload).value("insert_proportion", 0.0);
+        workload.update_proportion = (*j_workload).value("update_proportion", 0.0);
+        workload.read_proportion = (*j_workload).value("read_proportion", 0.0);
+        workload.remove_proportion = (*j_workload).value("remove_proportion", 0.0);
+        workload.batch_read_proportion = (*j_workload).value("batch_read_proportion", 0.0);
+        workload.range_select_proportion = (*j_workload).value("range_select_proportion", 0.0);
+        workload.scan_proportion = (*j_workload).value("scan_proportion", 0.0);
 
-        workload.key_dist = parse_distribution((*j_workload)["key_dist"].get<std::string>());
+        workload.key_dist = parse_distribution((*j_workload).value("key_dist", "uniform"));
+        if (workload.key_dist == distribution_kind_t::unknown_k) {
+            workloads.clear();
+            return false;
+        }
 
-        workload.value_length = (*j_workload)["value_length"].get<size_t>();
-        workload.value_length_dist = parse_distribution((*j_workload)["value_length_dist"].get<std::string>());
+        workload.value_length = (*j_workload).value("value_length", 1024);
+        workload.value_length_dist = parse_distribution((*j_workload).value("value_length_dist", "const"));
+        if (workload.value_length_dist == distribution_kind_t::unknown_k) {
+            workloads.clear();
+            return false;
+        }
 
-        workload.batch_length_dist = parse_distribution((*j_workload)["batch_length_dist"].get<std::string>());
-        workload.batch_min_length = (*j_workload)["batch_min_length"].get<size_t>();
-        workload.batch_max_length = (*j_workload)["batch_max_length"].get<size_t>();
+        workload.batch_min_length = (*j_workload).value("batch_min_length", 256);
+        workload.batch_max_length = (*j_workload).value("batch_max_length", 256);
+        workload.batch_length_dist = parse_distribution((*j_workload).value("batch_length_dist", "uniform"));
+        if (workload.batch_length_dist == distribution_kind_t::unknown_k) {
+            workloads.clear();
+            return false;
+        }
 
-        workload.range_select_min_length = (*j_workload)["range_select_min_length"].get<size_t>();
-        workload.range_select_max_length = (*j_workload)["range_select_max_length"].get<size_t>();
+        workload.range_select_min_length = (*j_workload).value("range_select_min_length", 100);
+        workload.range_select_max_length = (*j_workload).value("range_select_max_length", 100);
         workload.range_select_length_dist =
-            parse_distribution((*j_workload)["range_select_length_dist"].get<std::string>());
+            parse_distribution((*j_workload).value("range_select_length_dist", "uniform"));
+        if (workload.key_dist == distribution_kind_t::unknown_k) {
+            workloads.clear();
+            return false;
+        }
+
+        workloads.push_back(workload);
     }
 
     return true;

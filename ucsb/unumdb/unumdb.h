@@ -1,6 +1,7 @@
 #pragma once
 
 #include <vector>
+#include <fmt/format.h>
 
 #include "ucsb/core/types.hpp"
 #include "ucsb/core/db.hpp"
@@ -16,7 +17,6 @@ using keys_span_t = ucsb::keys_span_t;
 using value_span_t = ucsb::value_span_t;
 using operation_status_t = ucsb::operation_status_t;
 using operation_result_t = ucsb::operation_result_t;
-using exception_t = ucsb::exception_t;
 
 using fingerprint_t = key_t;
 using region_t = region_gt<key_t, data_source_t::unfixed_size_k>;
@@ -42,11 +42,16 @@ struct unumdb_t : public ucsb::db_t {
     operation_result_t scan(value_span_t single_value) const override;
 
   private:
+    struct db_config_t {
+        region_config_t region_config;
+        size_t uring_queue_depth = 0;
+    };
+
     void save(region_config_t const& config, region_schema_t const& schema, string_t const& name);
     bool load(region_config_t& config, region_schema_t& schema, string_t const& name);
     void unumdb_t::dump_fingerprint(fingerprint_t const& fingerprint, std::vector<uint8_t>& data);
     void unumdb_t::parse_fingerprint(std::vector<uint8_t> const& data, fingerprint_t& fingerprint);
-    region_config_t load_config();
+    bool load_config(db_config_t& db_config);
 
     string_t name_;
     fs::path config_path_;
@@ -68,25 +73,26 @@ bool unumdb_t::init(fs::path const& config_path, fs::path const& dir_path) {
     config_path_ = config_path;
     dir_path_ = dir_path;
 
-    size_t queue_depth = 0;
-    init_file_io_by_pulling(dir_path.c_str(), queue_depth);
+    db_config_t db_config;
+    if (!load_config(db_config))
+        return false;
+
+    init_file_io_by_pulling(dir_path.c_str(), db_config.uring_queue_depth);
 
     region_config_t config;
     region_schema_t schema;
     if (load(config, schema, name_))
         region_ = std::move(region_t(config, schema));
-    else {
-        config = load_config();
-        region_ = std::move(region_t(config));
-    }
+    else
+        region_ = std::move(region_t(db_config.region_config));
 
     return true;
 }
 
 void unumdb_t::destroy() {
     region_.destroy();
-    std::string config_path = ucsb::format("{}{}.cfg", dir_path_.c_str(), name_.c_str());
-    std::string schema_path = ucsb::format("{}{}.sch", dir_path_.c_str(), name_.c_str());
+    std::string config_path = fmt::format("{}{}.cfg", dir_path_.c_str(), name_.c_str());
+    std::string schema_path = fmt::format("{}{}.sch", dir_path_.c_str(), name_.c_str());
     fs::remove(config_path);
     fs::remove(schema_path);
 }
@@ -94,10 +100,11 @@ void unumdb_t::destroy() {
 operation_result_t unumdb_t::insert(key_t key, value_span_t value) {
     citizenc_t citizen {reinterpret_cast<byte_t*>(value.data()), value.size()};
     region_.insert(key, citizen);
+    return {1, operation_status_t::ok_k};
 }
 
 operation_result_t unumdb_t::update(key_t key, value_span_t value) {
-    insert(key, value);
+    return insert(key, value);
 }
 
 operation_result_t unumdb_t::read(key_t key, value_span_t value) const {
@@ -318,30 +325,32 @@ bool unumdb_t::load(region_config_t& config, region_schema_t& schema, string_t c
     return true;
 }
 
-region_config_t unumdb_t::load_config() {
-    if (!jbod->exists(config_path_.c_str()))
-        throw exception_t("UnumSB: Failed to load configuration");
+bool unumdb_t::load_config(db_config_t& db_config) {
+    if (!fs::exists(config_path_.c_str()))
+        return false;
 
     std::ifstream i_config(config_path_);
     nlohmann::json j_config;
     i_config >> j_config;
 
-    region_config_t config;
-    config.uuid = unum::algo::rand::uuid4_t {}();
-    config.fixed_citizen_size = 0;
-    config.migration_capacity = j_config["migration_capacity"].get<size_t>();
-    config.migration_max_cnt = j_config["migration_max_cnt"].get<size_t>();
+    db_config.region_config.uuid = unum::algo::rand::uuid4_t {}();
+    db_config.region_config.fixed_citizen_size = 0;
+    db_config.region_config.migration_capacity = j_config["migration_capacity"].get<size_t>();
+    db_config.region_config.migration_max_cnt = j_config["migration_max_cnt"].get<size_t>();
 
-    config.city.name = name_;
-    config.city.fixed_citizen_size = 0;
-    config.city.files_size_enlarge_factor = j_config["files_size_enlarge_factor"].get<size_t>();
+    db_config.region_config.city.name = name_;
+    db_config.region_config.city.fixed_citizen_size = 0;
+    db_config.region_config.city.files_size_enlarge_factor = j_config["files_size_enlarge_factor"].get<size_t>();
 
-    config.city.street.fixed_citizen_size = 0;
-    config.city.street.max_files_cnt = j_config["max_files_cnt"].get<size_t>();
-    config.city.street.files_count_enlarge_factor = j_config["files_count_enlarge_factor"].get<size_t>();
-    config.city.street.building.fixed_citizen_size = 0;
+    db_config.region_config.city.street.fixed_citizen_size = 0;
+    db_config.region_config.city.street.max_files_cnt = j_config["max_files_cnt"].get<size_t>();
+    db_config.region_config.city.street.files_count_enlarge_factor =
+        j_config["files_count_enlarge_factor"].get<size_t>();
+    db_config.region_config.city.street.building.fixed_citizen_size = 0;
 
-    return config;
+    db_config.uring_queue_depth = j_config["uring_queue_depth"].get<size_t>();
+
+    return true;
 }
 
 void unumdb_t::dump_fingerprint(fingerprint_t const& fingerprint, std::vector<uint8_t>& data) {
