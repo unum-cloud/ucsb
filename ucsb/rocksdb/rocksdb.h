@@ -6,7 +6,6 @@
 #include <vector>
 #include <mutex>
 #include <fmt/format.h>
-#include <nlohmann/json.hpp>
 
 #include <rocksdb/status.h>
 #include <rocksdb/cache.h>
