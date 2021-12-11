@@ -105,15 +105,15 @@ operation_result_t lmdb_t::insert(key_t key, value_span_t value) {
     MDB_txn* txn = nullptr;
     MDB_val key_slice, val_slice;
 
-    key_slice.mv_data = static_cast<void*>(&key);
-    key_slice.mv_size = sizeof(key);
+    std::string std_key = std::to_string(key);
+    key_slice.mv_data = static_cast<void*>(std_key.data());
+    key_slice.mv_size = std_key.size();
 
     std::string data(reinterpret_cast<char*>(value.data()), value.size());
     val_slice.mv_data = static_cast<void*>(const_cast<char*>(data.data()));
     val_slice.mv_size = data.size();
 
-    int ret;
-    ret = mdb_txn_begin(env_, nullptr, 0, &txn);
+    int ret = mdb_txn_begin(env_, nullptr, 0, &txn);
     if (ret)
         return {0, operation_status_t::error_k};
     ret = mdb_put(txn, dbi_, &key_slice, &val_slice, 0);
@@ -135,8 +135,9 @@ operation_result_t lmdb_t::read(key_t key, value_span_t value) const {
     MDB_txn* txn = nullptr;
     MDB_val key_slice, val_slice;
 
-    key_slice.mv_data = static_cast<void*>(&key);
-    key_slice.mv_size = sizeof(key);
+    std::string std_key = std::to_string(key);
+    key_slice.mv_data = static_cast<void*>(std_key.data());
+    key_slice.mv_size = std_key.size();
 
     int ret = mdb_txn_begin(env_, nullptr, MDB_RDONLY, &txn);
     if (ret)
@@ -155,11 +156,11 @@ operation_result_t lmdb_t::remove(key_t key) {
     MDB_txn* txn = nullptr;
     MDB_val key_slice;
 
-    key_slice.mv_data = static_cast<void*>(&key);
-    key_slice.mv_size = sizeof(key);
+    std::string std_key = std::to_string(key);
+    key_slice.mv_data = static_cast<void*>(std_key.data());
+    key_slice.mv_size = std_key.size();
 
-    int ret;
-    ret = mdb_txn_begin(env_, nullptr, 0, &txn);
+    int ret = mdb_txn_begin(env_, nullptr, 0, &txn);
     if (ret)
         return {0, operation_status_t::error_k};
     ret = mdb_del(txn, dbi_, &key_slice, nullptr);
@@ -178,8 +179,9 @@ operation_result_t lmdb_t::batch_read(keys_span_t keys) const {
         MDB_txn* txn = nullptr;
         MDB_val key_slice, val_slice;
 
-        key_slice.mv_data = static_cast<void const*>(&key);
-        key_slice.mv_size = sizeof(key);
+        std::string std_key = std::to_string(key);
+        key_slice.mv_data = static_cast<void*>(std_key.data());
+        key_slice.mv_size = std_key.size();
 
         int ret = mdb_txn_begin(env_, nullptr, MDB_RDONLY, &txn);
         if (ret)
@@ -198,8 +200,9 @@ operation_result_t lmdb_t::range_select(key_t key, size_t length, value_span_t s
     MDB_cursor* cursor = nullptr;
     MDB_val key_slice, val_slice;
 
-    key_slice.mv_data = static_cast<void*>(&key);
-    key_slice.mv_size = sizeof(key);
+    std::string std_key = std::to_string(key);
+    key_slice.mv_data = static_cast<void*>(std_key.data());
+    key_slice.mv_size = std_key.size();
 
     int ret = mdb_txn_begin(env_, nullptr, 0, &txn);
     if (ret)

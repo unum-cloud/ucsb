@@ -161,7 +161,7 @@ operation_result_t wiredtiger_t::batch_read(keys_span_t keys) const {
 operation_result_t wiredtiger_t::range_select(key_t key, size_t length, value_span_t single_value) const {
 
     std::string str_key = std::to_string(key);
-    const char* key_n = nullptr;
+    const char* db_key = nullptr;
     WT_ITEM db_value;
     int res = 0;
     int i = 0;
@@ -170,7 +170,7 @@ operation_result_t wiredtiger_t::range_select(key_t key, size_t length, value_sp
 
     size_t selected_records_count = 0;
     while ((res = cursor_->next(cursor_)) == 0 && i++ < length) {
-        error_check(cursor_->get_key(cursor_, &key_n));
+        error_check(cursor_->get_key(cursor_, &db_key));
         error_check(cursor_->get_value(cursor_, &db_value));
         memcpy(single_value.data(), db_value.data, db_value.size);
         ++selected_records_count;
@@ -180,14 +180,14 @@ operation_result_t wiredtiger_t::range_select(key_t key, size_t length, value_sp
 
 operation_result_t wiredtiger_t::scan(value_span_t single_value) const {
 
-    const char* key_n = nullptr;
+    const char* db_key = nullptr;
     WT_ITEM db_value;
     int res = 0;
     error_check(session_->open_cursor(session_, table_name_.c_str(), NULL, NULL, &cursor_));
 
     size_t scaned_records_count = 0;
     while ((res = cursor_->next(cursor_)) == 0) {
-        error_check(cursor_->get_key(cursor_, &key_n));
+        error_check(cursor_->get_key(cursor_, &db_key));
         error_check(cursor_->get_value(cursor_, &db_value));
         memcpy(single_value.data(), db_value.data, db_value.size);
         ++scaned_records_count;
