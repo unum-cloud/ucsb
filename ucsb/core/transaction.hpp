@@ -45,8 +45,8 @@ struct transaction_t {
     workload_t workload_;
     db_t* db_;
 
-    key_generator_t insert_key_sequence_counter_generator;
     key_generator_t insert_key_sequence_generator;
+    acknowledged_counter_generator_t* acknowledged_key_generator;
     key_generator_t key_generator_;
     keys_t keys_;
 
@@ -59,14 +59,14 @@ struct transaction_t {
 };
 
 inline transaction_t::transaction_t(workload_t const& workload, db_t& db)
-    : workload_(workload), db_(&db), insert_key_sequence_generator(nullptr) {
+    : workload_(workload), db_(&db), acknowledged_key_generator(nullptr) {
 
     if (workload.insert_proportion == 1.0) // Initialization case
         insert_key_sequence_generator.reset(new counter_generator_t(0));
     else {
-        auto acknowledged_counter_generator = new acknowledged_counter_generator_t(workload.records_count);
-        insert_key_sequence_generator.reset(acknowledged_counter_generator);
-        key_generator_ = create_key_generator(workload, *acknowledged_counter_generator);
+        acknowledged_key_generator = new acknowledged_counter_generator_t(workload.records_count);
+        insert_key_sequence_generator.reset(acknowledged_key_generator);
+        key_generator_ = create_key_generator(workload, *acknowledged_key_generator);
     }
     keys_ = keys_t(workload.batch_max_length);
 
@@ -80,7 +80,10 @@ inline transaction_t::transaction_t(workload_t const& workload, db_t& db)
 operation_result_t transaction_t::do_insert() {
     key_t key = insert_key_sequence_generator->generate();
     value_span_t value = generate_value();
-    return db_->insert(key, value);
+    auto status = db_->insert(key, value);
+    if (acknowledged_key_generator)
+        acknowledged_key_generator->acknowledge(key);
+    return status;
 }
 
 operation_result_t transaction_t::do_update() {

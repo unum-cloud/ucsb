@@ -22,7 +22,7 @@ struct skewed_latest_generator_t : public generator_gt<size_t> {
 
 inline size_t skewed_latest_generator_t::generate() {
 
-    size_t max = basis_->generate();
+    size_t max = basis_->last();
     return last_ = max - zipfian_.generate(max);
 }
 
