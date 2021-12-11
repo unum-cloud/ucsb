@@ -1,8 +1,0 @@
-{
-    "db_name": "rocksdb",
-    "db_config_path": "./bench/configs/rocksdb/config.json",
-    "db_dir_path": "./tmp/rocksdb/",
-    "workload_path": "./bench/workloads/10GB.json",
-    "result_dir_path": "./bench/results/",
-    "delete_db_at_the_end": false
-}

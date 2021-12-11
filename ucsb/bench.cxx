@@ -32,12 +32,69 @@ int drop_system_caches() {
     return system("sudo sh -c '/usr/bin/echo 3 > /proc/sys/vm/drop_caches'");
 }
 
-std::string parse_settings_path(int argc, char* argv[]) {
+inline bool start_with(const char* str, const char* prefix) {
+    return strncmp(str, prefix, strlen(prefix)) == 0;
+}
 
-    std::string path;
-    if (argc > 1)
-        path = std::string(argv[1]);
-    return path;
+void usage_message(const char* command) {
+    fmt::print("Usage: {} [options]\n", command);
+    fmt::print("Options:\n");
+    fmt::print("-db: Database name\n");
+    fmt::print("-c: Database configuration file path\n");
+    fmt::print("-w: Workload file path\n");
+}
+
+void parse_args(int argc, char* argv[], settings_t& settings) {
+    int arg_idx = 1;
+    while (arg_idx < argc && start_with(argv[arg_idx], "-")) {
+        if (strcmp(argv[arg_idx], "-db") == 0) {
+            arg_idx++;
+            if (arg_idx >= argc) {
+                usage_message(argv[0]);
+                fmt::print("Missing argument value for -db\n");
+                exit(1);
+            }
+            settings.db_name = std::string(argv[arg_idx]);
+            arg_idx++;
+        }
+        else if (strcmp(argv[arg_idx], "-c") == 0) {
+            arg_idx++;
+            if (arg_idx >= argc) {
+                usage_message(argv[0]);
+                fmt::print("Missing argument value for -c\n");
+                exit(1);
+            }
+            settings.db_config_path = std::string(argv[arg_idx]);
+            arg_idx++;
+        }
+        else if (strcmp(argv[arg_idx], "-w") == 0) {
+            arg_idx++;
+            if (arg_idx >= argc) {
+                usage_message(argv[0]);
+                fmt::print("Missing argument value for -w\n");
+                exit(1);
+            }
+            settings.workload_path = std::string(argv[arg_idx]);
+            arg_idx++;
+        }
+        else {
+            usage_message(argv[0]);
+            fmt::print("Unknown option '{}'\n", argv[arg_idx]);
+            exit(1);
+        }
+    }
+
+    if (arg_idx == 1 || arg_idx != argc) {
+        usage_message(argv[0]);
+        exit(1);
+    }
+}
+
+inline void register_section(std::string const& name) {
+    bm::RegisterBenchmark(name.c_str(), [=](bm::State& s) {
+        for (auto _ : s)
+            ;
+    });
 }
 
 template <typename func_at>
@@ -54,10 +111,7 @@ void run_benchmarks(int argc, char* argv[], settings_t const& settings) {
     std::string arg1("--benchmark_format=console");
     bm_argv[1] = const_cast<char*>(arg1.c_str());
 
-    std::string arg2(fmt::format("--benchmark_out={}{}/{}.json",
-                                 settings.result_dir_path.c_str(),
-                                 settings.db_name.c_str(),
-                                 settings.workload_path.stem().c_str()));
+    std::string arg2(fmt::format("--benchmark_out={}", settings.results_path.c_str()));
     bm_argv[2] = const_cast<char*>(arg2.c_str());
 
     std::string arg3("--benchmark_out_format=json");
@@ -116,16 +170,12 @@ void transaction(bm::State& state, workload_t const& workload, db_t& db) {
 
 int main(int argc, char** argv) {
 
-    std::string settings_path = parse_settings_path(argc, argv);
-    if (settings_path.empty()) {
-        fmt::print("Settings path is not specified\n");
-        return 1;
-    }
     settings_t settings;
-    if (!ucsb::load(settings_path, settings)) {
-        fmt::print("Failed to load settings: {}\n", settings_path);
-        return 1;
-    }
+    parse_args(argc, argv, settings);
+    settings.db_dir_path = fmt::format("./tmp/{}", settings.db_name);
+    settings.results_path =
+        fmt::format("./bench/results/{}/result_{}.json", settings.db_name, settings.workload_path.stem().c_str());
+    settings.delete_db_at_the_end = false;
 
     workloads_t workloads;
     if (!ucsb::load(settings.workload_path, workloads)) {
@@ -134,7 +184,7 @@ int main(int argc, char** argv) {
     }
 
     ucsb::fs::create_directories(settings.db_dir_path);
-    ucsb::fs::create_directories(fmt::format("{}{}", settings.result_dir_path.c_str(), settings.db_name.c_str()));
+    ucsb::fs::create_directories(settings.results_path.parent_path());
 
     db_kind_t kind = ucsb::parse_db(settings.db_name);
     std::unique_ptr<db_t> db(factory_t {}.create(kind));
@@ -147,6 +197,7 @@ int main(int argc, char** argv) {
         return 1;
     }
 
+    register_section(settings.db_name);
     for (auto const& workload : workloads) {
         register_benchmark(workload.name, workload.operations_count, [&](bm::State& state) {
             transaction(state, workload, *db.get());

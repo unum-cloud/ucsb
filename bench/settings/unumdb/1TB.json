@@ -1,8 +1,0 @@
-{
-    "db_name": "unumdb",
-    "db_config_path": "./bench/configs/unumdb/config.json",
-    "db_dir_path": "./tmp/unumdb/",
-    "workload_path": "./bench/workloads/1TB.json",
-    "result_dir_path": "./bench/results/",
-    "delete_db_at_the_end": false
-}
