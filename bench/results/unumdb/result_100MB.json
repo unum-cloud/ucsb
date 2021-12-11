@@ -1,6 +1,6 @@
 {
   "context": {
-    "date": "2021-12-11T15:20:46+04:00",
+    "date": "2021-12-11T15:20:02+04:00",
     "host_name": "unum-nb2",
     "executable": "./build_release/bin/_ucsb_bench",
     "num_cpus": 8,
@@ -32,22 +32,22 @@
         "num_sharing": 8
       }
     ],
-    "load_avg": [0.79,0.87,0.94],
+    "load_avg": [0.74,0.89,0.95],
     "library_build_type": "release"
   },
   "benchmarks": [
     {
-      "name": "wiredtiger",
+      "name": "unumdb",
       "family_index": 0,
       "per_family_instance_index": 0,
-      "run_name": "wiredtiger",
+      "run_name": "unumdb",
       "run_type": "iteration",
       "repetitions": 1,
       "repetition_index": 0,
       "threads": 1,
       "iterations": 1000000000,
-      "real_time": 3.6699930205941200e-07,
-      "cpu_time": 3.6800000000059008e-07,
+      "real_time": 1.5099976735655218e-07,
+      "cpu_time": 1.5399999999960584e-07,
       "time_unit": "ns"
     },
     {
@@ -60,11 +60,11 @@
       "repetition_index": 0,
       "threads": 1,
       "iterations": 100000,
-      "real_time": 2.5410805100000289e+00,
-      "cpu_time": 2.4576004899999999e+00,
+      "real_time": 1.6360278800129890e+00,
+      "cpu_time": 1.6346428300000002e+00,
       "time_unit": "us",
       "failes": 0.0000000000000000e+00,
-      "operations/s": 3.9353337923165160e+05
+      "operations/s": 6.1123652733354433e+05
     },
     {
       "name": "Read/iterations:100000/real_time",
@@ -76,11 +76,11 @@
       "repetition_index": 0,
       "threads": 1,
       "iterations": 100000,
-      "real_time": 2.0609095700092439e+00,
-      "cpu_time": 2.0441811400000005e+00,
+      "real_time": 2.7831262999825412e-01,
+      "cpu_time": 2.7826325000000013e-01,
       "time_unit": "us",
       "failes": 0.0000000000000000e+00,
-      "operations/s": 4.8522264855876943e+05
+      "operations/s": 3.5930816363104796e+06
     },
     {
       "name": "BatchRead/iterations:500/real_time",
@@ -92,11 +92,11 @@
       "repetition_index": 0,
       "threads": 1,
       "iterations": 500,
-      "real_time": 5.0799117599672172e+02,
-      "cpu_time": 4.7582921399999998e+02,
+      "real_time": 5.2247518000513082e+01,
+      "cpu_time": 5.2231066000000048e+01,
       "time_unit": "us",
       "failes": 0.0000000000000000e+00,
-      "operations/s": 5.0394576145482511e+05
+      "operations/s": 4.8997542811026163e+06
     },
     {
       "name": "RangeSelect/iterations:1000/real_time",
@@ -108,11 +108,11 @@
       "repetition_index": 0,
       "threads": 1,
       "iterations": 1000,
-      "real_time": 2.2015709999323008e+01,
-      "cpu_time": 2.1976356000000028e+01,
+      "real_time": 3.8189800034160726e-01,
+      "cpu_time": 3.8230200000000103e-01,
       "time_unit": "us",
       "failes": 0.0000000000000000e+00,
-      "operations/s": 4.5422109940163204e+06
+      "operations/s": 0.0000000000000000e+00
     },
     {
       "name": "Scan/iterations:1/real_time",
@@ -124,11 +124,11 @@
       "repetition_index": 0,
       "threads": 1,
       "iterations": 1,
-      "real_time": 2.4691743999937898e+04,
-      "cpu_time": 2.4592702000000078e+04,
+      "real_time": 2.3880002117948607e+00,
+      "cpu_time": 2.1689999999963128e+00,
       "time_unit": "us",
       "failes": 0.0000000000000000e+00,
-      "operations/s": 4.0499366913998262e+06
+      "operations/s": 0.0000000000000000e+00
     },
     {
       "name": "ReadUpdate_50_50/iterations:100000/real_time",
@@ -140,11 +140,11 @@
       "repetition_index": 0,
       "threads": 1,
       "iterations": 100000,
-      "real_time": 4.3687221499931184e+00,
-      "cpu_time": 4.1510669200000008e+00,
+      "real_time": 1.9012491200010118e+00,
+      "cpu_time": 1.9012279800000005e+00,
       "time_unit": "us",
       "failes": 0.0000000000000000e+00,
-      "operations/s": 2.2889988551951633e+05
+      "operations/s": 5.2597000018570304e+05
     },
     {
       "name": "ReadInsert_95_5/iterations:100000/real_time",
@@ -156,11 +156,11 @@
       "repetition_index": 0,
       "threads": 1,
       "iterations": 100000,
-      "real_time": 1.1344334900059039e+00,
-      "cpu_time": 1.1121140100000004e+00,
+      "real_time": 4.5864804000302684e-01,
+      "cpu_time": 4.5864503999999973e-01,
       "time_unit": "us",
       "failes": 0.0000000000000000e+00,
-      "operations/s": 8.8149724845904869e+05
+      "operations/s": 2.1803211019792007e+06
     },
     {
       "name": "Remove/iterations:100000/real_time",
@@ -172,11 +172,11 @@
       "repetition_index": 0,
       "threads": 1,
       "iterations": 100000,
-      "real_time": 3.1301216899919382e+00,
-      "cpu_time": 2.8291289100000006e+00,
+      "real_time": 1.2038683998980559e-01,
+      "cpu_time": 1.1909804999999994e-01,
       "time_unit": "us",
       "failes": 0.0000000000000000e+00,
-      "operations/s": 3.1947639709898166e+05
+      "operations/s": 8.3065557670978028e+06
     }
   ]
 }

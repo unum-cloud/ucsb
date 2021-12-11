@@ -61,5 +61,12 @@
         "insert_proportion": 0.05,
         "key_dist": "latest",
         "value_length": 1024
+    },
+    {
+        "name": "Remove",
+        "records_count": 100000,
+        "operations_count": 100000,
+        "remove_proportion": 1.0,
+        "key_dist": "zipfian"
     }
 ]
