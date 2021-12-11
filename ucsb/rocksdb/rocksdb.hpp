@@ -125,7 +125,8 @@ operation_result_t rocksdb_t::batch_read(keys_span_t keys) const {
 operation_result_t rocksdb_t::range_select(key_t key, size_t length, value_span_t single_value) const {
 
     rocksdb::Iterator* db_iter = db_->NewIterator(rocksdb::ReadOptions());
-    db_iter->Seek(key);
+    rocksdb::Slice slice {std::to_string(key)};
+    db_iter->Seek(slice);
     size_t selected_records_count = 0;
     for (int i = 0; db_iter->Valid() && i < length; i++) {
         std::string data = db_iter->value().ToString();
