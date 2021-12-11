@@ -23,6 +23,7 @@ namespace fs = ucsb::fs;
 using key_t = ucsb::key_t;
 using keys_span_t = ucsb::keys_span_t;
 using value_span_t = ucsb::value_span_t;
+using value_spanc_t = ucsb::value_spanc_t;
 using operation_status_t = ucsb::operation_status_t;
 using operation_result_t = ucsb::operation_result_t;
 
@@ -34,11 +35,13 @@ struct rocksdb_t : public ucsb::db_t {
     bool init(fs::path const& config_path, fs::path const& dir_path) override;
     void destroy() override;
 
-    operation_result_t insert(key_t key, value_span_t value) override;
-    operation_result_t update(key_t key, value_span_t value) override;
-    operation_result_t read(key_t key, value_span_t value) const override;
+    operation_result_t insert(key_t key, value_spanc_t value) override;
+    operation_result_t update(key_t key, value_spanc_t value) override;
     operation_result_t remove(key_t key) override;
+
+    operation_result_t read(key_t key, value_span_t value) const override;
     operation_result_t batch_read(keys_span_t keys) const override;
+
     operation_result_t range_select(key_t key, size_t length, value_span_t single_value) const override;
     operation_result_t scan(value_span_t single_value) const override;
 
@@ -71,8 +74,8 @@ void rocksdb_t::destroy() {
     db_ = nullptr;
 }
 
-operation_result_t rocksdb_t::insert(key_t key, value_span_t value) {
-    std::string data(reinterpret_cast<char*>(value.data()), value.size());
+operation_result_t rocksdb_t::insert(key_t key, value_spanc_t value) {
+    std::string data(reinterpret_cast<char const*>(value.data()), value.size());
     rocksdb::WriteOptions wopt;
     rocksdb::Slice slice {std::to_string(key)};
     rocksdb::Status status = db_->Put(wopt, slice, data);
@@ -81,8 +84,18 @@ operation_result_t rocksdb_t::insert(key_t key, value_span_t value) {
     return {1, operation_status_t::ok_k};
 }
 
-operation_result_t rocksdb_t::update(key_t key, value_span_t value) {
+operation_result_t rocksdb_t::update(key_t key, value_spanc_t value) {
     return insert(key, value);
+}
+
+operation_result_t rocksdb_t::remove(key_t key) {
+    rocksdb::WriteOptions wopt;
+    rocksdb::Slice slice {std::to_string(key)};
+    rocksdb::Status status = db_->Delete(wopt, slice);
+    if (!status.ok())
+        return {0, operation_status_t::error_k};
+
+    return {1, operation_status_t::ok_k};
 }
 
 operation_result_t rocksdb_t::read(key_t key, value_span_t value) const {
@@ -95,16 +108,6 @@ operation_result_t rocksdb_t::read(key_t key, value_span_t value) const {
         return {0, operation_status_t::error_k};
 
     memcpy(value.data(), data.data(), data.size());
-    return {1, operation_status_t::ok_k};
-}
-
-operation_result_t rocksdb_t::remove(key_t key) {
-    rocksdb::WriteOptions wopt;
-    rocksdb::Slice slice {std::to_string(key)};
-    rocksdb::Status status = db_->Delete(wopt, slice);
-    if (!status.ok())
-        return {0, operation_status_t::error_k};
-
     return {1, operation_status_t::ok_k};
 }
 

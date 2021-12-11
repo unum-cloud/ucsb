@@ -41,6 +41,7 @@ namespace fs = ucsb::fs;
 using key_t = ucsb::key_t;
 using keys_span_t = ucsb::keys_span_t;
 using value_span_t = ucsb::value_span_t;
+using value_spanc_t = ucsb::value_spanc_t;
 using operation_status_t = ucsb::operation_status_t;
 using operation_result_t = ucsb::operation_result_t;
 
@@ -52,11 +53,13 @@ struct wiredtiger_t : public ucsb::db_t {
     bool init(fs::path const& config_path, fs::path const& dir_path) override;
     void destroy() override;
 
-    operation_result_t insert(key_t key, value_span_t value) override;
-    operation_result_t update(key_t key, value_span_t value) override;
-    operation_result_t read(key_t key, value_span_t value) const override;
+    operation_result_t insert(key_t key, value_spanc_t value) override;
+    operation_result_t update(key_t key, value_spanc_t value) override;
     operation_result_t remove(key_t key) override;
+
+    operation_result_t read(key_t key, value_span_t value) const override;
     operation_result_t batch_read(keys_span_t keys) const override;
+
     operation_result_t range_select(key_t key, size_t length, value_span_t single_value) const override;
     operation_result_t scan(value_span_t single_value) const override;
 
@@ -84,10 +87,10 @@ void wiredtiger_t::destroy() {
     conn_ = nullptr;
 }
 
-operation_result_t wiredtiger_t::insert(key_t key, value_span_t value) {
+operation_result_t wiredtiger_t::insert(key_t key, value_spanc_t value) {
 
     std::string str_key = std::to_string(key);
-    std::string data(reinterpret_cast<char*>(value.data()), value.size());
+    std::string data(reinterpret_cast<char const*>(value.data()), value.size());
 
     cursor_->set_key(cursor_, str_key.c_str());
     WT_ITEM db_value;
@@ -101,10 +104,10 @@ operation_result_t wiredtiger_t::insert(key_t key, value_span_t value) {
     return {1, operation_status_t::ok_k};
 }
 
-operation_result_t wiredtiger_t::update(key_t key, value_span_t value) {
+operation_result_t wiredtiger_t::update(key_t key, value_spanc_t value) {
 
     std::string str_key = std::to_string(key);
-    std::string data(reinterpret_cast<char*>(value.data()), value.size());
+    std::string data(reinterpret_cast<char const*>(value.data()), value.size());
 
     cursor_->set_key(cursor_, str_key.c_str());
     WT_ITEM db_value;
@@ -112,6 +115,17 @@ operation_result_t wiredtiger_t::update(key_t key, value_span_t value) {
     db_value.size = data.size();
     cursor_->set_value(cursor_, &db_value);
     int res = cursor_->update(cursor_);
+    cursor_->reset(cursor_);
+    if (res)
+        return {0, operation_status_t::error_k};
+    return {1, operation_status_t::ok_k};
+}
+
+operation_result_t wiredtiger_t::remove(key_t key) {
+
+    std::string str_key = std::to_string(key);
+    cursor_->set_key(cursor_, str_key.c_str());
+    int res = cursor_->remove(cursor_);
     cursor_->reset(cursor_);
     if (res)
         return {0, operation_status_t::error_k};
@@ -130,17 +144,6 @@ operation_result_t wiredtiger_t::read(key_t key, value_span_t value) const {
         return {0, operation_status_t::not_found_k};
 
     memcpy(value.data(), db_value.data, db_value.size);
-    return {1, operation_status_t::ok_k};
-}
-
-operation_result_t wiredtiger_t::remove(key_t key) {
-
-    std::string str_key = std::to_string(key);
-    cursor_->set_key(cursor_, str_key.c_str());
-    int res = cursor_->remove(cursor_);
-    cursor_->reset(cursor_);
-    if (res)
-        return {0, operation_status_t::error_k};
     return {1, operation_status_t::ok_k};
 }
 

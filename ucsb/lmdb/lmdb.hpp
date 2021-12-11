@@ -17,6 +17,7 @@ namespace fs = ucsb::fs;
 using key_t = ucsb::key_t;
 using keys_span_t = ucsb::keys_span_t;
 using value_span_t = ucsb::value_span_t;
+using value_spanc_t = ucsb::value_spanc_t;
 using operation_status_t = ucsb::operation_status_t;
 using operation_result_t = ucsb::operation_result_t;
 
@@ -28,11 +29,13 @@ struct lmdb_t : public ucsb::db_t {
     bool init(fs::path const& config_path, fs::path const& dir_path) override;
     void destroy() override;
 
-    operation_result_t insert(key_t key, value_span_t value) override;
-    operation_result_t update(key_t key, value_span_t value) override;
-    operation_result_t read(key_t key, value_span_t value) const override;
+    operation_result_t insert(key_t key, value_spanc_t value) override;
+    operation_result_t update(key_t key, value_spanc_t value) override;
     operation_result_t remove(key_t key) override;
+
+    operation_result_t read(key_t key, value_span_t value) const override;
     operation_result_t batch_read(keys_span_t keys) const override;
+
     operation_result_t range_select(key_t key, size_t length, value_span_t single_value) const override;
     operation_result_t scan(value_span_t single_value) const override;
 
@@ -100,7 +103,7 @@ void lmdb_t::destroy() {
     env_ = nullptr;
 }
 
-operation_result_t lmdb_t::insert(key_t key, value_span_t value) {
+operation_result_t lmdb_t::insert(key_t key, value_spanc_t value) {
 
     MDB_txn* txn = nullptr;
     MDB_val key_slice, val_slice;
@@ -109,7 +112,7 @@ operation_result_t lmdb_t::insert(key_t key, value_span_t value) {
     key_slice.mv_data = static_cast<void*>(std_key.data());
     key_slice.mv_size = std_key.size();
 
-    std::string data(reinterpret_cast<char*>(value.data()), value.size());
+    std::string data(reinterpret_cast<char const*>(value.data()), value.size());
     val_slice.mv_data = static_cast<void*>(const_cast<char*>(data.data()));
     val_slice.mv_size = data.size();
 
@@ -126,29 +129,8 @@ operation_result_t lmdb_t::insert(key_t key, value_span_t value) {
     return {1, operation_status_t::ok_k};
 }
 
-operation_result_t lmdb_t::update(key_t key, value_span_t value) {
+operation_result_t lmdb_t::update(key_t key, value_spanc_t value) {
     return insert(key, value);
-}
-
-operation_result_t lmdb_t::read(key_t key, value_span_t value) const {
-
-    MDB_txn* txn = nullptr;
-    MDB_val key_slice, val_slice;
-
-    std::string std_key = std::to_string(key);
-    key_slice.mv_data = static_cast<void*>(std_key.data());
-    key_slice.mv_size = std_key.size();
-
-    int ret = mdb_txn_begin(env_, nullptr, MDB_RDONLY, &txn);
-    if (ret)
-        return {0, operation_status_t::error_k};
-    ret = mdb_get(txn, dbi_, &key_slice, &val_slice);
-    if (ret)
-        return {0, operation_status_t::error_k};
-    memcpy(value.data(), val_slice.mv_data, val_slice.mv_size);
-    mdb_txn_abort(txn);
-
-    return {1, operation_status_t::ok_k};
 }
 
 operation_result_t lmdb_t::remove(key_t key) {
@@ -169,6 +151,27 @@ operation_result_t lmdb_t::remove(key_t key) {
     ret = mdb_txn_commit(txn);
     if (ret)
         return {0, operation_status_t::error_k};
+    return {1, operation_status_t::ok_k};
+}
+
+operation_result_t lmdb_t::read(key_t key, value_span_t value) const {
+
+    MDB_txn* txn = nullptr;
+    MDB_val key_slice, val_slice;
+
+    std::string std_key = std::to_string(key);
+    key_slice.mv_data = static_cast<void*>(std_key.data());
+    key_slice.mv_size = std_key.size();
+
+    int ret = mdb_txn_begin(env_, nullptr, MDB_RDONLY, &txn);
+    if (ret)
+        return {0, operation_status_t::error_k};
+    ret = mdb_get(txn, dbi_, &key_slice, &val_slice);
+    if (ret)
+        return {0, operation_status_t::error_k};
+    memcpy(value.data(), val_slice.mv_data, val_slice.mv_size);
+    mdb_txn_abort(txn);
+
     return {1, operation_status_t::ok_k};
 }
 

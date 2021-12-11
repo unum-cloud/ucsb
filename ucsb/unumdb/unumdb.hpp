@@ -15,6 +15,7 @@ namespace fs = ucsb::fs;
 using key_t = ucsb::key_t;
 using keys_span_t = ucsb::keys_span_t;
 using value_span_t = ucsb::value_span_t;
+using value_spanc_t = ucsb::value_spanc_t;
 using operation_status_t = ucsb::operation_status_t;
 using operation_result_t = ucsb::operation_result_t;
 
@@ -33,11 +34,13 @@ struct unumdb_t : public ucsb::db_t {
     bool init(fs::path const& config_path, fs::path const& dir_path) override;
     void destroy() override;
 
-    operation_result_t insert(key_t key, value_span_t value) override;
-    operation_result_t update(key_t key, value_span_t value) override;
-    operation_result_t read(key_t key, value_span_t value) const override;
+    operation_result_t insert(key_t key, value_spanc_t value) override;
+    operation_result_t update(key_t key, value_spanc_t value) override;
     operation_result_t remove(key_t key) override;
+
+    operation_result_t read(key_t key, value_span_t value) const override;
     operation_result_t batch_read(keys_span_t keys) const override;
+
     operation_result_t range_select(key_t key, size_t length, value_span_t single_value) const override;
     operation_result_t scan(value_span_t single_value) const override;
 
@@ -97,14 +100,19 @@ void unumdb_t::destroy() {
     fs::remove(schema_path);
 }
 
-operation_result_t unumdb_t::insert(key_t key, value_span_t value) {
-    citizenc_t citizen {reinterpret_cast<byte_t*>(value.data()), value.size()};
+operation_result_t unumdb_t::insert(key_t key, value_spanc_t value) {
+    citizenc_t citizen {reinterpret_cast<byte_t const*>(value.data()), value.size()};
     region_.insert(key, citizen);
     return {1, operation_status_t::ok_k};
 }
 
-operation_result_t unumdb_t::update(key_t key, value_span_t value) {
+operation_result_t unumdb_t::update(key_t key, value_spanc_t value) {
     return insert(key, value);
+}
+
+operation_result_t unumdb_t::remove(key_t key) {
+    region_.remove(key);
+    return {1, operation_status_t::ok_k};
 }
 
 operation_result_t unumdb_t::read(key_t key, value_span_t value) const {
@@ -120,11 +128,6 @@ operation_result_t unumdb_t::read(key_t key, value_span_t value) const {
     if (!countdown.wait())
         return {0, operation_status_t::error_k};
 
-    return {1, operation_status_t::ok_k};
-}
-
-operation_result_t unumdb_t::remove(key_t key) {
-    region_.remove(key);
     return {1, operation_status_t::ok_k};
 }
 

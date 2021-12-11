@@ -15,5 +15,6 @@ using keys_span_t = std::span<key_t>;
 using value_length_t = size_t;
 using value_t = std::vector<std::byte>;
 using value_span_t = std::span<std::byte>;
+using value_spanc_t = std::span<const std::byte>;
 
 } // namespace ucsb
