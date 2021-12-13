@@ -160,12 +160,11 @@ void transaction(bm::State& state, workload_t const& workload, db_t& db) {
         }
 
         operations_done += result.depth;
-        bool ok = (result.status == operation_status_t::ok_k);
-        fails += size_t(!ok) * result.depth;
+        fails += size_t(result.status != operation_status_t::ok_k) * result.depth;
     }
 
     state.counters["operations/s"] = bm::Counter(operations_done - fails, bm::Counter::kIsRate);
-    state.counters["fails"] = bm::Counter(fails);
+    state.counters["fails,%"] = bm::Counter(fails * 100.0 / operations_done);
 }
 
 int main(int argc, char** argv) {
