@@ -159,17 +159,17 @@ operation_result_t rocksdb_t::range_select(key_t key, size_t length, value_span_
 
 operation_result_t rocksdb_t::scan(value_span_t single_value) const {
 
-    size_t scaned_records_count = 0;
+    size_t scanned_records_count = 0;
     rocksdb::Iterator* db_iter = db_->NewIterator(rocksdb::ReadOptions());
     db_iter->SeekToFirst();
     while (db_iter->Valid()) {
         std::string data = db_iter->value().ToString();
         memcpy(single_value.data(), data.data(), data.size());
         db_iter->Next();
-        ++scaned_records_count;
+        ++scanned_records_count;
     }
     delete db_iter;
-    return {scaned_records_count, operation_status_t::ok_k};
+    return {scanned_records_count, operation_status_t::ok_k};
 }
 
 } // namespace facebook

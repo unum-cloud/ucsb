@@ -274,16 +274,16 @@ operation_result_t lmdb_t::scan(value_span_t single_value) const {
     if (ret)
         return {0, operation_status_t::error_k};
 
-    size_t scaned_records_count = 0;
+    size_t scanned_records_count = 0;
     while (!ret) {
         memcpy(single_value.data(), val_slice.mv_data, val_slice.mv_size);
         ret = mdb_cursor_get(cursor, &key_slice, &val_slice, MDB_NEXT);
-        ++scaned_records_count;
+        ++scanned_records_count;
     }
 
     mdb_cursor_close(cursor);
     mdb_txn_abort(txn);
-    return {scaned_records_count, operation_status_t::ok_k};
+    return {scanned_records_count, operation_status_t::ok_k};
 }
 
 bool lmdb_t::load_config(fs::path const& config_path, config_t& config) {

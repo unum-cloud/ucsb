@@ -188,14 +188,14 @@ operation_result_t wiredtiger_t::scan(value_span_t single_value) const {
     int res = 0;
     error_check(session_->open_cursor(session_, table_name_.c_str(), NULL, NULL, &cursor_));
 
-    size_t scaned_records_count = 0;
+    size_t scanned_records_count = 0;
     while ((res = cursor_->next(cursor_)) == 0) {
         error_check(cursor_->get_key(cursor_, &db_key));
         error_check(cursor_->get_value(cursor_, &db_value));
         memcpy(single_value.data(), db_value.data, db_value.size);
-        ++scaned_records_count;
+        ++scanned_records_count;
     }
-    return {scaned_records_count, operation_status_t::ok_k};
+    return {scanned_records_count, operation_status_t::ok_k};
 }
 
 } // namespace mongodb
