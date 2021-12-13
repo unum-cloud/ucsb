@@ -29,7 +29,9 @@ using operation_chooser_t = std::unique_ptr<ucsb::operation_chooser_t>;
 using exception_t = ucsb::exception_t;
 
 int drop_system_caches() {
-    return system("sudo sh -c '/usr/bin/echo 3 > /proc/sys/vm/drop_caches'");
+    auto res = system("sudo sh -c '/usr/bin/echo 3 > /proc/sys/vm/drop_caches'");
+    assert(res == 0);
+    sleep(5);
 }
 
 inline bool start_with(const char* str, const char* prefix) {
@@ -139,6 +141,7 @@ operation_chooser_t create_operation_chooser(workload_t const& workload) {
 }
 
 void transaction(bm::State& state, workload_t const& workload, db_t& db) {
+    drop_system_caches();
 
     auto chooser = create_operation_chooser(workload);
     transaction_t transaction(workload, db);
