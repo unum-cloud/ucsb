@@ -52,12 +52,10 @@ struct rocksdb_t : public ucsb::db_t {
 bool rocksdb_t::init(fs::path const& config_path, fs::path const& dir_path) {
 
     rocksdb::Options options;
-    options.create_if_missing = true;
     std::vector<rocksdb::ColumnFamilyDescriptor> cf_descs;
     std::vector<rocksdb::ColumnFamilyHandle*> cf_handles;
     rocksdb::Status status =
         rocksdb::LoadOptionsFromFile(config_path.string(), rocksdb::Env::Default(), &options, &cf_descs);
-
     if (!status.ok())
         return false;
 
@@ -77,7 +75,8 @@ void rocksdb_t::destroy() {
 operation_result_t rocksdb_t::insert(key_t key, value_spanc_t value) {
     std::string data(reinterpret_cast<char const*>(value.data()), value.size());
     rocksdb::WriteOptions wopt;
-    rocksdb::Slice slice {std::to_string(key)};
+    auto str_key = std::to_string(key);
+    rocksdb::Slice slice {str_key};
     rocksdb::Status status = db_->Put(wopt, slice, data);
     if (!status.ok())
         return {0, operation_status_t::error_k};
@@ -87,7 +86,8 @@ operation_result_t rocksdb_t::insert(key_t key, value_spanc_t value) {
 operation_result_t rocksdb_t::update(key_t key, value_spanc_t value) {
 
     std::string data;
-    rocksdb::Slice slice {std::to_string(key)};
+    auto str_key = std::to_string(key);
+    rocksdb::Slice slice {str_key};
     rocksdb::Status status = db_->Get(rocksdb::ReadOptions(), slice, &data);
     if (status.IsNotFound())
         return {1, operation_status_t::not_found_k};
@@ -106,7 +106,8 @@ operation_result_t rocksdb_t::update(key_t key, value_spanc_t value) {
 
 operation_result_t rocksdb_t::remove(key_t key) {
     rocksdb::WriteOptions wopt;
-    rocksdb::Slice slice {std::to_string(key)};
+    auto str_key = std::to_string(key);
+    rocksdb::Slice slice {str_key};
     rocksdb::Status status = db_->Delete(wopt, slice);
     if (!status.ok())
         return {0, operation_status_t::error_k};
@@ -116,7 +117,8 @@ operation_result_t rocksdb_t::remove(key_t key) {
 
 operation_result_t rocksdb_t::read(key_t key, value_span_t value) const {
     std::string data;
-    rocksdb::Slice slice {std::to_string(key)};
+    auto str_key = std::to_string(key);
+    rocksdb::Slice slice {str_key};
     rocksdb::Status status = db_->Get(rocksdb::ReadOptions(), slice, &data);
     if (status.IsNotFound())
         return {1, operation_status_t::not_found_k};
@@ -129,10 +131,14 @@ operation_result_t rocksdb_t::read(key_t key, value_span_t value) const {
 
 operation_result_t rocksdb_t::batch_read(keys_span_t keys) const {
 
+    std::vector<std::string> str_keys;
     std::vector<rocksdb::Slice> slices;
+    str_keys.reserve(keys.size());
     slices.reserve(keys.size());
-    for (const auto& key : keys)
-        slices.push_back({std::to_string(key)});
+    for (const auto& key : keys) {
+        str_keys.push_back(std::to_string(key));
+        slices.push_back({str_keys.back()});
+    }
 
     std::vector<std::string> data;
     data.reserve(keys.size());
@@ -144,7 +150,8 @@ operation_result_t rocksdb_t::batch_read(keys_span_t keys) const {
 operation_result_t rocksdb_t::range_select(key_t key, size_t length, value_span_t single_value) const {
 
     rocksdb::Iterator* db_iter = db_->NewIterator(rocksdb::ReadOptions());
-    rocksdb::Slice slice {std::to_string(key)};
+    auto str_key = std::to_string(key);
+    rocksdb::Slice slice {str_key};
     db_iter->Seek(slice);
     size_t selected_records_count = 0;
     for (int i = 0; db_iter->Valid() && i < length; i++) {
