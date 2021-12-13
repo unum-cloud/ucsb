@@ -1,5 +1,4 @@
 #pragma once
-
 #include <cassert>
 
 #include "ucsb/core/hash.hpp"
