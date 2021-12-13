@@ -173,8 +173,8 @@ operation_result_t unumdb_t::range_select(key_t key, size_t length, value_span_t
             countdown.reset(1);
             it.get(citizen, countdown);
             countdown.wait();
+            ++selected_records_count;
         }
-        ++selected_records_count;
     }
     return {selected_records_count, operation_status_t::ok_k};
 }
@@ -189,8 +189,8 @@ operation_result_t unumdb_t::scan(value_span_t single_value) const {
             countdown.reset(1);
             it.get(citizen, countdown);
             countdown.wait();
+            ++scanned_records_count;
         }
-        ++scanned_records_count;
     }
     return {scanned_records_count, operation_status_t::ok_k};
 }
