@@ -1,6 +1,7 @@
 #pragma once
 
 #include <string>
+#include <vector>
 #include <fmt/format.h>
 
 #include <wiredtiger.h>
@@ -68,6 +69,7 @@ struct wiredtiger_t : public ucsb::db_t {
     WT_SESSION* session_;
     WT_CURSOR* cursor_;
     std::string table_name_;
+    std::vector<std::byte> value_buffer_;
 };
 
 bool wiredtiger_t::init(fs::path const& config_path, fs::path const& dir_path) {
@@ -156,6 +158,11 @@ operation_result_t wiredtiger_t::batch_read(keys_span_t keys) const {
         cursor_->set_key(cursor_, str_key.c_str());
         error_check(cursor_->search(cursor_));
         int res = cursor_->get_value(cursor_, &db_value);
+        if (res == 0) {
+            if (db_value.size > value_buffer_.size())
+                value_buffer_ = std::vector<std::byte>(db_value.size);
+            memcpy(value_buffer_.data(), db_value.data, db_value.size);
+        }
         cursor_->reset(cursor_);
     }
     return {keys.size(), operation_status_t::ok_k};

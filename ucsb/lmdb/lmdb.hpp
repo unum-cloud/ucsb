@@ -1,6 +1,7 @@
 #pragma once
 
 #include <string>
+#include <vector>
 #include <sys/stat.h>
 #include <fmt/format.h>
 #include <nlohmann/json.hpp>
@@ -52,6 +53,7 @@ struct lmdb_t : public ucsb::db_t {
 
     MDB_env* env_;
     MDB_dbi dbi_;
+    std::vector<std::byte> value_buffer_;
 };
 
 bool lmdb_t::init(fs::path const& config_path, fs::path const& dir_path) {
@@ -219,6 +221,10 @@ operation_result_t lmdb_t::batch_read(keys_span_t keys) const {
         ret = mdb_get(txn, dbi_, &key_slice, &val_slice);
         if (ret)
             return {0, operation_status_t::error_k};
+
+        if (val_slice.mv_size > value_buffer_.size())
+            value_buffer_ = std::vector<std::byte>(val_slice.mv_size);
+        memcpy(value_buffer_.data(), val_slice.mv_data, val_slice.mv_size);
         mdb_txn_abort(txn);
     }
     return {keys.size(), operation_status_t::ok_k};
