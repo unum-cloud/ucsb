@@ -37,7 +37,7 @@ rm -rf ./tmp/
 # ./build_release/bin/_ucsb_bench -db unumdb -c ./bench/configs/unumdb/config.json -w ./bench/workloads/100GB.json
 # ./build_release/bin/_ucsb_bench -db rocksdb -c ./bench/configs/rocksdb/options.ini -w ./bench/workloads/100GB.json
 # ./build_release/bin/_ucsb_bench -db leveldb -c ./bench/configs/leveldb/config.json -w ./bench/workloads/100GB.json
-# ./build_release/bin/_ucsb_bench -db wiredtiger -c ./bench/configs/wiredtiger/config.json -w ./bench/workloads/10100GB0MB.json
+# ./build_release/bin/_ucsb_bench -db wiredtiger -c ./bench/configs/wiredtiger/config.json -w ./bench/workloads/100GB.json
 
 #
 # 1TB benchmarks
