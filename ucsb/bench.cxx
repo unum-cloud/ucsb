@@ -160,7 +160,7 @@ void transaction(bm::State& state, workload_t const& workload, db_t& db) {
         }
 
         operations_done += result.depth;
-        bool ok = result.status == operation_status_t::ok_k || result.status == operation_status_t::not_found_k;
+        bool ok = (result.status == operation_status_t::ok_k);
         fails += size_t(!ok) * result.depth;
     }
 
