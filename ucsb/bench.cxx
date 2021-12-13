@@ -143,7 +143,7 @@ void transaction(bm::State& state, workload_t const& workload, db_t& db) {
     auto chooser = create_operation_chooser(workload);
     transaction_t transaction(workload, db);
     size_t operations_done = 0;
-    size_t failes = 0;
+    size_t fails = 0;
 
     for (auto _ : state) {
         operation_result_t result;
@@ -161,11 +161,11 @@ void transaction(bm::State& state, workload_t const& workload, db_t& db) {
 
         operations_done += result.depth;
         bool ok = result.status == operation_status_t::ok_k || result.status == operation_status_t::not_found_k;
-        failes += size_t(!ok) * result.depth;
+        fails += size_t(!ok) * result.depth;
     }
 
-    state.counters["operations/s"] = bm::Counter(operations_done - failes, bm::Counter::kIsRate);
-    state.counters["failes"] = bm::Counter(failes);
+    state.counters["operations/s"] = bm::Counter(operations_done - fails, bm::Counter::kIsRate);
+    state.counters["fails"] = bm::Counter(fails);
 }
 
 int main(int argc, char** argv) {

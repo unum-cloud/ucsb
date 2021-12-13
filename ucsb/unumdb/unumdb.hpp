@@ -182,7 +182,7 @@ operation_result_t unumdb_t::range_select(key_t key, size_t length, value_span_t
 operation_result_t unumdb_t::scan(value_span_t single_value) const {
     countdown_t countdown;
     citizen_t citizen {reinterpret_cast<byte_t*>(single_value.data()), single_value.size()};
-    size_t scaned_records_count = 0;
+    size_t scanned_records_count = 0;
     auto it = region_.begin();
     for (; it != region_.end(); ++it) {
         if (!it.is_removed()) {
@@ -190,9 +190,9 @@ operation_result_t unumdb_t::scan(value_span_t single_value) const {
             it.get(citizen, countdown);
             countdown.wait();
         }
-        ++scaned_records_count;
+        ++scanned_records_count;
     }
-    return {scaned_records_count, operation_status_t::ok_k};
+    return {scanned_records_count, operation_status_t::ok_k};
 }
 
 void unumdb_t::save(region_config_t const& config, region_schema_t const& schema, string_t const& name) {
