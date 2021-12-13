@@ -130,7 +130,34 @@ operation_result_t lmdb_t::insert(key_t key, value_spanc_t value) {
 }
 
 operation_result_t lmdb_t::update(key_t key, value_spanc_t value) {
-    return insert(key, value);
+
+    MDB_txn* txn = nullptr;
+    MDB_val key_slice, val_slice;
+
+    std::string std_key = std::to_string(key);
+    key_slice.mv_data = static_cast<void*>(std_key.data());
+    key_slice.mv_size = std_key.size();
+
+    int ret = mdb_txn_begin(env_, nullptr, MDB_RDONLY, &txn);
+    if (ret)
+        return {0, operation_status_t::error_k};
+    ret = mdb_get(txn, dbi_, &key_slice, &val_slice);
+    if (ret)
+        return {0, operation_status_t::error_k};
+
+    std::string data(reinterpret_cast<char const*>(value.data()), value.size());
+    val_slice.mv_data = static_cast<void*>(const_cast<char*>(data.data()));
+    val_slice.mv_size = data.size();
+
+    ret = mdb_put(txn, dbi_, &key_slice, &val_slice, 0);
+    if (ret)
+        return {0, operation_status_t::error_k};
+
+    ret = mdb_txn_commit(txn);
+    if (ret)
+        return {0, operation_status_t::error_k};
+
+    return {1, operation_status_t::ok_k};
 }
 
 operation_result_t lmdb_t::remove(key_t key) {

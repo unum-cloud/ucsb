@@ -102,7 +102,21 @@ operation_result_t leveldb_t::insert(key_t key, value_spanc_t value) {
 }
 
 operation_result_t leveldb_t::update(key_t key, value_spanc_t value) {
-    return insert(key, value);
+
+    std::string data;
+    leveldb::Slice slice {std::to_string(key)};
+    leveldb::Status status = db_->Get(leveldb::ReadOptions(), slice, &data);
+    if (status.IsNotFound())
+        return {1, operation_status_t::not_found_k};
+    else if (!status.ok())
+        return {0, operation_status_t::error_k};
+
+    data = std::string(reinterpret_cast<char const*>(value.data()), value.size());
+    leveldb::WriteOptions wopt;
+    status = db_->Put(wopt, slice, data);
+    if (!status.ok())
+        return {0, operation_status_t::error_k};
+    return {1, operation_status_t::ok_k};
 }
 
 operation_result_t leveldb_t::remove(key_t key) {

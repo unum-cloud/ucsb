@@ -107,7 +107,15 @@ operation_result_t unumdb_t::insert(key_t key, value_spanc_t value) {
 }
 
 operation_result_t unumdb_t::update(key_t key, value_spanc_t value) {
-    return insert(key, value);
+
+    citizen_location_t location;
+    region_.find(key, location);
+    if (!location)
+        return {1, operation_status_t::not_found_k};
+
+    citizenc_t citizen {reinterpret_cast<byte_t const*>(value.data()), value.size()};
+    region_.insert(key, citizen);
+    return {1, operation_status_t::ok_k};
 }
 
 operation_result_t unumdb_t::remove(key_t key) {

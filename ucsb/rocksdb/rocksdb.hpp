@@ -85,6 +85,22 @@ operation_result_t rocksdb_t::insert(key_t key, value_spanc_t value) {
 }
 
 operation_result_t rocksdb_t::update(key_t key, value_spanc_t value) {
+
+    std::string data;
+    rocksdb::Slice slice {std::to_string(key)};
+    rocksdb::Status status = db_->Get(rocksdb::ReadOptions(), slice, &data);
+    if (status.IsNotFound())
+        return {1, operation_status_t::not_found_k};
+    else if (!status.ok())
+        return {0, operation_status_t::error_k};
+
+    data = std::string(reinterpret_cast<char const*>(value.data()), value.size());
+    rocksdb::WriteOptions wopt;
+    status = db_->Put(wopt, slice, data);
+    if (!status.ok())
+        return {0, operation_status_t::error_k};
+    return {1, operation_status_t::ok_k};
+
     return insert(key, value);
 }
 
