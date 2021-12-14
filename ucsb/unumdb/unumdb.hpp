@@ -47,6 +47,7 @@ struct unumdb_t : public ucsb::db_t {
   private:
     struct db_config_t {
         region_config_t region_config;
+        string_t io_device;
         size_t uring_max_files_count = 0;
         size_t uring_queue_depth = 0;
     };
@@ -81,8 +82,14 @@ bool unumdb_t::init(fs::path const& config_path, fs::path const& dir_path) {
     if (!load_config(db_config))
         return false;
 
-    init_file_io_by_pulling(dir_path.c_str(), db_config.uring_queue_depth);
-    // init_file_io_by_polling(dir_path.c_str(), db_config.uring_max_files_count, db_config.uring_queue_depth);
+    if (db_config.io_device == string_t("libc"))
+        init_file_io_by_libc(dir_path.c_str());
+    else if (db_config.io_device == string_t("pulling"))
+        init_file_io_by_pulling(dir_path.c_str(), db_config.uring_queue_depth);
+    else if (db_config.io_device == string_t("polling"))
+        init_file_io_by_polling(dir_path.c_str(), db_config.uring_max_files_count, db_config.uring_queue_depth);
+    else
+        return false;
 
     region_config_t config;
     region_schema_t schema;
@@ -361,6 +368,7 @@ bool unumdb_t::load_config(db_config_t& db_config) {
         j_config["files_count_enlarge_factor"].get<size_t>();
     db_config.region_config.city.street.building.fixed_citizen_size = 0;
 
+    db_config.io_device = j_config["io_device"].get<std::string>().c_str();
     db_config.uring_max_files_count = j_config["uring_max_files_count"].get<size_t>();
     db_config.uring_queue_depth = j_config["uring_queue_depth"].get<size_t>();
 
