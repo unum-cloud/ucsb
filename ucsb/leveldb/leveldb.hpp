@@ -28,7 +28,7 @@ using operation_result_t = ucsb::operation_result_t;
 
 struct leveldb_t : public ucsb::db_t {
   public:
-    inline leveldb_t() : db_(nullptr) {}
+    inline leveldb_t() : db_(nullptr), slice_buffer_(100) {}
     ~leveldb_t() override = default;
 
     bool init(fs::path const& config_path, fs::path const& dir_path) override;
@@ -54,9 +54,11 @@ struct leveldb_t : public ucsb::db_t {
         size_t filter_bits = -1;
     };
 
-    bool load_config(fs::path const& config_path, config_t& config);
+    inline bool load_config(fs::path const& config_path, config_t& config);
+    inline leveldb::Slice build_slice(key_t key);
 
     leveldb::DB* db_;
+    std::vector<char> slice_buffer_;
 };
 
 bool leveldb_t::init(fs::path const& config_path, fs::path const& dir_path) {
@@ -94,8 +96,7 @@ void leveldb_t::destroy() {
 operation_result_t leveldb_t::insert(key_t key, value_spanc_t value) {
     std::string data(reinterpret_cast<char const*>(value.data()), value.size());
     leveldb::WriteOptions wopt;
-    auto str_key = std::to_string(key);
-    leveldb::Slice slice {str_key};
+    leveldb::Slice slice = build_slice(key);
     leveldb::Status status = db_->Put(wopt, slice, data);
     if (!status.ok())
         return {0, operation_status_t::error_k};
@@ -105,8 +106,7 @@ operation_result_t leveldb_t::insert(key_t key, value_spanc_t value) {
 operation_result_t leveldb_t::update(key_t key, value_spanc_t value) {
 
     std::string data;
-    auto str_key = std::to_string(key);
-    leveldb::Slice slice {str_key};
+    leveldb::Slice slice = build_slice(key);
     leveldb::Status status = db_->Get(leveldb::ReadOptions(), slice, &data);
     if (status.IsNotFound())
         return {1, operation_status_t::not_found_k};
@@ -123,8 +123,7 @@ operation_result_t leveldb_t::update(key_t key, value_spanc_t value) {
 
 operation_result_t leveldb_t::remove(key_t key) {
     leveldb::WriteOptions wopt;
-    auto str_key = std::to_string(key);
-    leveldb::Slice slice {str_key};
+    leveldb::Slice slice = build_slice(key);
     leveldb::Status status = db_->Delete(wopt, slice);
     if (!status.ok())
         return {0, operation_status_t::error_k};
@@ -134,8 +133,7 @@ operation_result_t leveldb_t::remove(key_t key) {
 
 operation_result_t leveldb_t::read(key_t key, value_span_t value) const {
     std::string data;
-    auto str_key = std::to_string(key);
-    leveldb::Slice slice {str_key};
+    leveldb::Slice slice = build_slice(key);
     leveldb::Status status = db_->Get(leveldb::ReadOptions(), slice, &data);
     if (status.IsNotFound())
         return {1, operation_status_t::not_found_k};
@@ -151,8 +149,7 @@ operation_result_t leveldb_t::batch_read(keys_span_t keys) const {
     // Note: imitation of batch read!
     for (auto const& key : keys) {
         std::string data;
-        auto str_key = std::to_string(key);
-        leveldb::Slice slice {str_key};
+        leveldb::Slice slice = build_slice(key);
         leveldb::Status status = db_->Get(leveldb::ReadOptions(), slice, &data);
     }
     return {keys.size(), operation_status_t::ok_k};
@@ -161,8 +158,7 @@ operation_result_t leveldb_t::batch_read(keys_span_t keys) const {
 operation_result_t leveldb_t::range_select(key_t key, size_t length, value_span_t single_value) const {
 
     leveldb::Iterator* db_iter = db_->NewIterator(leveldb::ReadOptions());
-    auto str_key = std::to_string(key);
-    leveldb::Slice slice {str_key};
+    leveldb::Slice slice = build_slice(key);
     db_iter->Seek(slice);
     size_t selected_records_count = 0;
     for (int i = 0; db_iter->Valid() && i < length; i++) {
@@ -206,6 +202,12 @@ bool leveldb_t::load_config(fs::path const& config_path, config_t& config) {
     config.filter_bits = j_config.value("filter_bits", 10);
 
     return true;
+}
+
+leveldb::Slice leveldb_t::build_slice(key_t key) {
+    char str_format[] = "%d";
+    int len = std::snprintf(slice_buffer_.data(), slice_buffer_.size(), str_format, key);
+    return leveldb::Slice(slice_buffer_.data(), len);
 }
 
 } // namespace google

@@ -48,7 +48,8 @@ using operation_result_t = ucsb::operation_result_t;
 
 struct wiredtiger_t : public ucsb::db_t {
   public:
-    inline wiredtiger_t() : conn_(nullptr), session_(nullptr), cursor_(nullptr), table_name_("table:access") {}
+    inline wiredtiger_t()
+        : conn_(nullptr), session_(nullptr), cursor_(nullptr), table_name_("table:access"), key_buffer_(100) {}
     ~wiredtiger_t() override = default;
 
     bool init(fs::path const& config_path, fs::path const& dir_path) override;
@@ -65,11 +66,14 @@ struct wiredtiger_t : public ucsb::db_t {
     operation_result_t scan(value_span_t single_value) const override;
 
   private:
+    char const* build_key(key_t key);
+
     WT_CONNECTION* conn_;
     WT_SESSION* session_;
     WT_CURSOR* cursor_;
     std::string table_name_;
-    std::vector<std::byte> value_buffer_;
+    std::vector<char> key_buffer_;
+    std::vector<char> value_buffer_;
 };
 
 bool wiredtiger_t::init(fs::path const& config_path, fs::path const& dir_path) {
@@ -91,13 +95,11 @@ void wiredtiger_t::destroy() {
 
 operation_result_t wiredtiger_t::insert(key_t key, value_spanc_t value) {
 
-    std::string str_key = std::to_string(key);
-    std::string data(reinterpret_cast<char const*>(value.data()), value.size());
-
-    cursor_->set_key(cursor_, str_key.c_str());
+    auto db_key = build_key(key);
+    cursor_->set_key(cursor_, db_key);
     WT_ITEM db_value;
-    db_value.data = data.c_str();
-    db_value.size = data.size();
+    db_value.data = value.data();
+    db_value.size = value.size();
     cursor_->set_value(cursor_, &db_value);
     int res = cursor_->insert(cursor_);
     cursor_->reset(cursor_);
@@ -108,13 +110,11 @@ operation_result_t wiredtiger_t::insert(key_t key, value_spanc_t value) {
 
 operation_result_t wiredtiger_t::update(key_t key, value_spanc_t value) {
 
-    std::string str_key = std::to_string(key);
-    std::string data(reinterpret_cast<char const*>(value.data()), value.size());
-
-    cursor_->set_key(cursor_, str_key.c_str());
+    auto db_key = build_key(key);
+    cursor_->set_key(cursor_, db_key);
     WT_ITEM db_value;
-    db_value.data = data.c_str();
-    db_value.size = data.size();
+    db_value.data = value.data();
+    db_value.size = value.size();
     cursor_->set_value(cursor_, &db_value);
     int res = cursor_->update(cursor_);
     cursor_->reset(cursor_);
@@ -125,8 +125,8 @@ operation_result_t wiredtiger_t::update(key_t key, value_spanc_t value) {
 
 operation_result_t wiredtiger_t::remove(key_t key) {
 
-    std::string str_key = std::to_string(key);
-    cursor_->set_key(cursor_, str_key.c_str());
+    auto db_key = build_key(key);
+    cursor_->set_key(cursor_, db_key);
     int res = cursor_->remove(cursor_);
     cursor_->reset(cursor_);
     if (res)
@@ -136,10 +136,10 @@ operation_result_t wiredtiger_t::remove(key_t key) {
 
 operation_result_t wiredtiger_t::read(key_t key, value_span_t value) const {
 
-    std::string str_key = std::to_string(key);
-    WT_ITEM db_value;
-    cursor_->set_key(cursor_, str_key.c_str());
+    auto db_key = build_key(key);
+    cursor_->set_key(cursor_, db_key);
     error_check(cursor_->search(cursor_));
+    WT_ITEM db_value;
     int res = cursor_->get_value(cursor_, &db_value);
     cursor_->reset(cursor_);
     if (res)
@@ -154,13 +154,13 @@ operation_result_t wiredtiger_t::batch_read(keys_span_t keys) const {
     // Note: imitation of batch read!
     for (auto const& key : keys) {
         WT_ITEM db_value;
-        std::string str_key = std::to_string(key);
-        cursor_->set_key(cursor_, str_key.c_str());
+        auto db_key = build_key(key);
+        cursor_->set_key(cursor_, db_key);
         error_check(cursor_->search(cursor_));
         int res = cursor_->get_value(cursor_, &db_value);
         if (res == 0) {
             if (db_value.size > value_buffer_.size())
-                value_buffer_ = std::vector<std::byte>(db_value.size);
+                value_buffer_ = std::vector<char>(db_value.size);
             memcpy(value_buffer_.data(), db_value.data, db_value.size);
         }
         cursor_->reset(cursor_);
@@ -170,12 +170,11 @@ operation_result_t wiredtiger_t::batch_read(keys_span_t keys) const {
 
 operation_result_t wiredtiger_t::range_select(key_t key, size_t length, value_span_t single_value) const {
 
-    std::string str_key = std::to_string(key);
-    const char* db_key = nullptr;
+    auto db_key = build_key(key);
     WT_ITEM db_value;
     int res = 0;
     int i = 0;
-    cursor_->set_key(cursor_, str_key.c_str());
+    cursor_->set_key(cursor_, db_key);
     error_check(cursor_->search(cursor_));
 
     size_t selected_records_count = 0;
@@ -203,6 +202,12 @@ operation_result_t wiredtiger_t::scan(value_span_t single_value) const {
         ++scanned_records_count;
     }
     return {scanned_records_count, operation_status_t::ok_k};
+}
+
+char const* wiredtiger_t::build_key(key_t key) {
+    char str_format[] = "%d";
+    int len = std::snprintf(key_buffer_.data(), key_buffer_.size(), str_format, key);
+    return key_buffer_.data();
 }
 
 } // namespace mongodb
