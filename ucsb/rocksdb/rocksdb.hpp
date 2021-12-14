@@ -98,8 +98,6 @@ operation_result_t rocksdb_t::update(key_t key, value_spanc_t value) {
     if (!status.ok())
         return {0, operation_status_t::error_k};
     return {1, operation_status_t::ok_k};
-
-    return insert(key, value);
 }
 
 operation_result_t rocksdb_t::remove(key_t key) {
