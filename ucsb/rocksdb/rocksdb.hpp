@@ -102,6 +102,7 @@ operation_result_t rocksdb_t::update(key_t key, value_spanc_t value) {
         return {0, operation_status_t::error_k};
     return {1, operation_status_t::ok_k};
 
+    // Review: Check this
     return insert(key, value);
 }
 
