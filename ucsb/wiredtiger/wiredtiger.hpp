@@ -66,8 +66,6 @@ struct wiredtiger_t : public ucsb::db_t {
     operation_result_t scan(value_span_t single_value) const override;
 
   private:
-    char const* build_key(key_t key);
-
     WT_CONNECTION* conn_;
     WT_SESSION* session_;
     WT_CURSOR* cursor_;
@@ -95,8 +93,7 @@ void wiredtiger_t::destroy() {
 
 operation_result_t wiredtiger_t::insert(key_t key, value_spanc_t value) {
 
-    auto db_key = build_key(key);
-    cursor_->set_key(cursor_, db_key);
+    cursor_->set_key(cursor_, &key);
     WT_ITEM db_value;
     db_value.data = value.data();
     db_value.size = value.size();
@@ -110,8 +107,7 @@ operation_result_t wiredtiger_t::insert(key_t key, value_spanc_t value) {
 
 operation_result_t wiredtiger_t::update(key_t key, value_spanc_t value) {
 
-    auto db_key = build_key(key);
-    cursor_->set_key(cursor_, db_key);
+    cursor_->set_key(cursor_, &key);
     WT_ITEM db_value;
     db_value.data = value.data();
     db_value.size = value.size();
@@ -125,8 +121,7 @@ operation_result_t wiredtiger_t::update(key_t key, value_spanc_t value) {
 
 operation_result_t wiredtiger_t::remove(key_t key) {
 
-    auto db_key = build_key(key);
-    cursor_->set_key(cursor_, db_key);
+    cursor_->set_key(cursor_, &key);
     int res = cursor_->remove(cursor_);
     cursor_->reset(cursor_);
     if (res)
@@ -136,8 +131,7 @@ operation_result_t wiredtiger_t::remove(key_t key) {
 
 operation_result_t wiredtiger_t::read(key_t key, value_span_t value) const {
 
-    auto db_key = build_key(key);
-    cursor_->set_key(cursor_, db_key);
+    cursor_->set_key(cursor_, &key);
     error_check(cursor_->search(cursor_));
     WT_ITEM db_value;
     int res = cursor_->get_value(cursor_, &db_value);
@@ -154,8 +148,7 @@ operation_result_t wiredtiger_t::batch_read(keys_span_t keys) const {
     // Note: imitation of batch read!
     for (auto const& key : keys) {
         WT_ITEM db_value;
-        auto db_key = build_key(key);
-        cursor_->set_key(cursor_, db_key);
+        cursor_->set_key(cursor_, &key);
         error_check(cursor_->search(cursor_));
         int res = cursor_->get_value(cursor_, &db_value);
         if (res == 0) {
@@ -170,13 +163,13 @@ operation_result_t wiredtiger_t::batch_read(keys_span_t keys) const {
 
 operation_result_t wiredtiger_t::range_select(key_t key, size_t length, value_span_t single_value) const {
 
-    auto db_key = build_key(key);
-    WT_ITEM db_value;
-    int res = 0;
-    int i = 0;
-    cursor_->set_key(cursor_, db_key);
+    cursor_->set_key(cursor_, &key);
     error_check(cursor_->search(cursor_));
 
+    int i = 0;
+    int res = 0;
+    WT_ITEM db_value;
+    const char* db_key = nullptr;
     size_t selected_records_count = 0;
     while ((res = cursor_->next(cursor_)) == 0 && i++ < length) {
         error_check(cursor_->get_key(cursor_, &db_key));
@@ -189,11 +182,11 @@ operation_result_t wiredtiger_t::range_select(key_t key, size_t length, value_sp
 
 operation_result_t wiredtiger_t::scan(value_span_t single_value) const {
 
-    const char* db_key = nullptr;
-    WT_ITEM db_value;
-    int res = 0;
     error_check(session_->open_cursor(session_, table_name_.c_str(), NULL, NULL, &cursor_));
 
+    int res = 0;
+    WT_ITEM db_value;
+    const char* db_key = nullptr;
     size_t scanned_records_count = 0;
     while ((res = cursor_->next(cursor_)) == 0) {
         error_check(cursor_->get_key(cursor_, &db_key));
@@ -202,12 +195,6 @@ operation_result_t wiredtiger_t::scan(value_span_t single_value) const {
         ++scanned_records_count;
     }
     return {scanned_records_count, operation_status_t::ok_k};
-}
-
-char const* wiredtiger_t::build_key(key_t key) {
-    char str_format[] = "%d";
-    int len = std::snprintf(key_buffer_.data(), key_buffer_.size(), str_format, key);
-    return key_buffer_.data();
 }
 
 } // namespace mongodb

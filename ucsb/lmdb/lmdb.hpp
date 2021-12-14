@@ -113,7 +113,7 @@ operation_result_t lmdb_t::insert(key_t key, value_spanc_t value) {
     key_slice.mv_data = &key;
     key_slice.mv_size = sizeof(key);
 
-    val_slice.mv_data = const_cast<void*>(reinterpret_cast<void const*>(value.data()));
+    val_slice.mv_data = value.data();
     val_slice.mv_size = value.size();
 
     int ret = mdb_txn_begin(env_, nullptr, 0, &txn);
@@ -148,7 +148,7 @@ operation_result_t lmdb_t::update(key_t key, value_spanc_t value) {
         return {0, operation_status_t::not_found_k};
     }
 
-    val_slice.mv_data = const_cast<void*>(reinterpret_cast<void const*>(value.data()));
+    val_slice.mv_data = value.data();
     val_slice.mv_size = value.size();
 
     ret = mdb_put(txn, dbi_, &key_slice, &val_slice, 0);
