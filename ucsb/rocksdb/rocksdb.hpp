@@ -12,6 +12,7 @@
 #include <rocksdb/utilities/options_util.h>
 #include <rocksdb/db.h>
 #include <rocksdb/options.h>
+#include <leveldb/comparator.h>
 
 #include "ucsb/core/types.hpp"
 #include "ucsb/core/db.hpp"
@@ -26,6 +27,20 @@ using value_span_t = ucsb::value_span_t;
 using value_spanc_t = ucsb::value_spanc_t;
 using operation_status_t = ucsb::operation_status_t;
 using operation_result_t = ucsb::operation_result_t;
+
+struct key_comparator_t : public rocksdb::Comparator {
+    int Compare(rocksdb::Slice const& left, rocksdb::Slice const& right) const override {
+        assert(left.size() == sizeof(key_t));
+        assert(right.size() == sizeof(key_t));
+
+        key_t left_key = *reinterpret_cast<key_t const*>(left.data());
+        key_t right_key = *reinterpret_cast<key_t const*>(right.data());
+        return left_key < right_key ? -1 : left_key > right_key;
+    }
+    const char* Name() const { return "KeyComparator"; }
+    void FindShortestSeparator(std::string*, const rocksdb::Slice&) const {}
+    void FindShortSuccessor(std::string*) const {}
+};
 
 struct rocksdb_t : public ucsb::db_t {
   public:
@@ -47,6 +62,7 @@ struct rocksdb_t : public ucsb::db_t {
 
   private:
     rocksdb::DB* db_;
+    key_comparator_t key_cmp;
 };
 
 bool rocksdb_t::init(fs::path const& config_path, fs::path const& dir_path) {
@@ -59,6 +75,7 @@ bool rocksdb_t::init(fs::path const& config_path, fs::path const& dir_path) {
     if (!status.ok())
         return false;
 
+    options.comparator = &key_cmp;
     if (cf_descs.empty())
         status = rocksdb::DB::Open(options, dir_path.string(), &db_);
     else
