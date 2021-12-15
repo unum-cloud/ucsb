@@ -9,7 +9,23 @@
 #include "ucsb/core/types.hpp"
 #include "ucsb/core/db.hpp"
 
+#define error_check(call)                                                         \
+    do {                                                                          \
+        int __r;                                                                  \
+        if ((__r = (call)) != 0 && __r != ENOTSUP)                                \
+            testutil_die(__r, "%s/%d: %s", __PRETTY_FUNCTION__, __LINE__, #call); \
+    } while (0)
+
 namespace mongodb {
+
+namespace fs = ucsb::fs;
+
+using key_t = ucsb::key_t;
+using keys_span_t = ucsb::keys_span_t;
+using value_span_t = ucsb::value_span_t;
+using value_spanc_t = ucsb::value_spanc_t;
+using operation_status_t = ucsb::operation_status_t;
+using operation_result_t = ucsb::operation_result_t;
 
 void testutil_die(int e, const char* fmt, ...) {
     va_list ap;
@@ -30,21 +46,18 @@ void testutil_die(int e, const char* fmt, ...) {
     throw std::runtime_error("WIREDTIGER unwired");
 }
 
-#define error_check(call)                                                         \
-    do {                                                                          \
-        int __r;                                                                  \
-        if ((__r = (call)) != 0 && __r != ENOTSUP)                                \
-            testutil_die(__r, "%s/%d: %s", __PRETTY_FUNCTION__, __LINE__, #call); \
-    } while (0)
+int compare_keys(WT_COLLATOR* collator, WT_SESSION* session, WT_ITEM const* left, WT_ITEM const* right, int* res) {
 
-namespace fs = ucsb::fs;
+    (void)collator;
+    (void)session;
 
-using key_t = ucsb::key_t;
-using keys_span_t = ucsb::keys_span_t;
-using value_span_t = ucsb::value_span_t;
-using value_spanc_t = ucsb::value_spanc_t;
-using operation_status_t = ucsb::operation_status_t;
-using operation_result_t = ucsb::operation_result_t;
+    key_t left_key = *reinterpret_cast<key_t const*>(left->data);
+    key_t right_key = *reinterpret_cast<key_t const*>(right->data);
+    *res = left_key < right_key ? -1 : left_key > right_key;
+    return 0;
+}
+
+WT_COLLATOR key_comparator = {compare_keys, nullptr, nullptr};
 
 struct wiredtiger_t : public ucsb::db_t {
   public:
@@ -78,6 +91,7 @@ bool wiredtiger_t::init(fs::path const& config_path, fs::path const& dir_path) {
 
     error_check(wiredtiger_open(dir_path.c_str(), NULL, "create", &conn_));
     error_check(conn_->open_session(conn_, NULL, NULL, &session_));
+    error_check(conn_->add_collator(conn_, "key_comparator", &key_comparator, NULL));
     error_check(session_->create(session_, table_name_.c_str(), "key_format=S,value_format=u"));
     error_check(session_->open_cursor(session_, table_name_.c_str(), NULL, NULL, &cursor_));
 
