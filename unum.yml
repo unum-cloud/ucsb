@@ -10,8 +10,10 @@ conan:
   - benchmark/1.5.2
   - nlohmann_json/3.10.4
   - rocksdb/6.20.3
-  - leveldb/1.23
   - lmdb/0.9.29
+
+cpp-library:
+  - libleveldb
 
 packages:
   pkg-config:
