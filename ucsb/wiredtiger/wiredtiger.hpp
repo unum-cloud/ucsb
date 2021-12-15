@@ -151,7 +151,7 @@ operation_result_t wiredtiger_t::read(key_t key, value_span_t value) const {
     int res = cursor_->get_value(cursor_, &db_value);
     cursor_->reset(cursor_);
     if (res)
-        return {0, operation_status_t::not_found_k};
+        return {1, operation_status_t::not_found_k};
 
     memcpy(value.data(), db_value.data, db_value.size);
     return {1, operation_status_t::ok_k};

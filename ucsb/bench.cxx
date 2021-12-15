@@ -158,8 +158,10 @@ void transaction(bm::State& state, workload_t const& workload, db_t& db) {
 
     auto chooser = create_operation_chooser(workload);
     transaction_t transaction(workload, db);
-    size_t operations_done = 0;
+
     size_t fails = 0;
+    size_t operations_done = 0;
+    size_t bytes_processed_cnt = 0;
 
     for (auto _ : state) {
         operation_result_t result;
@@ -175,12 +177,15 @@ void transaction(bm::State& state, workload_t const& workload, db_t& db) {
         default: throw exception_t("Unknown operation"); break;
         }
 
+        bool success = result.status == operation_status_t::ok_k;
+        fails += size_t(!success) * result.depth;
         operations_done += result.depth;
-        fails += size_t(result.status != operation_status_t::ok_k) * result.depth;
+        bytes_processed_cnt += size_t(success) * workload.value_length * result.depth;
     }
 
-    state.counters["operations/s"] = bm::Counter(operations_done - fails, bm::Counter::kIsRate);
     state.counters["fails,%"] = bm::Counter(fails * 100.0 / operations_done);
+    state.counters["operations/s"] = bm::Counter(operations_done - fails, bm::Counter::kIsRate);
+    state.SetBytesProcessed(bytes_processed_cnt);
 }
 
 int main(int argc, char** argv) {
