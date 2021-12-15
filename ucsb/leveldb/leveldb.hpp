@@ -11,6 +11,7 @@
 #include <leveldb/status.h>
 #include <leveldb/cache.h>
 #include <leveldb/filter_policy.h>
+#include <leveldb/comparator.h>
 
 #include "ucsb/core/types.hpp"
 #include "ucsb/core/db.hpp"
@@ -25,6 +26,20 @@ using value_span_t = ucsb::value_span_t;
 using value_spanc_t = ucsb::value_spanc_t;
 using operation_status_t = ucsb::operation_status_t;
 using operation_result_t = ucsb::operation_result_t;
+
+struct key_comparator_t : public leveldb::Comparator {
+    int Compare(leveldb::Slice const& left, leveldb::Slice const& right) const override {
+        assert(left.size() == sizeof(key_t));
+        assert(right.size() == sizeof(key_t));
+
+        key_t left_key = *reinterpret_cast<key_t const*>(left.data());
+        key_t right_key = *reinterpret_cast<key_t const*>(right.data());
+        return left_key < right_key ? -1 : left_key > right_key;
+    }
+    const char* Name() const { return "KeyComparator"; }
+    void FindShortestSeparator(std::string*, const leveldb::Slice&) const {}
+    void FindShortSuccessor(std::string*) const {}
+};
 
 struct leveldb_t : public ucsb::db_t {
   public:
@@ -57,6 +72,7 @@ struct leveldb_t : public ucsb::db_t {
     inline bool load_config(fs::path const& config_path, config_t& config);
 
     leveldb::DB* db_;
+    key_comparator_t key_cmp;
 };
 
 bool leveldb_t::init(fs::path const& config_path, fs::path const& dir_path) {
@@ -67,6 +83,7 @@ bool leveldb_t::init(fs::path const& config_path, fs::path const& dir_path) {
 
     leveldb::Options options;
     options.create_if_missing = true;
+    options.comparator = &key_cmp;
     if (config.write_buffer_size > 0)
         options.write_buffer_size = config.write_buffer_size;
     if (config.max_file_size > 0)
