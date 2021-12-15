@@ -12,6 +12,7 @@
 #include "ucsb/core/factory.hpp"
 #include "ucsb/core/operation.hpp"
 #include "ucsb/core/exception.hpp"
+#include "ucsb/core/format.hpp"
 
 namespace bm = benchmark;
 
@@ -27,12 +28,7 @@ using operation_status_t = ucsb::operation_status_t;
 using operation_result_t = ucsb::operation_result_t;
 using operation_chooser_t = std::unique_ptr<ucsb::operation_chooser_t>;
 using exception_t = ucsb::exception_t;
-
-void drop_system_caches() {
-    auto res = system("sudo sh -c '/usr/bin/echo 3 > /proc/sys/vm/drop_caches'");
-    if (res == 0)
-        sleep(5);
-}
+using printable_bytes_t = ucsb::printable_bytes_t;
 
 inline bool start_with(const char* str, const char* prefix) {
     return strncmp(str, prefix, strlen(prefix)) == 0;
@@ -97,6 +93,23 @@ inline void register_section(std::string const& name) {
         for (auto _ : s)
             ;
     });
+}
+
+void drop_system_caches() {
+    auto res = system("sudo sh -c '/usr/bin/echo 3 > /proc/sys/vm/drop_caches'");
+    if (res == 0)
+        sleep(5);
+}
+
+std::string section_name(settings_t const& settings, workloads_t const& workloads) {
+    std::string section_name = settings.db_name;
+    if (!workloads.empty()) {
+        workload_t const& workload = workloads.front();
+        section_name = fmt::format("{} ({})",
+                                   settings.db_name,
+                                   printable_bytes_t {workload.records_count * workload.value_length});
+    }
+    return section_name;
 }
 
 template <typename func_at>
@@ -199,7 +212,7 @@ int main(int argc, char** argv) {
         return 1;
     }
 
-    register_section(settings.db_name);
+    register_section(section_name(settings, workloads));
     for (auto const& workload : workloads) {
         register_benchmark(workload.name, workload.operations_count, [&](bm::State& state) {
             transaction(state, workload, *db.get());
