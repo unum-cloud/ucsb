@@ -65,7 +65,9 @@ struct wiredtiger_t : public ucsb::db_t {
         : conn_(nullptr), session_(nullptr), cursor_(nullptr), table_name_("table:access"), key_buffer_(100) {}
     ~wiredtiger_t() override = default;
 
-    bool init(fs::path const& config_path, fs::path const& dir_path) override;
+    void set_config(fs::path const& config_path, fs::path const& dir_path) override;
+    bool open() override;
+    bool close() override;
     void destroy() override;
 
     operation_result_t insert(key_t key, value_spanc_t value) override;
@@ -79,6 +81,9 @@ struct wiredtiger_t : public ucsb::db_t {
     operation_result_t scan(value_span_t single_value) const override;
 
   private:
+    fs::path config_path_;
+    fs::path dir_path_;
+
     WT_CONNECTION* conn_;
     WT_SESSION* session_;
     WT_CURSOR* cursor_;
@@ -87,9 +92,14 @@ struct wiredtiger_t : public ucsb::db_t {
     std::vector<char> value_buffer_;
 };
 
-bool wiredtiger_t::init(fs::path const& config_path, fs::path const& dir_path) {
+void wiredtiger_t::set_config(fs::path const& config_path, fs::path const& dir_path) {
+    config_path_ = config_path;
+    dir_path_ = dir_path;
+}
 
-    error_check(wiredtiger_open(dir_path.c_str(), NULL, "create", &conn_));
+bool wiredtiger_t::open() {
+
+    error_check(wiredtiger_open(dir_path_.c_str(), NULL, "create", &conn_));
     error_check(conn_->open_session(conn_, NULL, NULL, &session_));
     error_check(conn_->add_collator(conn_, "key_comparator", &key_comparator, NULL));
     error_check(session_->create(session_, table_name_.c_str(), "key_format=S,value_format=u"));
@@ -98,11 +108,19 @@ bool wiredtiger_t::init(fs::path const& config_path, fs::path const& dir_path) {
     return true;
 }
 
-void wiredtiger_t::destroy() {
+bool wiredtiger_t::close() {
+    if (conn_ == nullptr)
+        return true;
+
     error_check(conn_->close(conn_, NULL));
     cursor_ = nullptr;
     session_ = nullptr;
     conn_ = nullptr;
+    return true;
+}
+
+void wiredtiger_t::destroy() {
+    close();
 }
 
 operation_result_t wiredtiger_t::insert(key_t key, value_spanc_t value) {

@@ -44,9 +44,11 @@ struct key_comparator_t : public leveldb::Comparator {
 struct leveldb_t : public ucsb::db_t {
   public:
     inline leveldb_t() : db_(nullptr) {}
-    ~leveldb_t() override = default;
+    ~leveldb_t() { close(); }
 
-    bool init(fs::path const& config_path, fs::path const& dir_path) override;
+    void set_config(fs::path const& config_path, fs::path const& dir_path) override;
+    bool open() override;
+    bool close() override;
     void destroy() override;
 
     operation_result_t insert(key_t key, value_spanc_t value) override;
@@ -71,14 +73,24 @@ struct leveldb_t : public ucsb::db_t {
 
     inline bool load_config(fs::path const& config_path, config_t& config);
 
+    fs::path config_path_;
+    fs::path dir_path_;
+
     leveldb::DB* db_;
     key_comparator_t key_cmp;
 };
 
-bool leveldb_t::init(fs::path const& config_path, fs::path const& dir_path) {
+void leveldb_t::set_config(fs::path const& config_path, fs::path const& dir_path) {
+    config_path_ = config_path;
+    dir_path_ = dir_path;
+}
+
+bool leveldb_t::open() {
+    if (db_)
+        return true;
 
     config_t config;
-    if (!load_config(config_path, config))
+    if (!load_config(config_path_, config))
         return false;
 
     leveldb::Options options;
@@ -99,13 +111,18 @@ bool leveldb_t::init(fs::path const& config_path, fs::path const& dir_path) {
     if (config.filter_bits > 0)
         options.filter_policy = leveldb::NewBloomFilterPolicy(config.filter_bits);
 
-    leveldb::Status status = leveldb::DB::Open(options, dir_path.string(), &db_);
+    leveldb::Status status = leveldb::DB::Open(options, dir_path_.string(), &db_);
     return status.ok();
 }
 
-void leveldb_t::destroy() {
+bool leveldb_t::close() {
     delete db_;
     db_ = nullptr;
+    return true;
+}
+
+void leveldb_t::destroy() {
+    close();
 }
 
 operation_result_t leveldb_t::insert(key_t key, value_spanc_t value) {

@@ -29,9 +29,11 @@ using region_schema_t = region_schema_gt<fingerprint_t>;
 struct unumdb_t : public ucsb::db_t {
   public:
     inline unumdb_t() : name_("Kovkas"), region_(region_config_t()) {}
-    ~unumdb_t() override;
+    ~unumdb_t() { close(); }
 
-    bool init(fs::path const& config_path, fs::path const& dir_path) override;
+    void set_config(fs::path const& config_path, fs::path const& dir_path) override;
+    bool open() override;
+    bool close() override;
     void destroy() override;
 
     operation_result_t insert(key_t key, value_spanc_t value) override;
@@ -58,36 +60,33 @@ struct unumdb_t : public ucsb::db_t {
     void unumdb_t::parse_fingerprint(std::vector<uint8_t> const& data, fingerprint_t& fingerprint);
     bool load_config(db_config_t& db_config);
 
-    string_t name_;
     fs::path config_path_;
     fs::path dir_path_;
+
+    string_t name_;
     region_t region_;
     dbuffer_t batch_buffer_;
 };
 
-unumdb_t::~unumdb_t() {
-    if (region_.population_count()) {
-        region_config_t config = region_.get_config();
-        region_schema_t schema = region_.get_schema();
-        save(config, schema, name_);
-    }
-}
-
-bool unumdb_t::init(fs::path const& config_path, fs::path const& dir_path) {
-
+void unumdb_t::set_config(fs::path const& config_path, fs::path const& dir_path) {
     config_path_ = config_path;
     dir_path_ = dir_path;
+}
+
+bool unumdb_t::open() {
+    if (region_.get_config().uuid.is_valid())
+        return true;
 
     db_config_t db_config;
     if (!load_config(db_config))
         return false;
 
     if (db_config.io_device == string_t("libc"))
-        init_file_io_by_libc(dir_path.c_str());
+        init_file_io_by_libc(dir_path_.c_str());
     else if (db_config.io_device == string_t("pulling"))
-        init_file_io_by_pulling(dir_path.c_str(), db_config.uring_queue_depth);
+        init_file_io_by_pulling(dir_path_.c_str(), db_config.uring_queue_depth);
     else if (db_config.io_device == string_t("polling"))
-        init_file_io_by_polling(dir_path.c_str(), db_config.uring_max_files_count, db_config.uring_queue_depth);
+        init_file_io_by_polling(dir_path_.c_str(), db_config.uring_max_files_count, db_config.uring_queue_depth);
     else
         return false;
 
@@ -98,6 +97,17 @@ bool unumdb_t::init(fs::path const& config_path, fs::path const& dir_path) {
     else
         region_ = std::move(region_t(db_config.region_config));
 
+    return true;
+}
+
+bool unumdb_t::close() {
+    if (region_.population_count()) {
+        region_config_t config = region_.get_config();
+        region_schema_t schema = region_.get_schema();
+        save(config, schema, name_);
+    }
+
+    region_ = std::move(region_config_t());
     return true;
 }
 

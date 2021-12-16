@@ -8,7 +8,9 @@ namespace ucsb {
 struct db_t {
     virtual ~db_t() {}
 
-    virtual bool init(fs::path const& config_path, fs::path const& dir_path) = 0;
+    virtual void set_config(fs::path const& config_path, fs::path const& dir_path) = 0;
+    virtual bool open() = 0;
+    virtual bool close() = 0;
     virtual void destroy() = 0;
 
     virtual operation_result_t insert(key_t key, value_spanc_t value) = 0;

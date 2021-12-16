@@ -158,13 +158,15 @@ operation_chooser_t create_operation_chooser(workload_t const& workload) {
 void transaction(bm::State& state, workload_t const& workload, db_t& db) {
     // drop_system_caches();
 
+    bool ok = db.open();
+    assert(ok);
     auto chooser = create_operation_chooser(workload);
     transaction_t transaction(workload, db);
 
     size_t fails = 0;
     size_t operations_done = 0;
     size_t bytes_processed_cnt = 0;
-    mem_stat_t mem_stat(workload.records_count / 1000);
+    mem_stat_t mem_stat(100);
     mem_stat.start();
 
     for (auto _ : state) {
@@ -193,6 +195,8 @@ void transaction(bm::State& state, workload_t const& workload, db_t& db) {
     state.counters["operations/s"] = bm::Counter(operations_done - fails, bm::Counter::kIsRate);
     state.counters["mem_max"] = bm::Counter(mem_stat.rss().max, bm::Counter::kDefaults, bm::Counter::kIs1024);
     state.counters["mem_avg"] = bm::Counter(mem_stat.rss().avg, bm::Counter::kDefaults, bm::Counter::kIs1024);
+    ok = db.close();
+    assert(ok);
 }
 
 int main(int argc, char** argv) {
@@ -219,10 +223,7 @@ int main(int argc, char** argv) {
         fmt::print("Failed to create DB: {}\n", settings.db_name);
         return 1;
     }
-    if (!db->init(settings.db_config_path, settings.db_dir_path)) {
-        fmt::print("Failed to init DB: {}\n", settings.db_name);
-        return 1;
-    }
+    db->set_config(settings.db_config_path, settings.db_dir_path);
 
     register_section(section_name(settings, workloads));
     for (auto const& workload : workloads) {

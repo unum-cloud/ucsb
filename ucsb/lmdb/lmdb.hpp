@@ -31,10 +31,12 @@ int compare_keys(MDB_val const* left, MDB_val const* right) {
 
 struct lmdb_t : public ucsb::db_t {
   public:
-    inline lmdb_t() : env_(nullptr) {}
-    ~lmdb_t() override = default;
+    inline lmdb_t() : env_(nullptr), dbi_(0) {}
+    ~lmdb_t() { close(); }
 
-    bool init(fs::path const& config_path, fs::path const& dir_path) override;
+    void set_config(fs::path const& config_path, fs::path const& dir_path) override;
+    bool open() override;
+    bool close() override;
     void destroy() override;
 
     operation_result_t insert(key_t key, value_spanc_t value) override;
@@ -58,15 +60,25 @@ struct lmdb_t : public ucsb::db_t {
 
     bool load_config(fs::path const& config_path, config_t& config);
 
+    fs::path config_path_;
+    fs::path dir_path_;
+
     MDB_env* env_;
     MDB_dbi dbi_;
     std::vector<char> value_buffer_;
 };
 
-bool lmdb_t::init(fs::path const& config_path, fs::path const& dir_path) {
+void lmdb_t::set_config(fs::path const& config_path, fs::path const& dir_path) {
+    config_path_ = config_path;
+    dir_path_ = dir_path;
+}
+
+bool lmdb_t::open() {
+    if (env_)
+        return true;
 
     config_t config;
-    if (!load_config(config_path, config))
+    if (!load_config(config_path_, config))
         return false;
 
     int env_opt = 0;
@@ -88,7 +100,7 @@ bool lmdb_t::init(fs::path const& config_path, fs::path const& dir_path) {
             return false;
     }
 
-    ret = mdb_env_open(env_, dir_path.c_str(), env_opt, 0664);
+    ret = mdb_env_open(env_, dir_path_.c_str(), env_opt, 0664);
     if (ret)
         return false;
 
@@ -106,10 +118,19 @@ bool lmdb_t::init(fs::path const& config_path, fs::path const& dir_path) {
     return true;
 }
 
-void lmdb_t::destroy() {
+bool lmdb_t::close() {
+    if (env_ == nullptr)
+        return true;
+
     mdb_close(env_, dbi_);
     mdb_env_close(env_);
+    dbi_ = 0;
     env_ = nullptr;
+    return true;
+}
+
+void lmdb_t::destroy() {
+    close();
 }
 
 operation_result_t lmdb_t::insert(key_t key, value_spanc_t value) {
