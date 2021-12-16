@@ -3,10 +3,11 @@
 #include <vector>
 #include <fmt/format.h>
 
+#include "diskkv/region.hpp"
+
 #include "ucsb/core/types.hpp"
 #include "ucsb/core/db.hpp"
-
-#include "diskkv/region.hpp"
+#include "ucsb/core/helper.hpp"
 
 namespace unum {
 
@@ -45,6 +46,8 @@ struct unumdb_t : public ucsb::db_t {
 
     operation_result_t range_select(key_t key, size_t length, value_span_t single_value) const override;
     operation_result_t scan(value_span_t single_value) const override;
+
+    size_t size_on_disk() const override;
 
   private:
     struct db_config_t {
@@ -212,6 +215,10 @@ operation_result_t unumdb_t::scan(value_span_t single_value) const {
         }
     }
     return {scanned_records_count, operation_status_t::ok_k};
+}
+
+size_t unumdb_t::size_on_disk() const {
+    return ucsb::size(dir_path_);
 }
 
 void unumdb_t::save(region_config_t const& config, region_schema_t const& schema, string_t const& name) {

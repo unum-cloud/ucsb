@@ -22,6 +22,8 @@ struct db_t {
 
     virtual operation_result_t range_select(key_t key, size_t length, value_span_t single_value) const = 0;
     virtual operation_result_t scan(value_span_t single_value) const = 0;
+
+    virtual size_t size_on_disk() const = 0;
 };
 
 } // namespace ucsb

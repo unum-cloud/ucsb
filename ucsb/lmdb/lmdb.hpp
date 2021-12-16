@@ -10,6 +10,7 @@
 
 #include "ucsb/core/types.hpp"
 #include "ucsb/core/db.hpp"
+#include "ucsb/core/helper.hpp"
 
 namespace symas {
 
@@ -48,6 +49,8 @@ struct lmdb_t : public ucsb::db_t {
 
     operation_result_t range_select(key_t key, size_t length, value_span_t single_value) const override;
     operation_result_t scan(value_span_t single_value) const override;
+
+    size_t size_on_disk() const override;
 
   private:
     struct config_t {
@@ -334,6 +337,10 @@ operation_result_t lmdb_t::scan(value_span_t single_value) const {
     mdb_cursor_close(cursor);
     mdb_txn_abort(txn);
     return {scanned_records_count, operation_status_t::ok_k};
+}
+
+size_t lmdb_t::size_on_disk() const {
+    return ucsb::size(dir_path_);
 }
 
 bool lmdb_t::load_config(fs::path const& config_path, config_t& config) {

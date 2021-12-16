@@ -195,6 +195,7 @@ void transaction(bm::State& state, workload_t const& workload, db_t& db) {
     state.counters["operations/s"] = bm::Counter(operations_done - fails, bm::Counter::kIsRate);
     state.counters["mem_max"] = bm::Counter(mem_stat.rss().max, bm::Counter::kDefaults, bm::Counter::kIs1024);
     state.counters["mem_avg"] = bm::Counter(mem_stat.rss().avg, bm::Counter::kDefaults, bm::Counter::kIs1024);
+    state.counters["disk"] = bm::Counter(db.size_on_disk(), bm::Counter::kDefaults, bm::Counter::kIs1024);
     ok = db.close();
     assert(ok);
 }

@@ -16,6 +16,7 @@
 
 #include "ucsb/core/types.hpp"
 #include "ucsb/core/db.hpp"
+#include "ucsb/core/helper.hpp"
 
 namespace facebook {
 
@@ -61,6 +62,8 @@ struct rocksdb_t : public ucsb::db_t {
 
     operation_result_t range_select(key_t key, size_t length, value_span_t single_value) const override;
     operation_result_t scan(value_span_t single_value) const override;
+
+    size_t size_on_disk() const override;
 
   private:
     fs::path config_path_;
@@ -202,6 +205,10 @@ operation_result_t rocksdb_t::scan(value_span_t single_value) const {
     }
     delete db_iter;
     return {scanned_records_count, operation_status_t::ok_k};
+}
+
+size_t rocksdb_t::size_on_disk() const {
+    return ucsb::size(dir_path_);
 }
 
 } // namespace facebook
