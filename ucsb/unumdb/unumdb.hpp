@@ -110,7 +110,7 @@ void unumdb_t::destroy() {
 }
 
 operation_result_t unumdb_t::insert(key_t key, value_spanc_t value) {
-    citizenc_t citizen {reinterpret_cast<byte_t const*>(value.data()), value.size()};
+    citizen_view_t citizen {reinterpret_cast<byte_t const*>(value.data()), value.size()};
     region_.insert(key, citizen);
     return {1, operation_status_t::ok_k};
 }
@@ -122,7 +122,7 @@ operation_result_t unumdb_t::update(key_t key, value_spanc_t value) {
     if (!location)
         return {1, operation_status_t::not_found_k};
 
-    citizenc_t citizen {reinterpret_cast<byte_t const*>(value.data()), value.size()};
+    citizen_view_t citizen {reinterpret_cast<byte_t const*>(value.data()), value.size()};
     region_.insert(key, citizen);
     return {1, operation_status_t::ok_k};
 }
@@ -140,7 +140,7 @@ operation_result_t unumdb_t::read(key_t key, value_span_t value) const {
 
     countdown_t countdown;
     notifier_t read_notifier(countdown);
-    citizen_t citizen {reinterpret_cast<byte_t*>(value.data()), value.size()};
+    citizen_span_t citizen {reinterpret_cast<byte_t*>(value.data()), value.size()};
     region_.select<caching_t::io_k>(location, citizen, read_notifier);
     if (!countdown.wait())
         return {0, operation_status_t::error_k};
@@ -174,7 +174,7 @@ operation_result_t unumdb_t::batch_read(keys_span_t keys) const {
 
 operation_result_t unumdb_t::range_select(key_t key, size_t length, value_span_t single_value) const {
     countdown_t countdown;
-    citizen_t citizen {reinterpret_cast<byte_t*>(single_value.data()), single_value.size()};
+    citizen_span_t citizen {reinterpret_cast<byte_t*>(single_value.data()), single_value.size()};
     size_t selected_records_count = 0;
     auto it = region_.find(key);
     for (size_t i = 0; it != region_.end() && i < length; ++i, ++it) {
@@ -190,7 +190,7 @@ operation_result_t unumdb_t::range_select(key_t key, size_t length, value_span_t
 
 operation_result_t unumdb_t::scan(value_span_t single_value) const {
     countdown_t countdown;
-    citizen_t citizen {reinterpret_cast<byte_t*>(single_value.data()), single_value.size()};
+    citizen_span_t citizen {reinterpret_cast<byte_t*>(single_value.data()), single_value.size()};
     size_t scanned_records_count = 0;
     auto it = region_.begin();
     for (; it != region_.end(); ++it) {
