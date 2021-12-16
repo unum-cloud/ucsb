@@ -9,9 +9,11 @@ conan:
   - gtest/1.10.0
   - benchmark/1.5.2
   - nlohmann_json/3.10.4
-  - rocksdb/6.20.3
-  - leveldb/1.23
   - lmdb/0.9.29
+
+cpp-library:
+  - librocksdb
+  - libleveldb
 
 packages:
   pkg-config:
