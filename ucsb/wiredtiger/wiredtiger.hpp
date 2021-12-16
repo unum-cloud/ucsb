@@ -47,18 +47,18 @@ void testutil_die(int e, const char* fmt, ...) {
     throw std::runtime_error("WIREDTIGER unwired");
 }
 
-int compare_keys(WT_COLLATOR* collator, WT_SESSION* session, WT_ITEM const* left, WT_ITEM const* right, int* res) {
+// int compare_keys(WT_COLLATOR* collator, WT_SESSION* session, WT_ITEM const* left, WT_ITEM const* right, int* res) {
 
-    (void)collator;
-    (void)session;
+//     (void)collator;
+//     (void)session;
 
-    key_t left_key = *reinterpret_cast<key_t const*>(left->data);
-    key_t right_key = *reinterpret_cast<key_t const*>(right->data);
-    *res = left_key < right_key ? -1 : left_key > right_key;
-    return 0;
-}
+//     key_t left_key = *reinterpret_cast<key_t const*>(left->data);
+//     key_t right_key = *reinterpret_cast<key_t const*>(right->data);
+//     *res = left_key < right_key ? -1 : left_key > right_key;
+//     return 0;
+// }
 
-WT_COLLATOR key_comparator = {compare_keys, nullptr, nullptr};
+// WT_COLLATOR key_comparator = {compare_keys, nullptr, nullptr};
 
 struct wiredtiger_t : public ucsb::db_t {
   public:
@@ -104,7 +104,7 @@ bool wiredtiger_t::open() {
 
     error_check(wiredtiger_open(dir_path_.c_str(), NULL, "create", &conn_));
     error_check(conn_->open_session(conn_, NULL, NULL, &session_));
-    error_check(conn_->add_collator(conn_, "key_comparator", &key_comparator, NULL));
+    // error_check(conn_->add_collator(conn_, "key_comparator", &key_comparator, NULL));
     error_check(session_->create(session_, table_name_.c_str(), "key_format=S,value_format=u"));
     error_check(session_->open_cursor(session_, table_name_.c_str(), NULL, NULL, &cursor_));
 
