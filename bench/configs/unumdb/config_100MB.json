@@ -1,0 +1,10 @@
+{
+    "migration_capacity": 67108864,
+    "migration_max_cnt": 50000,
+    "files_size_enlarge_factor": 8,
+    "max_files_cnt": 32,
+    "files_count_enlarge_factor": 1,
+    "io_device": "pulling",
+    "uring_max_files_count": 1000,
+    "uring_queue_depth": 256
+}
