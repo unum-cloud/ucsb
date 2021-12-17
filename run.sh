@@ -7,7 +7,7 @@
 # 100MB benchmarks
 #
 sudo rm -rf ./tmp/
-sudo ./build_release/bin/_ucsb_bench -db unumdb -c ./bench/configs/unumdb/config.json -w ./bench/workloads/100MB.json
+sudo ./build_release/bin/_ucsb_bench -db unumdb -c ./bench/configs/unumdb/config_100MB.json -w ./bench/workloads/100MB.json
 sudo ./build_release/bin/_ucsb_bench -db rocksdb -c ./bench/configs/rocksdb/options.ini -w ./bench/workloads/100MB.json
 sudo ./build_release/bin/_ucsb_bench -db leveldb -c ./bench/configs/leveldb/config.json -w ./bench/workloads/100MB.json
 sudo ./build_release/bin/_ucsb_bench -db wiredtiger -c ./bench/configs/wiredtiger/config.json -w ./bench/workloads/100MB.json
