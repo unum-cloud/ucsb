@@ -1,6 +1,6 @@
 {
   "context": {
-    "date": "2021-12-16T07:03:21+00:00",
+    "date": "2021-12-17T07:58:28+00:00",
     "host_name": "unum-bench",
     "executable": "./build_release/bin/_ucsb_bench",
     "num_cpus": 128,
@@ -32,7 +32,7 @@
         "num_sharing": 8
       }
     ],
-    "load_avg": [14.62,13.94,10.87],
+    "load_avg": [8.54,8.09,9.31],
     "library_build_type": "release"
   },
   "benchmarks": [
@@ -46,8 +46,8 @@
       "repetition_index": 0,
       "threads": 1,
       "iterations": 1000000000,
-      "real_time": 1.8000719137489796e-07,
-      "cpu_time": 1.9100000000007999e-07,
+      "real_time": 3.3102696761488914e-07,
+      "cpu_time": 3.3100000000011592e-07,
       "time_unit": "ns"
     },
     {
@@ -60,12 +60,15 @@
       "repetition_index": 0,
       "threads": 1,
       "iterations": 100000,
-      "real_time": 1.1033478350145742e+01,
-      "cpu_time": 1.1022432470000002e+01,
+      "real_time": 2.4801551920245402e+01,
+      "cpu_time": 2.4790340129999997e+01,
       "time_unit": "us",
-      "bytes_per_second": 9.2808447844235256e+07,
+      "bytes_per_second": 4.1287738900085248e+07,
+      "disk": 2.0581580800000000e+08,
       "fails,%": 0.0000000000000000e+00,
-      "operations/s": 9.0633249847885992e+04
+      "mem_avg": 1.1123342900000000e+08,
+      "mem_max": 2.0774502400000000e+08,
+      "operations/s": 4.0320057519614500e+04
     },
     {
       "name": "Read/iterations:100000/real_time",
@@ -77,12 +80,15 @@
       "repetition_index": 0,
       "threads": 1,
       "iterations": 100000,
-      "real_time": 6.1400020989822224e-01,
-      "cpu_time": 6.1372561999999853e-01,
+      "real_time": 7.3043515993049368e-01,
+      "cpu_time": 7.3002988999999918e-01,
       "time_unit": "us",
-      "bytes_per_second": 1.6677518728694572e+09,
+      "bytes_per_second": 1.4019040377210774e+09,
+      "disk": 2.0581580800000000e+08,
       "fails,%": 0.0000000000000000e+00,
-      "operations/s": 1.6286639383490793e+06
+      "mem_avg": 9.7484800000000000e+06,
+      "mem_max": 9.7484800000000000e+06,
+      "operations/s": 1.3690469118369897e+06
     },
     {
       "name": "BatchRead/iterations:500/real_time",
@@ -94,12 +100,15 @@
       "repetition_index": 0,
       "threads": 1,
       "iterations": 500,
-      "real_time": 1.4133122196653858e+02,
-      "cpu_time": 1.4117131000000026e+02,
+      "real_time": 1.6336463799234480e+02,
+      "cpu_time": 1.6328904600000007e+02,
       "time_unit": "us",
-      "bytes_per_second": 1.8548201618327825e+09,
+      "bytes_per_second": 1.6046557151020894e+09,
+      "disk": 2.0581580800000000e+08,
       "fails,%": 0.0000000000000000e+00,
-      "operations/s": 1.8113478142898267e+06
+      "mem_avg": 1.0653696000000000e+07,
+      "mem_max": 1.0653696000000000e+07,
+      "operations/s": 1.5670465967793842e+06
     },
     {
       "name": "RangeSelect/iterations:1000/real_time",
@@ -111,12 +120,15 @@
       "repetition_index": 0,
       "threads": 1,
       "iterations": 1000,
-      "real_time": 2.2904807992745191e+01,
-      "cpu_time": 2.2854796999999927e+01,
+      "real_time": 2.9544223012635484e+01,
+      "cpu_time": 2.9527143000000144e+01,
       "time_unit": "us",
-      "bytes_per_second": 4.4689782176921797e+09,
+      "bytes_per_second": 3.4627672542360063e+09,
+      "disk": 2.0581580800000000e+08,
       "fails,%": 0.0000000000000000e+00,
-      "operations/s": 4.3642365407150192e+06
+      "mem_avg": 1.0723328000000000e+07,
+      "mem_max": 1.0723328000000000e+07,
+      "operations/s": 3.3816086467148499e+06
     },
     {
       "name": "Scan/iterations:1/real_time",
@@ -128,12 +140,15 @@
       "repetition_index": 0,
       "threads": 1,
       "iterations": 1,
-      "real_time": 2.0670623023761436e+04,
-      "cpu_time": 2.0620998000000058e+04,
+      "real_time": 2.6653944980353117e+04,
+      "cpu_time": 2.6643979000000152e+04,
       "time_unit": "us",
-      "bytes_per_second": 4.9538903535848169e+09,
+      "bytes_per_second": 3.8418327971893106e+09,
+      "disk": 2.0581580800000000e+08,
       "fails,%": 0.0000000000000000e+00,
-      "operations/s": 4.8377835484226728e+06
+      "mem_avg": 1.0723328000000000e+07,
+      "mem_max": 1.0723328000000000e+07,
+      "operations/s": 3.7517898410051861e+06
     },
     {
       "name": "ReadUpdate_50_50/iterations:100000/real_time",
@@ -145,12 +160,15 @@
       "repetition_index": 0,
       "threads": 1,
       "iterations": 100000,
-      "real_time": 1.4309189000050537e+00,
-      "cpu_time": 1.4291180999999997e+00,
+      "real_time": 1.5103322998038493e+00,
+      "cpu_time": 1.5098969200000001e+00,
       "time_unit": "us",
-      "bytes_per_second": 3.5600150364790124e+08,
+      "bytes_per_second": 3.3895756587241548e+08,
+      "disk": 2.0581580800000000e+08,
       "fails,%": 0.0000000000000000e+00,
-      "operations/s": 3.4765771840615355e+05
+      "mem_avg": 1.1227340800000000e+08,
+      "mem_max": 2.1382348800000000e+08,
+      "operations/s": 3.3101324792228075e+05
     },
     {
       "name": "ReadInsert_95_5/iterations:100000/real_time",
@@ -162,29 +180,35 @@
       "repetition_index": 0,
       "threads": 1,
       "iterations": 100000,
-      "real_time": 1.1357891798252240e+00,
-      "cpu_time": 1.1348716199999997e+00,
+      "real_time": 2.0861970301484689e+00,
+      "cpu_time": 2.0854092299999971e+00,
       "time_unit": "us",
-      "bytes_per_second": 9.0157576616249669e+08,
+      "bytes_per_second": 4.9084529658597237e+08,
+      "disk": 2.1614182400000000e+08,
       "fails,%": 0.0000000000000000e+00,
-      "operations/s": 8.8044508414306317e+05
+      "mem_avg": 1.4920635700000000e+08,
+      "mem_max": 2.2504652800000000e+08,
+      "operations/s": 4.7934110994723864e+05
     },
     {
-      "name": "Remove/iterations:100000/real_time",
+      "name": "Remove/iterations:5000/real_time",
       "family_index": 8,
       "per_family_instance_index": 0,
-      "run_name": "Remove/iterations:100000/real_time",
+      "run_name": "Remove/iterations:5000/real_time",
       "run_type": "iteration",
       "repetitions": 1,
       "repetition_index": 0,
       "threads": 1,
-      "iterations": 100000,
-      "real_time": 7.1473551099188626e+00,
-      "cpu_time": 7.1409714199999978e+00,
+      "iterations": 5000,
+      "real_time": 2.0703052601311356e+01,
+      "cpu_time": 2.0691597599999945e+01,
       "time_unit": "us",
-      "bytes_per_second": 6.9931412713265061e+07,
-      "fails,%": 5.1189000000000000e+01,
-      "operations/s": 6.8292395227797912e+04
+      "bytes_per_second": 3.7926928705685861e+07,
+      "disk": 2.1615001600000000e+08,
+      "fails,%": 2.3320000000000000e+01,
+      "mem_avg": 8.4107264000000000e+07,
+      "mem_max": 1.5747891200000000e+08,
+      "operations/s": 3.7038016314146349e+04
     }
   ]
 }
