@@ -1,0 +1,75 @@
+{
+  "context": {
+    "date": "2021-12-16T06:57:07+00:00",
+    "host_name": "unum-bench",
+    "executable": "./build_release/bin/_ucsb_bench",
+    "num_cpus": 128,
+    "mhz_per_cpu": 4308,
+    "cpu_scaling_enabled": true,
+    "caches": [
+      {
+        "type": "Data",
+        "level": 1,
+        "size": 32768,
+        "num_sharing": 2
+      },
+      {
+        "type": "Instruction",
+        "level": 1,
+        "size": 32768,
+        "num_sharing": 2
+      },
+      {
+        "type": "Unified",
+        "level": 2,
+        "size": 524288,
+        "num_sharing": 2
+      },
+      {
+        "type": "Unified",
+        "level": 3,
+        "size": 16777216,
+        "num_sharing": 8
+      }
+    ],
+    "load_avg": [
+      7.44,
+      6.2,
+      7.21
+    ],
+    "library_build_type": "release"
+  },
+  "benchmarks": [
+    {
+      "name": "lmdb (953.67GB)",
+      "family_index": 0,
+      "per_family_instance_index": 0,
+      "run_name": "lmdb (953.67GB)",
+      "run_type": "iteration",
+      "repetitions": 1,
+      "repetition_index": 0,
+      "threads": 1,
+      "iterations": 1000000000,
+      "real_time": 2.3000757209956646e-07,
+      "cpu_time": 2.4000000000030941e-07,
+      "time_unit": "ns"
+    },
+    {
+      "name": "Init/iterations:1000000000/real_time",
+      "family_index": 1,
+      "per_family_instance_index": 0,
+      "run_name": "Init/iterations:1000000000/real_time",
+      "run_type": "iteration",
+      "repetitions": 1,
+      "repetition_index": 0,
+      "threads": 1,
+      "iterations": 1000000000,
+      "real_time": 1.1110000258082001e+01,
+      "cpu_time": 1.1088085883505000e+01,
+      "time_unit": "us",
+      "bytes_per_second": 9.2169214780628681e+07,
+      "fails,%": 0.0000000000000000e+00,
+      "operations/s": 9.0008998809207696e+04
+    }
+  ]
+}
