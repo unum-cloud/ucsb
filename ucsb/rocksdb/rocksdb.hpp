@@ -16,6 +16,7 @@
 
 #include "ucsb/core/types.hpp"
 #include "ucsb/core/db.hpp"
+#include "ucsb/core/helper.hpp"
 
 namespace facebook {
 
@@ -28,26 +29,28 @@ using value_spanc_t = ucsb::value_spanc_t;
 using operation_status_t = ucsb::operation_status_t;
 using operation_result_t = ucsb::operation_result_t;
 
-struct key_comparator_t : public rocksdb::Comparator {
-    int Compare(rocksdb::Slice const& left, rocksdb::Slice const& right) const override {
-        assert(left.size() == sizeof(key_t));
-        assert(right.size() == sizeof(key_t));
+// struct key_comparator_t : public rocksdb::Comparator {
+//     int Compare(rocksdb::Slice const& left, rocksdb::Slice const& right) const override {
+//         assert(left.size() == sizeof(key_t));
+//         assert(right.size() == sizeof(key_t));
 
-        key_t left_key = *reinterpret_cast<key_t const*>(left.data());
-        key_t right_key = *reinterpret_cast<key_t const*>(right.data());
-        return left_key < right_key ? -1 : left_key > right_key;
-    }
-    const char* Name() const { return "KeyComparator"; }
-    void FindShortestSeparator(std::string*, const rocksdb::Slice&) const {}
-    void FindShortSuccessor(std::string*) const {}
-};
+//         key_t left_key = *reinterpret_cast<key_t const*>(left.data());
+//         key_t right_key = *reinterpret_cast<key_t const*>(right.data());
+//         return left_key < right_key ? -1 : left_key > right_key;
+//     }
+//     const char* Name() const { return "KeyComparator"; }
+//     void FindShortestSeparator(std::string*, const rocksdb::Slice&) const {}
+//     void FindShortSuccessor(std::string*) const {}
+// };
 
 struct rocksdb_t : public ucsb::db_t {
   public:
     inline rocksdb_t() : db_(nullptr) {}
-    ~rocksdb_t() override = default;
+    ~rocksdb_t() { close(); }
 
-    bool init(fs::path const& config_path, fs::path const& dir_path) override;
+    void set_config(fs::path const& config_path, fs::path const& dir_path) override;
+    bool open() override;
+    bool close() override;
     void destroy() override;
 
     operation_result_t insert(key_t key, value_spanc_t value) override;
@@ -60,33 +63,50 @@ struct rocksdb_t : public ucsb::db_t {
     operation_result_t range_select(key_t key, size_t length, value_span_t single_value) const override;
     operation_result_t scan(value_span_t single_value) const override;
 
+    size_t size_on_disk() const override;
+
   private:
+    fs::path config_path_;
+    fs::path dir_path_;
+
     rocksdb::DB* db_;
-    key_comparator_t key_cmp;
+    // key_comparator_t key_cmp;
 };
 
-bool rocksdb_t::init(fs::path const& config_path, fs::path const& dir_path) {
+void rocksdb_t::set_config(fs::path const& config_path, fs::path const& dir_path) {
+    config_path_ = config_path;
+    dir_path_ = dir_path;
+}
+
+bool rocksdb_t::open() {
+    if (db_)
+        return true;
 
     rocksdb::Options options;
     std::vector<rocksdb::ColumnFamilyDescriptor> cf_descs;
     std::vector<rocksdb::ColumnFamilyHandle*> cf_handles;
     rocksdb::Status status =
-        rocksdb::LoadOptionsFromFile(config_path.string(), rocksdb::Env::Default(), &options, &cf_descs);
+        rocksdb::LoadOptionsFromFile(config_path_.string(), rocksdb::Env::Default(), &options, &cf_descs);
     if (!status.ok())
         return false;
 
-    options.comparator = &key_cmp;
+    // options.comparator = &key_cmp;
     if (cf_descs.empty())
-        status = rocksdb::DB::Open(options, dir_path.string(), &db_);
+        status = rocksdb::DB::Open(options, dir_path_.string(), &db_);
     else
-        status = rocksdb::DB::Open(options, dir_path.string(), cf_descs, &cf_handles, &db_);
+        status = rocksdb::DB::Open(options, dir_path_.string(), cf_descs, &cf_handles, &db_);
 
     return status.ok();
 }
 
-void rocksdb_t::destroy() {
+bool rocksdb_t::close() {
     delete db_;
     db_ = nullptr;
+    return true;
+}
+
+void rocksdb_t::destroy() {
+    close();
 }
 
 operation_result_t rocksdb_t::insert(key_t key, value_spanc_t value) {
@@ -185,6 +205,10 @@ operation_result_t rocksdb_t::scan(value_span_t single_value) const {
     }
     delete db_iter;
     return {scanned_records_count, operation_status_t::ok_k};
+}
+
+size_t rocksdb_t::size_on_disk() const {
+    return ucsb::size(dir_path_);
 }
 
 } // namespace facebook

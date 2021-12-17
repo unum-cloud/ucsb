@@ -3,10 +3,11 @@
 #include <vector>
 #include <fmt/format.h>
 
+#include "diskkv/region.hpp"
+
 #include "ucsb/core/types.hpp"
 #include "ucsb/core/db.hpp"
-
-#include "diskkv/region.hpp"
+#include "ucsb/core/helper.hpp"
 
 namespace unum {
 
@@ -29,9 +30,11 @@ using region_schema_t = region_schema_gt<fingerprint_t>;
 struct unumdb_t : public ucsb::db_t {
   public:
     inline unumdb_t() : name_("Kovkas"), region_(region_config_t()) {}
-    ~unumdb_t() override;
+    ~unumdb_t() { close(); }
 
-    bool init(fs::path const& config_path, fs::path const& dir_path) override;
+    void set_config(fs::path const& config_path, fs::path const& dir_path) override;
+    bool open() override;
+    bool close() override;
     void destroy() override;
 
     operation_result_t insert(key_t key, value_spanc_t value) override;
@@ -43,6 +46,8 @@ struct unumdb_t : public ucsb::db_t {
 
     operation_result_t range_select(key_t key, size_t length, value_span_t single_value) const override;
     operation_result_t scan(value_span_t single_value) const override;
+
+    size_t size_on_disk() const override;
 
   private:
     struct db_config_t {
@@ -58,36 +63,33 @@ struct unumdb_t : public ucsb::db_t {
     void unumdb_t::parse_fingerprint(std::vector<uint8_t> const& data, fingerprint_t& fingerprint);
     bool load_config(db_config_t& db_config);
 
-    string_t name_;
     fs::path config_path_;
     fs::path dir_path_;
+
+    string_t name_;
     region_t region_;
     dbuffer_t batch_buffer_;
 };
 
-unumdb_t::~unumdb_t() {
-    if (region_.population_count()) {
-        region_config_t config = region_.get_config();
-        region_schema_t schema = region_.get_schema();
-        save(config, schema, name_);
-    }
-}
-
-bool unumdb_t::init(fs::path const& config_path, fs::path const& dir_path) {
-
+void unumdb_t::set_config(fs::path const& config_path, fs::path const& dir_path) {
     config_path_ = config_path;
     dir_path_ = dir_path;
+}
+
+bool unumdb_t::open() {
+    if (region_.get_config().uuid.is_valid())
+        return true;
 
     db_config_t db_config;
     if (!load_config(db_config))
         return false;
 
     if (db_config.io_device == string_t("libc"))
-        init_file_io_by_libc(dir_path.c_str());
+        init_file_io_by_libc(dir_path_.c_str());
     else if (db_config.io_device == string_t("pulling"))
-        init_file_io_by_pulling(dir_path.c_str(), db_config.uring_queue_depth);
+        init_file_io_by_pulling(dir_path_.c_str(), db_config.uring_queue_depth);
     else if (db_config.io_device == string_t("polling"))
-        init_file_io_by_polling(dir_path.c_str(), db_config.uring_max_files_count, db_config.uring_queue_depth);
+        init_file_io_by_polling(dir_path_.c_str(), db_config.uring_max_files_count, db_config.uring_queue_depth);
     else
         return false;
 
@@ -101,6 +103,17 @@ bool unumdb_t::init(fs::path const& config_path, fs::path const& dir_path) {
     return true;
 }
 
+bool unumdb_t::close() {
+    if (region_.population_count()) {
+        region_config_t config = region_.get_config();
+        region_schema_t schema = region_.get_schema();
+        save(config, schema, name_);
+    }
+
+    region_ = std::move(region_config_t());
+    return true;
+}
+
 void unumdb_t::destroy() {
     region_.destroy();
     std::string config_path = fmt::format("{}{}.cfg", dir_path_.c_str(), name_.c_str());
@@ -110,7 +123,7 @@ void unumdb_t::destroy() {
 }
 
 operation_result_t unumdb_t::insert(key_t key, value_spanc_t value) {
-    citizenc_t citizen {reinterpret_cast<byte_t const*>(value.data()), value.size()};
+    citizen_view_t citizen {reinterpret_cast<byte_t const*>(value.data()), value.size()};
     region_.insert(key, citizen);
     return {1, operation_status_t::ok_k};
 }
@@ -122,7 +135,7 @@ operation_result_t unumdb_t::update(key_t key, value_spanc_t value) {
     if (!location)
         return {1, operation_status_t::not_found_k};
 
-    citizenc_t citizen {reinterpret_cast<byte_t const*>(value.data()), value.size()};
+    citizen_view_t citizen {reinterpret_cast<byte_t const*>(value.data()), value.size()};
     region_.insert(key, citizen);
     return {1, operation_status_t::ok_k};
 }
@@ -140,7 +153,7 @@ operation_result_t unumdb_t::read(key_t key, value_span_t value) const {
 
     countdown_t countdown;
     notifier_t read_notifier(countdown);
-    citizen_t citizen {reinterpret_cast<byte_t*>(value.data()), value.size()};
+    citizen_span_t citizen {reinterpret_cast<byte_t*>(value.data()), value.size()};
     region_.select<caching_t::io_k>(location, citizen, read_notifier);
     if (!countdown.wait())
         return {0, operation_status_t::error_k};
@@ -174,7 +187,7 @@ operation_result_t unumdb_t::batch_read(keys_span_t keys) const {
 
 operation_result_t unumdb_t::range_select(key_t key, size_t length, value_span_t single_value) const {
     countdown_t countdown;
-    citizen_t citizen {reinterpret_cast<byte_t*>(single_value.data()), single_value.size()};
+    citizen_span_t citizen {reinterpret_cast<byte_t*>(single_value.data()), single_value.size()};
     size_t selected_records_count = 0;
     auto it = region_.find(key);
     for (size_t i = 0; it != region_.end() && i < length; ++i, ++it) {
@@ -190,7 +203,7 @@ operation_result_t unumdb_t::range_select(key_t key, size_t length, value_span_t
 
 operation_result_t unumdb_t::scan(value_span_t single_value) const {
     countdown_t countdown;
-    citizen_t citizen {reinterpret_cast<byte_t*>(single_value.data()), single_value.size()};
+    citizen_span_t citizen {reinterpret_cast<byte_t*>(single_value.data()), single_value.size()};
     size_t scanned_records_count = 0;
     auto it = region_.begin();
     for (; it != region_.end(); ++it) {
@@ -202,6 +215,10 @@ operation_result_t unumdb_t::scan(value_span_t single_value) const {
         }
     }
     return {scanned_records_count, operation_status_t::ok_k};
+}
+
+size_t unumdb_t::size_on_disk() const {
+    return ucsb::size(dir_path_);
 }
 
 void unumdb_t::save(region_config_t const& config, region_schema_t const& schema, string_t const& name) {
