@@ -1,6 +1,6 @@
 {
   "context": {
-    "date": "2021-12-16T07:32:03+00:00",
+    "date": "2021-12-15T06:17:11+00:00",
     "host_name": "unum-bench",
     "executable": "./build_release/bin/_ucsb_bench",
     "num_cpus": 128,
@@ -32,57 +32,55 @@
         "num_sharing": 8
       }
     ],
-    "load_avg": [19.55,18.86,15.54],
+    "load_avg": [8.22,4.05,4.49],
     "library_build_type": "release"
   },
   "benchmarks": [
     {
-      "name": "wiredtiger (9.54GB)",
+      "name": "unumdb",
       "family_index": 0,
       "per_family_instance_index": 0,
-      "run_name": "wiredtiger (9.54GB)",
+      "run_name": "unumdb",
       "run_type": "iteration",
       "repetitions": 1,
       "repetition_index": 0,
       "threads": 1,
       "iterations": 1000000000,
-      "real_time": 1.8099672161042690e-07,
-      "cpu_time": 1.8999999999713690e-07,
+      "real_time": 1.8100399756804109e-07,
+      "cpu_time": 1.8999999999973896e-07,
       "time_unit": "ns"
     },
     {
-      "name": "Init/iterations:10000000/real_time",
+      "name": "Init/iterations:1000000000/real_time",
       "family_index": 1,
       "per_family_instance_index": 0,
-      "run_name": "Init/iterations:10000000/real_time",
+      "run_name": "Init/iterations:1000000000/real_time",
       "run_type": "iteration",
       "repetitions": 1,
       "repetition_index": 0,
       "threads": 1,
-      "iterations": 10000000,
-      "real_time": 2.5245478924500638e+01,
-      "cpu_time": 1.6419348180500002e+01,
+      "iterations": 1000000000,
+      "real_time": 1.0711099740899998e+01,
+      "cpu_time": 1.0283460233937003e+01,
       "time_unit": "us",
-      "bytes_per_second": 4.0561718122376837e+07,
       "fails,%": 0.0000000000000000e+00,
-      "operations/s": 3.9611052853883630e+04
+      "operations/s": 9.3361094956620698e+04
     },
     {
-      "name": "Read/iterations:10000000/real_time",
+      "name": "Read/iterations:1000000000/real_time",
       "family_index": 2,
       "per_family_instance_index": 0,
-      "run_name": "Read/iterations:10000000/real_time",
+      "run_name": "Read/iterations:1000000000/real_time",
       "run_type": "iteration",
       "repetitions": 1,
       "repetition_index": 0,
       "threads": 1,
-      "iterations": 10000000,
-      "real_time": 7.9326296140992776e+00,
-      "cpu_time": 7.4905156627999991e+00,
+      "iterations": 1000000000,
+      "real_time": 2.1613201089030003e+01,
+      "cpu_time": 2.1590105104332999e+01,
       "time_unit": "us",
-      "bytes_per_second": 1.2908708080608797e+08,
       "fails,%": 0.0000000000000000e+00,
-      "operations/s": 1.2606160234969528e+05
+      "operations/s": 4.6268019063014232e+04
     },
     {
       "name": "BatchRead/iterations:50000/real_time",
@@ -94,12 +92,11 @@
       "repetition_index": 0,
       "threads": 1,
       "iterations": 50000,
-      "real_time": 2.0183733750396641e+03,
-      "cpu_time": 1.9016473822199991e+03,
+      "real_time": 6.7971779473999050e+02,
+      "cpu_time": 6.7924215701998037e+02,
       "time_unit": "us",
-      "bytes_per_second": 1.2987884364796899e+08,
       "fails,%": 0.0000000000000000e+00,
-      "operations/s": 1.2683480824996972e+05
+      "operations/s": 3.7662689130851219e+05
     },
     {
       "name": "RangeSelect/iterations:100000/real_time",
@@ -111,12 +108,11 @@
       "repetition_index": 0,
       "threads": 1,
       "iterations": 100000,
-      "real_time": 6.5938004830095451e+01,
-      "cpu_time": 6.2060632600000069e+01,
+      "real_time": 2.1728910335994442e+02,
+      "cpu_time": 9.2947085510022589e+01,
       "time_unit": "us",
-      "bytes_per_second": 1.5529600706581125e+09,
       "fails,%": 0.0000000000000000e+00,
-      "operations/s": 1.5165625690020630e+06
+      "operations/s": 4.6017954169731622e+05
     },
     {
       "name": "Scan/iterations:1/real_time",
@@ -128,63 +124,59 @@
       "repetition_index": 0,
       "threads": 1,
       "iterations": 1,
-      "real_time": 8.7724606739939190e+06,
-      "cpu_time": 6.1421089940000111e+06,
+      "real_time": 9.4424607751899743e+08,
+      "cpu_time": 4.4422771355900115e+08,
       "time_unit": "us",
-      "bytes_per_second": 1.1582052800898135e+09,
       "fails,%": 0.0000000000000000e+00,
-      "operations/s": 1.1310598438377085e+06
+      "operations/s": 1.0589400621363798e+06
     },
     {
-      "name": "ReadUpdate_50_50/iterations:10000000/real_time",
+      "name": "ReadUpdate_50_50/iterations:1000000000/real_time",
       "family_index": 6,
       "per_family_instance_index": 0,
-      "run_name": "ReadUpdate_50_50/iterations:10000000/real_time",
+      "run_name": "ReadUpdate_50_50/iterations:1000000000/real_time",
       "run_type": "iteration",
       "repetitions": 1,
       "repetition_index": 0,
       "threads": 1,
-      "iterations": 10000000,
-      "real_time": 1.0206624728802126e+01,
-      "cpu_time": 1.0054393466799997e+01,
+      "iterations": 1000000000,
+      "real_time": 1.9300638101602001e+01,
+      "cpu_time": 1.8676086180840997e+01,
       "time_unit": "us",
-      "bytes_per_second": 1.0032699616263634e+08,
       "fails,%": 0.0000000000000000e+00,
-      "operations/s": 9.7975582190074550e+04
+      "operations/s": 5.1811758488803403e+04
     },
     {
-      "name": "ReadInsert_95_5/iterations:10000000/real_time",
+      "name": "ReadInsert_95_5/iterations:1000000000/real_time",
       "family_index": 7,
       "per_family_instance_index": 0,
-      "run_name": "ReadInsert_95_5/iterations:10000000/real_time",
+      "run_name": "ReadInsert_95_5/iterations:1000000000/real_time",
       "run_type": "iteration",
       "repetitions": 1,
       "repetition_index": 0,
       "threads": 1,
-      "iterations": 10000000,
-      "real_time": 7.8488516448007433e+00,
-      "cpu_time": 7.6937053843999994e+00,
+      "iterations": 1000000000,
+      "real_time": 1.4546637817804019e+01,
+      "cpu_time": 1.4341440116233999e+01,
       "time_unit": "us",
-      "bytes_per_second": 1.3046494523543718e+08,
       "fails,%": 0.0000000000000000e+00,
-      "operations/s": 1.2740717308148163e+05
+      "operations/s": 6.8744407644223698e+04
     },
     {
-      "name": "Remove/iterations:10000000/real_time",
+      "name": "Remove/iterations:1000000000/real_time",
       "family_index": 8,
       "per_family_instance_index": 0,
-      "run_name": "Remove/iterations:10000000/real_time",
+      "run_name": "Remove/iterations:1000000000/real_time",
       "run_type": "iteration",
       "repetitions": 1,
       "repetition_index": 0,
       "threads": 1,
-      "iterations": 10000000,
-      "real_time": 8.5650938873994171e+00,
-      "cpu_time": 8.4506788111000102e+00,
+      "iterations": 1000000000,
+      "real_time": 2.5988200257020071e+00,
+      "cpu_time": 2.2541047095719984e+00,
       "time_unit": "us",
-      "bytes_per_second": 1.1955502338467802e+08,
       "fails,%": 0.0000000000000000e+00,
-      "operations/s": 1.1675295252409963e+05
+      "operations/s": 3.8479001628051355e+05
     }
   ]
 }

@@ -11,7 +11,9 @@
 #include "ucsb/core/transaction.hpp"
 #include "ucsb/core/factory.hpp"
 #include "ucsb/core/operation.hpp"
+#include "ucsb/core/stat.hpp"
 #include "ucsb/core/exception.hpp"
+#include "ucsb/core/format.hpp"
 
 namespace bm = benchmark;
 
@@ -26,13 +28,9 @@ using operation_kind_t = ucsb::operation_kind_t;
 using operation_status_t = ucsb::operation_status_t;
 using operation_result_t = ucsb::operation_result_t;
 using operation_chooser_t = std::unique_ptr<ucsb::operation_chooser_t>;
+using mem_stat_t = ucsb::mem_stat_t;
 using exception_t = ucsb::exception_t;
-
-void drop_system_caches() {
-    auto res = system("sudo sh -c '/usr/bin/echo 3 > /proc/sys/vm/drop_caches'");
-    if (res == 0)
-        sleep(5);
-}
+using printable_bytes_t = ucsb::printable_bytes_t;
 
 inline bool start_with(const char* str, const char* prefix) {
     return strncmp(str, prefix, strlen(prefix)) == 0;
@@ -99,6 +97,23 @@ inline void register_section(std::string const& name) {
     });
 }
 
+void drop_system_caches() {
+    auto res = system("sudo sh -c '/usr/bin/echo 3 > /proc/sys/vm/drop_caches'");
+    if (res == 0)
+        sleep(5);
+}
+
+std::string section_name(settings_t const& settings, workloads_t const& workloads) {
+    std::string section_name = settings.db_name;
+    if (!workloads.empty()) {
+        workload_t const& workload = workloads.front();
+        section_name = fmt::format("{} ({})",
+                                   settings.db_name,
+                                   printable_bytes_t {workload.records_count * workload.value_length});
+    }
+    return section_name;
+}
+
 template <typename func_at>
 inline void register_benchmark(std::string const& name, size_t iterations_count, func_at func) {
     bm::RegisterBenchmark(name.c_str(), func)->Iterations(iterations_count)->Unit(bm::kMicrosecond)->UseRealTime();
@@ -143,10 +158,16 @@ operation_chooser_t create_operation_chooser(workload_t const& workload) {
 void transaction(bm::State& state, workload_t const& workload, db_t& db) {
     // drop_system_caches();
 
+    bool ok = db.open();
+    assert(ok);
     auto chooser = create_operation_chooser(workload);
     transaction_t transaction(workload, db);
-    size_t operations_done = 0;
+
     size_t fails = 0;
+    size_t operations_done = 0;
+    size_t bytes_processed_cnt = 0;
+    mem_stat_t mem_stat(100);
+    mem_stat.start();
 
     for (auto _ : state) {
         operation_result_t result;
@@ -163,11 +184,20 @@ void transaction(bm::State& state, workload_t const& workload, db_t& db) {
         }
 
         operations_done += result.depth;
-        fails += size_t(result.status != operation_status_t::ok_k) * result.depth;
+        bool success = result.status == operation_status_t::ok_k;
+        fails += size_t(!success) * result.depth;
+        bytes_processed_cnt += size_t(success) * workload.value_length * result.depth;
     }
 
-    state.counters["operations/s"] = bm::Counter(operations_done - fails, bm::Counter::kIsRate);
+    mem_stat.stop();
+    state.SetBytesProcessed(bytes_processed_cnt);
     state.counters["fails,%"] = bm::Counter(fails * 100.0 / operations_done);
+    state.counters["operations/s"] = bm::Counter(operations_done - fails, bm::Counter::kIsRate);
+    state.counters["mem_max"] = bm::Counter(mem_stat.rss().max, bm::Counter::kDefaults, bm::Counter::kIs1024);
+    state.counters["mem_avg"] = bm::Counter(mem_stat.rss().avg, bm::Counter::kDefaults, bm::Counter::kIs1024);
+    state.counters["disk"] = bm::Counter(db.size_on_disk(), bm::Counter::kDefaults, bm::Counter::kIs1024);
+    ok = db.close();
+    assert(ok);
 }
 
 int main(int argc, char** argv) {
@@ -194,12 +224,9 @@ int main(int argc, char** argv) {
         fmt::print("Failed to create DB: {}\n", settings.db_name);
         return 1;
     }
-    if (!db->init(settings.db_config_path, settings.db_dir_path)) {
-        fmt::print("Failed to init DB: {}\n", settings.db_name);
-        return 1;
-    }
+    db->set_config(settings.db_config_path, settings.db_dir_path);
 
-    register_section(settings.db_name);
+    register_section(section_name(settings, workloads));
     for (auto const& workload : workloads) {
         register_benchmark(workload.name, workload.operations_count, [&](bm::State& state) {
             transaction(state, workload, *db.get());

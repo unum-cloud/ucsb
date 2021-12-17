@@ -8,7 +8,9 @@ namespace ucsb {
 struct db_t {
     virtual ~db_t() {}
 
-    virtual bool init(fs::path const& config_path, fs::path const& dir_path) = 0;
+    virtual void set_config(fs::path const& config_path, fs::path const& dir_path) = 0;
+    virtual bool open() = 0;
+    virtual bool close() = 0;
     virtual void destroy() = 0;
 
     virtual operation_result_t insert(key_t key, value_spanc_t value) = 0;
@@ -20,6 +22,8 @@ struct db_t {
 
     virtual operation_result_t range_select(key_t key, size_t length, value_span_t single_value) const = 0;
     virtual operation_result_t scan(value_span_t single_value) const = 0;
+
+    virtual size_t size_on_disk() const = 0;
 };
 
 } // namespace ucsb

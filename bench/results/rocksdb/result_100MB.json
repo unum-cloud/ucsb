@@ -1,6 +1,6 @@
 {
   "context": {
-    "date": "2021-12-13T11:11:24+00:00",
+    "date": "2021-12-16T07:03:15+00:00",
     "host_name": "unum-bench",
     "executable": "./build_release/bin/_ucsb_bench",
     "num_cpus": 128,
@@ -32,21 +32,21 @@
         "num_sharing": 8
       }
     ],
-    "load_avg": [25.76,21.87,21.92],
+    "load_avg": [14.84,13.97,10.87],
     "library_build_type": "release"
   },
   "benchmarks": [
     {
-      "name": "rocksdb",
+      "name": "rocksdb (97.66MB)",
       "family_index": 0,
       "per_family_instance_index": 0,
-      "run_name": "rocksdb",
+      "run_name": "rocksdb (97.66MB)",
       "run_type": "iteration",
       "repetitions": 1,
       "repetition_index": 0,
       "threads": 1,
       "iterations": 1000000000,
-      "real_time": 1.7997808754444122e-07,
+      "real_time": 1.9001890905201435e-07,
       "cpu_time": 1.9000000000060635e-07,
       "time_unit": "ns"
     },
@@ -60,11 +60,12 @@
       "repetition_index": 0,
       "threads": 1,
       "iterations": 100000,
-      "real_time": 4.3534174398519099e+00,
-      "cpu_time": 4.3516297400000008e+00,
+      "real_time": 6.2545716800377704e+00,
+      "cpu_time": 6.2513762400000008e+00,
       "time_unit": "us",
-      "fails": 0.0000000000000000e+00,
-      "operations/s": 2.2970459732297508e+05
+      "bytes_per_second": 1.6372024374877995e+08,
+      "fails,%": 0.0000000000000000e+00,
+      "operations/s": 1.5988305053591792e+05
     },
     {
       "name": "Read/iterations:100000/real_time",
@@ -76,11 +77,12 @@
       "repetition_index": 0,
       "threads": 1,
       "iterations": 100000,
-      "real_time": 9.6788875991478562e-01,
-      "cpu_time": 9.6748649000000020e-01,
+      "real_time": 1.0778183801448904e+00,
+      "cpu_time": 1.0772906100000001e+00,
       "time_unit": "us",
-      "fails": 0.0000000000000000e+00,
-      "operations/s": 1.0331765812509710e+06
+      "bytes_per_second": 9.5006730156368685e+08,
+      "fails,%": 0.0000000000000000e+00,
+      "operations/s": 9.2780009918328794e+05
     },
     {
       "name": "BatchRead/iterations:500/real_time",
@@ -92,11 +94,12 @@
       "repetition_index": 0,
       "threads": 1,
       "iterations": 500,
-      "real_time": 2.3891078401356936e+02,
-      "cpu_time": 2.3876518800000014e+02,
+      "real_time": 2.6968953199684620e+02,
+      "cpu_time": 2.6951246000000009e+02,
       "time_unit": "us",
-      "fails": 0.0000000000000000e+00,
-      "operations/s": 1.0715296969828706e+06
+      "bytes_per_second": 9.7202141313762808e+08,
+      "fails,%": 0.0000000000000000e+00,
+      "operations/s": 9.4923966126721492e+05
     },
     {
       "name": "RangeSelect/iterations:1000/real_time",
@@ -108,11 +111,12 @@
       "repetition_index": 0,
       "threads": 1,
       "iterations": 1000,
-      "real_time": 1.7750593950040638e+01,
-      "cpu_time": 1.7731119000000017e+01,
+      "real_time": 3.5260859003756195e+01,
+      "cpu_time": 3.5202205000000042e+01,
       "time_unit": "us",
-      "fails": 0.0000000000000000e+00,
-      "operations/s": 5.6307974978928054e+06
+      "bytes_per_second": 2.9022984377407937e+09,
+      "fails,%": 0.0000000000000000e+00,
+      "operations/s": 2.8342758181062439e+06
     },
     {
       "name": "Scan/iterations:1/real_time",
@@ -124,11 +128,12 @@
       "repetition_index": 0,
       "threads": 1,
       "iterations": 1,
-      "real_time": 1.6531588975340128e+04,
-      "cpu_time": 1.6526119000000006e+04,
+      "real_time": 2.4051896005403250e+04,
+      "cpu_time": 2.4031224999999988e+04,
       "time_unit": "us",
-      "fails": 0.0000000000000000e+00,
-      "operations/s": 6.0490253023570925e+06
+      "bytes_per_second": 4.2574606167013144e+09,
+      "fails,%": 0.0000000000000000e+00,
+      "operations/s": 4.1576763834973774e+06
     },
     {
       "name": "ReadUpdate_50_50/iterations:100000/real_time",
@@ -140,11 +145,12 @@
       "repetition_index": 0,
       "threads": 1,
       "iterations": 100000,
-      "real_time": 4.2379351402632892e+00,
-      "cpu_time": 4.1719759299999994e+00,
+      "real_time": 5.1266341499285772e+00,
+      "cpu_time": 5.0799045399999985e+00,
       "time_unit": "us",
-      "fails": 0.0000000000000000e+00,
-      "operations/s": 2.3596396992943907e+05
+      "bytes_per_second": 1.9974118886838570e+08,
+      "fails,%": 0.0000000000000000e+00,
+      "operations/s": 1.9505975475428291e+05
     },
     {
       "name": "ReadInsert_95_5/iterations:100000/real_time",
@@ -156,11 +162,12 @@
       "repetition_index": 0,
       "threads": 1,
       "iterations": 100000,
-      "real_time": 1.5979358297772706e+00,
-      "cpu_time": 1.5972212099999992e+00,
+      "real_time": 1.8985316299949773e+00,
+      "cpu_time": 1.8972062799999989e+00,
       "time_unit": "us",
-      "fails": 0.0000000000000000e+00,
-      "operations/s": 6.2580735807105957e+05
+      "bytes_per_second": 5.3936420327256227e+08,
+      "fails,%": 0.0000000000000000e+00,
+      "operations/s": 5.2672285475836159e+05
     },
     {
       "name": "Remove/iterations:100000/real_time",
@@ -172,11 +179,12 @@
       "repetition_index": 0,
       "threads": 1,
       "iterations": 100000,
-      "real_time": 2.2184566501528025e+00,
-      "cpu_time": 2.2178125099999990e+00,
+      "real_time": 3.4833124402211979e+00,
+      "cpu_time": 3.4809866800000022e+00,
       "time_unit": "us",
-      "fails": 0.0000000000000000e+00,
-      "operations/s": 4.5076382264720934e+05
+      "bytes_per_second": 2.9397305512306380e+08,
+      "fails,%": 0.0000000000000000e+00,
+      "operations/s": 2.8708306164361699e+05
     }
   ]
 }
