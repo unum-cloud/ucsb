@@ -5,13 +5,12 @@
 
 #include "ucsb/core/types.hpp"
 #include "ucsb/core/settings.hpp"
-#include "ucsb/core/types.hpp"
+#include "ucsb/core/stat.hpp"
 #include "ucsb/core/db.hpp"
 #include "ucsb/core/workload.hpp"
 #include "ucsb/core/transaction.hpp"
 #include "ucsb/core/factory.hpp"
 #include "ucsb/core/operation.hpp"
-#include "ucsb/core/stat.hpp"
 #include "ucsb/core/exception.hpp"
 #include "ucsb/core/format.hpp"
 
@@ -28,6 +27,7 @@ using operation_kind_t = ucsb::operation_kind_t;
 using operation_status_t = ucsb::operation_status_t;
 using operation_result_t = ucsb::operation_result_t;
 using operation_chooser_t = std::unique_ptr<ucsb::operation_chooser_t>;
+using cpu_stat_t = ucsb::cpu_stat_t;
 using mem_stat_t = ucsb::mem_stat_t;
 using exception_t = ucsb::exception_t;
 using printable_bytes_t = ucsb::printable_bytes_t;
@@ -167,7 +167,9 @@ void transaction(bm::State& state, workload_t const& workload, db_t& db) {
     size_t fails = 0;
     size_t operations_done = 0;
     size_t bytes_processed_cnt = 0;
-    mem_stat_t mem_stat(100);
+    cpu_stat_t cpu_stat;
+    mem_stat_t mem_stat;
+    cpu_stat.start();
     mem_stat.start();
 
     for (auto _ : state) {
@@ -191,10 +193,13 @@ void transaction(bm::State& state, workload_t const& workload, db_t& db) {
         bytes_processed_cnt += size_t(success) * workload.value_length * result.depth;
     }
 
+    cpu_stat.stop();
     mem_stat.stop();
     state.SetBytesProcessed(bytes_processed_cnt);
     state.counters["fails,%"] = bm::Counter(fails * 100.0 / operations_done);
     state.counters["operations/s"] = bm::Counter(operations_done - fails, bm::Counter::kIsRate);
+    state.counters["cpu_max,%"] = bm::Counter(cpu_stat.percent().max);
+    state.counters["cpu_avg,%"] = bm::Counter(cpu_stat.percent().avg);
     state.counters["mem_max"] = bm::Counter(mem_stat.rss().max, bm::Counter::kDefaults, bm::Counter::kIs1024);
     state.counters["mem_avg"] = bm::Counter(mem_stat.rss().avg, bm::Counter::kDefaults, bm::Counter::kIs1024);
     state.counters["disk"] = bm::Counter(db.size_on_disk(), bm::Counter::kDefaults, bm::Counter::kIs1024);
