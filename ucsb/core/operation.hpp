@@ -16,6 +16,7 @@ enum class operation_kind_t {
     batch_read_k,
     range_select_k,
     scan_k,
+    read_modify_write_k,
 };
 
 enum class operation_status_t {

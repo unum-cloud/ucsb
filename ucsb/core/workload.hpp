@@ -25,6 +25,7 @@ struct workload_t {
     double batch_read_proportion = 0;
     double range_select_proportion = 0;
     double scan_proportion = 0;
+    double read_modify_write_proportion = 0;
 
     distribution_kind_t key_dist = distribution_kind_t::uniform_k;
 
@@ -86,6 +87,7 @@ bool load(fs::path const& path, workloads_t& workloads) {
         workload.batch_read_proportion = (*j_workload).value("batch_read_proportion", 0.0);
         workload.range_select_proportion = (*j_workload).value("range_select_proportion", 0.0);
         workload.scan_proportion = (*j_workload).value("scan_proportion", 0.0);
+        workload.read_modify_write_proportion = (*j_workload).value("read_modify_write_proportion", 0.0);
 
         workload.key_dist = parse_distribution((*j_workload).value("key_dist", "uniform"));
         if (workload.key_dist == distribution_kind_t::unknown_k) {
