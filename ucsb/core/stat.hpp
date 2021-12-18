@@ -12,9 +12,8 @@ namespace ucsb {
 
 struct cpu_stat_t {
 
-    inline cpu_stat_t(size_t request_delay = 300)
-        : last_cpu_(0), last_user_(0), last_sys_(0), request_delay_(request_delay), requests_count_(0),
-          time_to_die_(true) {}
+    inline cpu_stat_t(size_t request_delay = 100)
+        : request_delay_(request_delay), requests_count_(0), time_to_die_(true) {}
     inline ~cpu_stat_t() { stop(); }
 
     struct stat_t {
@@ -41,9 +40,6 @@ struct cpu_stat_t {
 
         time_to_die_ = true;
         thread_.join();
-        last_cpu_ = 0;
-        last_user_ = 0;
-        last_sys_ = 0;
     }
 
     inline stat_t percent() const { return percent_; }
@@ -56,37 +52,36 @@ struct cpu_stat_t {
     }
 
     void request_cpu_usage() {
-        size_t processor_count = std::thread::hardware_concurrency();
-        tms time_sample;
-        last_cpu_ = times(&time_sample);
-        last_user_ = time_sample.tms_utime;
-        last_sys_ = time_sample.tms_stime;
+        bool first_time = true;
+        clock_t last_cpu = 0;
+        clock_t last_proc_user = 0;
+        clock_t last_proc_sys = 0;
 
         while (!time_to_die_) {
+            tms time_sample;
+            clock_t cpu = times(&time_sample);
+            clock_t proc_user = time_sample.tms_utime;
+            clock_t proc_sys = time_sample.tms_stime;
+            clock_t delta_proc = (proc_user - last_proc_user) + (proc_sys - last_proc_sys);
+            clock_t delta_cpu = cpu - last_cpu;
+
+            if (!first_time && delta_cpu > 0) {
+                double percent = 100.0 * delta_proc / delta_cpu;
+                ++requests_count_;
+                recalculate(percent);
+            }
+            else
+                first_time = false;
+
+            last_cpu = cpu;
+            last_proc_user = proc_user;
+            last_proc_sys = proc_sys;
+
             std::this_thread::sleep_for(std::chrono::milliseconds(request_delay_));
-
-            clock_t cpu = times(&time_sample) * processor_count;
-            clock_t user = time_sample.tms_utime;
-            clock_t sys = time_sample.tms_stime;
-            clock_t delta_proc = (user - last_user_) + (sys - last_sys_);
-            clock_t delta_time = cpu - last_cpu_;
-
-            double overall_cpus_percent = 100.0 * delta_proc / delta_time;
-            double single_cpu_percent = overall_cpus_percent * processor_count;
-
-            last_cpu_ = cpu;
-            last_user_ = user;
-            last_sys_ = sys;
-
-            ++requests_count_;
-            recalculate(single_cpu_percent);
         }
     }
 
     stat_t percent_;
-    clock_t last_cpu_;
-    clock_t last_user_;
-    clock_t last_sys_;
 
     size_t request_delay_;
     size_t requests_count_;
