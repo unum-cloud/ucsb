@@ -38,6 +38,9 @@ struct cpu_stat_t {
         if (time_to_die_)
             return;
 
+        // Wait to calculate one more times for  to get more accuracy
+        std::this_thread::sleep_for(std::chrono::milliseconds(request_delay_ + 1));
+
         time_to_die_ = true;
         thread_.join();
     }
