@@ -1,8 +1,6 @@
 #pragma once
 #include <fmt/format.h>
 
-#include "container/flat/string.hpp"
-
 namespace ucsb {
 
 struct printable_bytes_t {
