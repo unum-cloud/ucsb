@@ -5,7 +5,7 @@
 
 namespace ucsb {
 
-struct randome_int_generator_t : generator_gt<uint32_t> {
+struct randome_int_generator_t final : generator_gt<uint32_t> {
     inline randome_int_generator_t() : device_(), rand_(device_()), last_(0) { generate(); }
 
     inline uint32_t generate() override { return last_ = rand_(); }
@@ -14,27 +14,27 @@ struct randome_int_generator_t : generator_gt<uint32_t> {
   private:
     std::random_device device_;
     std::minstd_rand rand_;
-    double last_;
+    float last_;
 };
 
-struct randome_double_generator_t : generator_gt<double> {
-    inline randome_double_generator_t(double min, double max)
+struct randome_double_generator_t final : generator_gt<float> {
+    inline randome_double_generator_t(float min, float max)
         : device_(), rand_(device_()), uniform_(min, max), last_(0.0) {
         generate();
     }
     ~randome_double_generator_t() override = default;
 
-    inline double generate() override { return last_ = uniform_(rand_); }
-    inline double last() override { return last_; }
+    inline float generate() override { return last_ = uniform_(rand_); }
+    inline float last() override { return last_; }
 
   private:
     std::random_device device_;
     std::minstd_rand rand_;
-    std::uniform_real_distribution<double> uniform_;
-    double last_;
+    std::uniform_real_distribution<float> uniform_;
+    float last_;
 };
 
-struct random_byte_generator_t : generator_gt<char> {
+struct random_byte_generator_t final : generator_gt<char> {
   public:
     random_byte_generator_t() : off_(6) {}
     ~random_byte_generator_t() override = default;
@@ -59,7 +59,7 @@ inline char random_byte_generator_t::generate() {
         buf_[5] = static_cast<char>(((bytes >> 25) & 95) + ' ');
         off_ = 0;
     }
-    
+
     return buf_[off_++];
 }
 
