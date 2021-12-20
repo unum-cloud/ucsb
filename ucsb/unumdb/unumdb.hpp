@@ -218,7 +218,7 @@ operation_result_t unumdb_t::scan(value_span_t single_value) const {
 }
 
 size_t unumdb_t::size_on_disk() const {
-    return ucsb::size(dir_path_);
+    return ucsb::size_on_disk(dir_path_);
 }
 
 void unumdb_t::save(region_config_t const& config, region_schema_t const& schema, string_t const& name) {

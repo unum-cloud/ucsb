@@ -222,7 +222,7 @@ operation_result_t leveldb_t::scan(value_span_t single_value) const {
 }
 
 size_t leveldb_t::size_on_disk() const {
-    return ucsb::size(dir_path_);
+    return ucsb::size_on_disk(dir_path_);
 }
 
 bool leveldb_t::load_config(fs::path const& config_path, config_t& config) {
