@@ -43,7 +43,7 @@ struct workload_t {
 
 using workloads_t = std::vector<workload_t>;
 
-distribution_kind_t parse_distribution(std::string const& name) {
+inline distribution_kind_t parse_distribution(std::string const& name) {
     distribution_kind_t dist = distribution_kind_t::unknown_k;
     if (name == "const")
         dist = distribution_kind_t::const_k;

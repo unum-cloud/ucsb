@@ -10,11 +10,11 @@ struct acknowledged_counter_generator_t : public counter_generator_t {
     static const size_t window_size_k = (1 << 16);
     static const size_t window_mask_k = window_size_k - 1;
 
-    acknowledged_counter_generator_t(uint64_t start)
+    inline acknowledged_counter_generator_t(uint64_t start)
         : counter_generator_t(start), limit_(start - 1), ack_window_(window_size_k, false) {}
 
-    size_t generate() override { return counter_++; }
-    size_t last() override { return limit_; }
+    inline size_t generate() override { return counter_++; }
+    inline size_t last() override { return limit_; }
 
     void acknowledge(uint64_t value) {
         size_t cur_slot = value & window_mask_k;

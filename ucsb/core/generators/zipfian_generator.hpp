@@ -16,8 +16,8 @@ struct zipfian_generator_t : public generator_gt<size_t> {
         : zipfian_generator_t(min, max, zipfian_const, zeta(max - min + 1, zipfian_const)) {}
     inline zipfian_generator_t(size_t min, size_t max, float zipfian_const, float zeta_n);
 
-    size_t generate() override { return generate(items_count_); }
-    size_t last() override { return last_; }
+    inline size_t generate() override { return generate(items_count_); }
+    inline size_t last() override { return last_; }
 
     inline size_t generate(size_t items_count);
 

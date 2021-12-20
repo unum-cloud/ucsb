@@ -7,7 +7,7 @@ namespace ucsb {
 struct exception_t : public std::exception {
   public:
     inline exception_t(std::string const& message) : message_(message) {}
-    const char* what() const noexcept override { return message_.c_str(); }
+    inline const char* what() const noexcept override { return message_.c_str(); }
 
   private:
     std::string message_;

@@ -24,14 +24,14 @@ struct transaction_t {
 
     inline transaction_t(workload_t const& workload, db_t& db);
 
-    operation_result_t do_insert();
-    operation_result_t do_update();
-    operation_result_t do_read();
-    operation_result_t do_remove();
-    operation_result_t do_batch_read();
-    operation_result_t do_range_select();
-    operation_result_t do_scan();
-    operation_result_t do_read_modify_write();
+    inline operation_result_t do_insert();
+    inline operation_result_t do_update();
+    inline operation_result_t do_read();
+    inline operation_result_t do_remove();
+    inline operation_result_t do_batch_read();
+    inline operation_result_t do_range_select();
+    inline operation_result_t do_scan();
+    inline operation_result_t do_read_modify_write();
 
   private:
     inline key_generator_t create_key_generator(workload_t const& workload, counter_generator_t& counter_generator);
@@ -78,7 +78,7 @@ inline transaction_t::transaction_t(workload_t const& workload, db_t& db)
     value_buffer_ = value_t(workload.value_length);
 }
 
-operation_result_t transaction_t::do_insert() {
+inline operation_result_t transaction_t::do_insert() {
     key_t key = insert_key_sequence_generator->generate();
     value_span_t value = generate_value();
     auto status = db_->insert(key, value);
@@ -87,41 +87,41 @@ operation_result_t transaction_t::do_insert() {
     return status;
 }
 
-operation_result_t transaction_t::do_update() {
+inline operation_result_t transaction_t::do_update() {
     key_t key = generate_key();
     value_span_t value = generate_value();
     return db_->update(key, value);
 }
 
-operation_result_t transaction_t::do_remove() {
+inline operation_result_t transaction_t::do_remove() {
     key_t key = generate_key();
     return db_->remove(key);
 }
 
-operation_result_t transaction_t::do_read() {
+inline operation_result_t transaction_t::do_read() {
     key_t key = generate_key();
     value_span_t value(value_buffer_.data(), value_buffer_.size());
     return db_->read(key, value);
 }
 
-operation_result_t transaction_t::do_batch_read() {
+inline operation_result_t transaction_t::do_batch_read() {
     keys_span_t keys = generate_batch_keys();
     return db_->batch_read(keys);
 }
 
-operation_result_t transaction_t::do_range_select() {
+inline operation_result_t transaction_t::do_range_select() {
     key_t key = generate_key();
     size_t length = range_select_length_generator_->generate();
     value_span_t single_value(value_buffer_.data(), value_buffer_.size());
     return db_->range_select(key, length, single_value);
 }
 
-operation_result_t transaction_t::do_scan() {
+inline operation_result_t transaction_t::do_scan() {
     value_span_t single_value(value_buffer_.data(), value_buffer_.size());
     return db_->scan(single_value);
 }
 
-operation_result_t transaction_t::do_read_modify_write() {
+inline operation_result_t transaction_t::do_read_modify_write() {
     key_t key = generate_key();
     value_span_t value(value_buffer_.data(), value_buffer_.size());
     db_->read(key, value);

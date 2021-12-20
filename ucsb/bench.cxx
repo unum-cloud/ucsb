@@ -36,7 +36,7 @@ inline bool start_with(const char* str, const char* prefix) {
     return strncmp(str, prefix, strlen(prefix)) == 0;
 }
 
-void usage_message(const char* command) {
+inline void usage_message(const char* command) {
     fmt::print("Usage: {} [options]\n", command);
     fmt::print("Options:\n");
     fmt::print("-db: Database name\n");
@@ -97,13 +97,13 @@ inline void register_section(std::string const& name) {
     });
 }
 
-void drop_system_caches() {
+inline void drop_system_caches() {
     auto res = system("sudo sh -c '/usr/bin/echo 3 > /proc/sys/vm/drop_caches'");
     if (res == 0)
         sleep(5);
 }
 
-std::string section_name(settings_t const& settings, workloads_t const& workloads) {
+inline std::string section_name(settings_t const& settings, workloads_t const& workloads) {
     std::string section_name = settings.db_name;
     if (!workloads.empty()) {
         workload_t const& workload = workloads.front();
@@ -143,7 +143,7 @@ void run_benchmarks(int argc, char* argv[], settings_t const& settings) {
     benchmark::RunSpecifiedBenchmarks();
 }
 
-operation_chooser_t create_operation_chooser(workload_t const& workload) {
+inline operation_chooser_t create_operation_chooser(workload_t const& workload) {
     operation_chooser_t chooer(new ucsb::operation_chooser_t);
     chooer->add(operation_kind_t::insert_k, workload.insert_proportion);
     chooer->add(operation_kind_t::update_k, workload.update_proportion);

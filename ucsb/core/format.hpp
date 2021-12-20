@@ -17,7 +17,7 @@ struct fmt::formatter<ucsb::printable_bytes_t> {
     size_t suffix_idx = 0;
 
     template <typename ctx_at>
-    constexpr auto parse(ctx_at& ctx) {
+    inline constexpr auto parse(ctx_at& ctx) {
         auto it = ctx.begin();
         if (it != ctx.end()) {
             switch (*it) {
@@ -41,7 +41,7 @@ struct fmt::formatter<ucsb::printable_bytes_t> {
     }
 
     template <typename ctx_at>
-    auto format(ucsb::printable_bytes_t const& v, ctx_at& ctx) {
+    inline auto format(ucsb::printable_bytes_t const& v, ctx_at& ctx) {
 
         char const* suffix_k[] = {"", "B", "KB", "MB", "GB", "TB", "PB", "EB"};
 

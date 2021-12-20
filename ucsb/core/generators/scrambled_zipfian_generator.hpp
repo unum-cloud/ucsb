@@ -8,20 +8,20 @@ namespace ucsb {
 
 struct scrambled_zipfian_generator_t : public generator_gt<size_t> {
   public:
-    scrambled_zipfian_generator_t(size_t min, size_t max, float zipfian_const)
+    inline scrambled_zipfian_generator_t(size_t min, size_t max, float zipfian_const)
         : base_(min), num_items_(max - min + 1), generator_(0, 10000000000LL, zipfian_const) {}
-    scrambled_zipfian_generator_t(size_t min, size_t max)
+    inline scrambled_zipfian_generator_t(size_t min, size_t max)
         : base_(min), num_items_(max - min + 1),
           generator_(0, 10000000000LL, zipfian_generator_t::zipfian_const_k, zetan_k) {}
-    scrambled_zipfian_generator_t(size_t num_items) : scrambled_zipfian_generator_t(0, num_items - 1) {}
+    inline scrambled_zipfian_generator_t(size_t num_items) : scrambled_zipfian_generator_t(0, num_items - 1) {}
 
-    size_t generate() override { return scramble(generator_.generate()); }
-    size_t last() override { return scramble(generator_.last()); }
+    inline size_t generate() override { return scramble(generator_.generate()); }
+    inline size_t last() override { return scramble(generator_.last()); }
 
   private:
-    size_t scramble(size_t value) const { return base_ + fnv_hash64(value) % num_items_; }
-
     static constexpr float zetan_k = 26.46902820178302;
+
+    inline size_t scramble(size_t value) const { return base_ + fnv_hash64(value) % num_items_; }
 
     const size_t base_;
     const size_t num_items_;

@@ -48,7 +48,7 @@ struct cpu_stat_t {
     inline stat_t percent() const { return percent_; }
 
   private:
-    void recalculate(float percent) {
+    inline void recalculate(float percent) {
         percent_.min = std::min(percent, percent_.min);
         percent_.max = std::max(percent, percent_.max);
         percent_.avg = (percent_.avg * (requests_count_ - 1) + percent) / requests_count_;
@@ -132,7 +132,7 @@ struct mem_stat_t {
     inline stat_t rss() const { return rss_; }
 
   private:
-    void recalculate(size_t vm, size_t rss) {
+    inline void recalculate(size_t vm, size_t rss) {
         vm_.min = std::min(vm, vm_.min);
         vm_.max = std::max(vm, vm_.max);
         vm_.avg = (vm_.avg * (requests_count_ - 1) + vm) / requests_count_;
@@ -142,7 +142,7 @@ struct mem_stat_t {
         rss_.avg = (rss_.avg * (requests_count_ - 1) + rss) / requests_count_;
     }
 
-    void request_mem_usage() {
+    inline void request_mem_usage() {
         while (!time_to_die_) {
             size_t vm = 0, rss = 0;
             mem_usage(vm, rss);
@@ -152,7 +152,7 @@ struct mem_stat_t {
         }
     }
 
-    void mem_usage(size_t& vm, size_t& rss) {
+    inline void mem_usage(size_t& vm, size_t& rss) {
         vm = 0;
         rss = 0;
 

@@ -11,8 +11,8 @@ struct skewed_latest_generator_t : public generator_gt<size_t> {
   public:
     skewed_latest_generator_t(counter_generator_t& counter) : basis_(&counter), zipfian_(basis_->last()) { generate(); }
 
-    size_t generate() override;
-    size_t last() override { return last_; }
+    inline size_t generate() override;
+    inline size_t last() override { return last_; }
 
   private:
     counter_generator_t* basis_;

@@ -22,7 +22,7 @@ struct randome_double_generator_t final : generator_gt<float> {
         : device_(), rand_(device_()), uniform_(min, max), last_(0.0) {
         generate();
     }
-    ~randome_double_generator_t() override = default;
+    inline ~randome_double_generator_t() override = default;
 
     inline float generate() override { return last_ = uniform_(rand_); }
     inline float last() override { return last_; }
@@ -36,8 +36,8 @@ struct randome_double_generator_t final : generator_gt<float> {
 
 struct random_byte_generator_t final : generator_gt<char> {
   public:
-    random_byte_generator_t() : off_(6) {}
-    ~random_byte_generator_t() override = default;
+    inline random_byte_generator_t() : off_(6) {}
+    inline ~random_byte_generator_t() override = default;
 
     inline char generate() override;
     inline char last() override { return buf_[(off_ - 1 + 6) % 6]; }
