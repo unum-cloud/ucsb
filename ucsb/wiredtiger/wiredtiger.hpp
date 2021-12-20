@@ -64,7 +64,7 @@ struct wiredtiger_t : public ucsb::db_t {
   public:
     inline wiredtiger_t()
         : conn_(nullptr), session_(nullptr), cursor_(nullptr), table_name_("table:access"), key_buffer_(100) {}
-    ~wiredtiger_t() override = default;
+    inline ~wiredtiger_t() override = default;
 
     void set_config(fs::path const& config_path, fs::path const& dir_path) override;
     bool open() override;
@@ -89,10 +89,10 @@ struct wiredtiger_t : public ucsb::db_t {
 
     WT_CONNECTION* conn_;
     WT_SESSION* session_;
-    WT_CURSOR* cursor_;
+    mutable WT_CURSOR* cursor_;
     std::string table_name_;
     std::vector<char> key_buffer_;
-    std::vector<char> value_buffer_;
+    mutable std::vector<char> value_buffer_;
 };
 
 void wiredtiger_t::set_config(fs::path const& config_path, fs::path const& dir_path) {
@@ -207,8 +207,8 @@ operation_result_t wiredtiger_t::range_select(key_t key, size_t length, value_sp
     cursor_->set_key(cursor_, &key);
     error_check(cursor_->search(cursor_));
 
-    int i = 0;
     int res = 0;
+    size_t i = 0;
     WT_ITEM db_value;
     const char* db_key = nullptr;
     size_t selected_records_count = 0;

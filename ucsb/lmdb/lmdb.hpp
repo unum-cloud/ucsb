@@ -33,7 +33,7 @@ using operation_result_t = ucsb::operation_result_t;
 struct lmdb_t : public ucsb::db_t {
   public:
     inline lmdb_t() : env_(nullptr), dbi_(0) {}
-    ~lmdb_t() { close(); }
+    inline ~lmdb_t() { close(); }
 
     void set_config(fs::path const& config_path, fs::path const& dir_path) override;
     bool open() override;
@@ -68,7 +68,7 @@ struct lmdb_t : public ucsb::db_t {
 
     MDB_env* env_;
     MDB_dbi dbi_;
-    std::vector<char> value_buffer_;
+    mutable std::vector<char> value_buffer_;
 };
 
 void lmdb_t::set_config(fs::path const& config_path, fs::path const& dir_path) {
@@ -97,7 +97,7 @@ bool lmdb_t::open() {
     int ret = mdb_env_create(&env_);
     if (ret)
         return false;
-    if (config.map_size >= 0) {
+    if (config.map_size > 0) {
         ret = mdb_env_set_mapsize(env_, config.map_size);
         if (ret)
             return false;
@@ -159,7 +159,7 @@ operation_result_t lmdb_t::insert(key_t key, value_spanc_t value) {
     key_slice.mv_data = &key;
     key_slice.mv_size = sizeof(key);
 
-    val_slice.mv_data = value.data();
+    val_slice.mv_data = const_cast<void*>(reinterpret_cast<void const*>(value.data()));
     val_slice.mv_size = value.size();
 
     int ret = mdb_txn_begin(env_, nullptr, 0, &txn);
@@ -196,7 +196,7 @@ operation_result_t lmdb_t::update(key_t key, value_spanc_t value) {
         return {1, operation_status_t::not_found_k};
     }
 
-    val_slice.mv_data = value.data();
+    val_slice.mv_data = const_cast<void*>(reinterpret_cast<void const*>(value.data()));
     val_slice.mv_size = value.size();
 
     ret = mdb_put(txn, dbi_, &key_slice, &val_slice, 0);
@@ -270,7 +270,7 @@ operation_result_t lmdb_t::batch_read(keys_span_t keys) const {
     // mdb_set_compare(txn, &dbi_, compare_keys);
 
     // Note: imitation of batch read!
-    for (auto const& key : keys) {
+    for (auto& key : keys) {
         key_slice.mv_data = &key;
         key_slice.mv_size = sizeof(key);
         ret = mdb_get(txn, dbi_, &key_slice, &val_slice);
@@ -310,7 +310,7 @@ operation_result_t lmdb_t::range_select(key_t key, size_t length, value_span_t s
     }
 
     size_t selected_records_count = 0;
-    for (int i = 0; !ret && i < length; i++) {
+    for (size_t i = 0; !ret && i < length; i++) {
         memcpy(single_value.data(), val_slice.mv_data, val_slice.mv_size);
         ret = mdb_cursor_get(cursor, &key_slice, &val_slice, MDB_NEXT);
         ++selected_records_count;

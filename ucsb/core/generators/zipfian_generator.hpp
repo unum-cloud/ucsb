@@ -36,8 +36,8 @@ struct zipfian_generator_t : public generator_gt<size_t> {
 };
 
 inline zipfian_generator_t::zipfian_generator_t(size_t min, size_t max, float zipfian_const, float zeta_n)
-    : items_count_(max - min + 1), base_(min), theta_(zipfian_const), allow_count_decrease_(false),
-      generator_(0.0, 1.0) {
+    : generator_(0.0, 1.0), items_count_(max - min + 1), base_(min), theta_(zipfian_const),
+      allow_count_decrease_(false) {
     assert(items_count_ >= 2 && items_count_ < items_max_count);
 
     zeta_2_ = zeta(2, theta_);

@@ -46,7 +46,7 @@ using operation_result_t = ucsb::operation_result_t;
 struct rocksdb_t : public ucsb::db_t {
   public:
     inline rocksdb_t() : db_(nullptr) {}
-    ~rocksdb_t() { close(); }
+    inline ~rocksdb_t() { close(); }
 
     void set_config(fs::path const& config_path, fs::path const& dir_path) override;
     bool open() override;
@@ -186,7 +186,7 @@ operation_result_t rocksdb_t::range_select(key_t key, size_t length, value_span_
     rocksdb::Slice slice {reinterpret_cast<char const*>(&key), sizeof(key)};
     db_iter->Seek(slice);
     size_t selected_records_count = 0;
-    for (int i = 0; db_iter->Valid() && i < length; i++) {
+    for (size_t i = 0; db_iter->Valid() && i < length; i++) {
         std::string data = db_iter->value().ToString();
         memcpy(single_value.data(), data.data(), data.size());
         db_iter->Next();

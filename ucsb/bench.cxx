@@ -120,6 +120,8 @@ inline void register_benchmark(std::string const& name, size_t iterations_count,
 }
 
 void run_benchmarks(int argc, char* argv[], settings_t const& settings) {
+    (void)argc;
+
     int bm_argc = 4;
     char* bm_argv[4];
     std::string arg0(argv[0]);

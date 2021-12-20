@@ -30,7 +30,7 @@ using region_schema_t = region_schema_gt<fingerprint_t>;
 struct unumdb_t : public ucsb::db_t {
   public:
     inline unumdb_t() : name_("Kovkas"), region_(region_config_t()) {}
-    ~unumdb_t() { close(); }
+    inline ~unumdb_t() { close(); }
 
     void set_config(fs::path const& config_path, fs::path const& dir_path) override;
     bool open() override;
@@ -59,8 +59,8 @@ struct unumdb_t : public ucsb::db_t {
 
     void save(region_config_t const& config, region_schema_t const& schema, string_t const& name);
     bool load(region_config_t& config, region_schema_t& schema, string_t const& name);
-    void unumdb_t::dump_fingerprint(fingerprint_t const& fingerprint, std::vector<uint8_t>& data);
-    void unumdb_t::parse_fingerprint(std::vector<uint8_t> const& data, fingerprint_t& fingerprint);
+    void dump_fingerprint(fingerprint_t const& fingerprint, std::vector<uint8_t>& data);
+    void parse_fingerprint(std::vector<uint8_t> const& data, fingerprint_t& fingerprint);
     bool load_config(db_config_t& db_config);
 
     fs::path config_path_;
@@ -68,7 +68,7 @@ struct unumdb_t : public ucsb::db_t {
 
     string_t name_;
     region_t region_;
-    dbuffer_t batch_buffer_;
+    mutable dbuffer_t batch_buffer_;
 };
 
 void unumdb_t::set_config(fs::path const& config_path, fs::path const& dir_path) {
