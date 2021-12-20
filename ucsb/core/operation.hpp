@@ -27,7 +27,7 @@ enum class operation_status_t {
 };
 
 struct operation_result_t {
-    size_t depth = 0;
+    size_t entries_touched = 0;
     operation_status_t status = operation_status_t::ok_k;
 };
 

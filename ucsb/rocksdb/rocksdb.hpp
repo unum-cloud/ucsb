@@ -12,7 +12,7 @@
 #include <rocksdb/utilities/options_util.h>
 #include <rocksdb/db.h>
 #include <rocksdb/options.h>
-#include <leveldb/comparator.h>
+#include <rocksdb/comparator.h>
 
 #include "ucsb/core/types.hpp"
 #include "ucsb/core/db.hpp"

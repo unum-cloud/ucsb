@@ -187,10 +187,10 @@ void transaction(bm::State& state, workload_t const& workload, db_t& db) {
         default: throw exception_t("Unknown operation"); break;
         }
 
-        operations_done += result.depth;
+        operations_done += result.entries_touched;
         bool success = result.status == operation_status_t::ok_k;
-        fails += size_t(!success) * result.depth;
-        bytes_processed_cnt += size_t(success) * workload.value_length * result.depth;
+        fails += size_t(!success) * result.entries_touched;
+        bytes_processed_cnt += size_t(success) * workload.value_length * result.entries_touched;
     }
 
     cpu_stat.stop();
