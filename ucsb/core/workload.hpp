@@ -18,14 +18,14 @@ struct workload_t {
     size_t records_count = 0;
     size_t operations_count = 0;
 
-    double insert_proportion = 0;
-    double update_proportion = 0;
-    double read_proportion = 0;
-    double remove_proportion = 0;
-    double batch_read_proportion = 0;
-    double range_select_proportion = 0;
-    double scan_proportion = 0;
-    double read_modify_write_proportion = 0;
+    float insert_proportion = 0;
+    float update_proportion = 0;
+    float read_proportion = 0;
+    float remove_proportion = 0;
+    float batch_read_proportion = 0;
+    float range_select_proportion = 0;
+    float scan_proportion = 0;
+    float read_modify_write_proportion = 0;
 
     distribution_kind_t key_dist = distribution_kind_t::uniform_k;
 
