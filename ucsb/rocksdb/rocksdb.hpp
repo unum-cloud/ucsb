@@ -12,7 +12,7 @@
 #include <rocksdb/utilities/options_util.h>
 #include <rocksdb/db.h>
 #include <rocksdb/options.h>
-#include <leveldb/comparator.h>
+#include <rocksdb/comparator.h>
 
 #include "ucsb/core/types.hpp"
 #include "ucsb/core/db.hpp"
@@ -208,7 +208,7 @@ operation_result_t rocksdb_t::scan(value_span_t single_value) const {
 }
 
 size_t rocksdb_t::size_on_disk() const {
-    return ucsb::size(dir_path_);
+    return ucsb::size_on_disk(dir_path_);
 }
 
 } // namespace facebook
