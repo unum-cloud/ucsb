@@ -122,10 +122,11 @@ bool lmdb_t::open() {
 }
 
 bool lmdb_t::close() {
-    if (env_ == nullptr)
+    if (!env_)
         return true;
 
-    mdb_close(env_, dbi_);
+    if (dbi_)
+        mdb_close(env_, dbi_);
     mdb_env_close(env_);
     dbi_ = 0;
     env_ = nullptr;
@@ -133,7 +134,21 @@ bool lmdb_t::close() {
 }
 
 void lmdb_t::destroy() {
-    close();
+    if (!env_ || !dbi_)
+        return;
+
+    MDB_txn* txn = nullptr;
+    int ret = mdb_txn_begin(env_, nullptr, 0, &txn);
+    if (ret)
+        return;
+    mdb_drop(txn, dbi_, 1);
+    ret = mdb_txn_commit(txn);
+    assert(ret == 0);
+
+    bool ok = close();
+    assert(ok);
+
+    ucsb::remove_dir_contents(dir_path_);
 }
 
 operation_result_t lmdb_t::insert(key_t key, value_spanc_t value) {

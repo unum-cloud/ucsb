@@ -227,7 +227,7 @@ int main(int argc, char** argv) {
 
     db_kind_t kind = ucsb::parse_db(settings.db_name);
     std::unique_ptr<db_t> db(factory_t {}.create(kind));
-    if (db == nullptr) {
+    if (!db) {
         fmt::print("Failed to create DB: {}\n", settings.db_name);
         return 1;
     }

@@ -79,6 +79,7 @@ struct leveldb_t : public ucsb::db_t {
     fs::path config_path_;
     fs::path dir_path_;
 
+    leveldb::Options options_;
     leveldb::DB* db_;
     // key_comparator_t key_cmp;
 };
@@ -96,25 +97,25 @@ bool leveldb_t::open() {
     if (!load_config(config_path_, config))
         return false;
 
-    leveldb::Options options;
-    options.create_if_missing = true;
+    options_ = leveldb::Options();
+    options_.create_if_missing = true;
     // options.comparator = &key_cmp;
     if (config.write_buffer_size > 0)
-        options.write_buffer_size = config.write_buffer_size;
+        options_.write_buffer_size = config.write_buffer_size;
     if (config.max_file_size > 0)
-        options.max_file_size = config.max_file_size;
+        options_.max_file_size = config.max_file_size;
     if (config.max_open_files > 0)
-        options.max_open_files = config.max_open_files;
+        options_.max_open_files = config.max_open_files;
     if (config.compression == "snappy")
-        options.compression = leveldb::kSnappyCompression;
+        options_.compression = leveldb::kSnappyCompression;
     else
-        options.compression = leveldb::kNoCompression;
+        options_.compression = leveldb::kNoCompression;
     if (config.cache_size > 0)
-        options.block_cache = leveldb::NewLRUCache(config.cache_size);
+        options_.block_cache = leveldb::NewLRUCache(config.cache_size);
     if (config.filter_bits > 0)
-        options.filter_policy = leveldb::NewBloomFilterPolicy(config.filter_bits);
+        options_.filter_policy = leveldb::NewBloomFilterPolicy(config.filter_bits);
 
-    leveldb::Status status = leveldb::DB::Open(options, dir_path_.string(), &db_);
+    leveldb::Status status = leveldb::DB::Open(options_, dir_path_.string(), &db_);
     return status.ok();
 }
 
@@ -125,7 +126,9 @@ bool leveldb_t::close() {
 }
 
 void leveldb_t::destroy() {
-    close();
+    bool ok = close();
+    assert(ok);
+    leveldb::DestroyDB(dir_path_.string(), options_);
 }
 
 operation_result_t leveldb_t::insert(key_t key, value_spanc_t value) {

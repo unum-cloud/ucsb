@@ -69,6 +69,8 @@ struct rocksdb_t : public ucsb::db_t {
     fs::path config_path_;
     fs::path dir_path_;
 
+    rocksdb::Options options_;
+    std::vector<rocksdb::ColumnFamilyDescriptor> cf_descs_;
     rocksdb::DB* db_;
     // key_comparator_t key_cmp;
 };
@@ -82,19 +84,19 @@ bool rocksdb_t::open() {
     if (db_)
         return true;
 
-    rocksdb::Options options;
-    std::vector<rocksdb::ColumnFamilyDescriptor> cf_descs;
+    options_ = rocksdb::Options();
+    cf_descs_.clear();
     std::vector<rocksdb::ColumnFamilyHandle*> cf_handles;
     rocksdb::Status status =
-        rocksdb::LoadOptionsFromFile(config_path_.string(), rocksdb::Env::Default(), &options, &cf_descs);
+        rocksdb::LoadOptionsFromFile(config_path_.string(), rocksdb::Env::Default(), &options_, &cf_descs_);
     if (!status.ok())
         return false;
 
-    // options.comparator = &key_cmp;
-    if (cf_descs.empty())
-        status = rocksdb::DB::Open(options, dir_path_.string(), &db_);
+    // options_.comparator = &key_cmp;
+    if (cf_descs_.empty())
+        status = rocksdb::DB::Open(options_, dir_path_.string(), &db_);
     else
-        status = rocksdb::DB::Open(options, dir_path_.string(), cf_descs, &cf_handles, &db_);
+        status = rocksdb::DB::Open(options_, dir_path_.string(), cf_descs_, &cf_handles, &db_);
 
     return status.ok();
 }
@@ -106,7 +108,9 @@ bool rocksdb_t::close() {
 }
 
 void rocksdb_t::destroy() {
-    close();
+    bool ok = close();
+    assert(ok);
+    rocksdb::DestroyDB(dir_path_.string(), options_, cf_descs_);
 }
 
 operation_result_t rocksdb_t::insert(key_t key, value_spanc_t value) {

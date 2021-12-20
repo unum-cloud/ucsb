@@ -112,7 +112,7 @@ bool wiredtiger_t::open() {
 }
 
 bool wiredtiger_t::close() {
-    if (conn_ == nullptr)
+    if (!conn_)
         return true;
 
     error_check(conn_->close(conn_, NULL));
@@ -123,7 +123,13 @@ bool wiredtiger_t::close() {
 }
 
 void wiredtiger_t::destroy() {
-    close();
+    if (session_)
+        session_->drop(session_, table_name_.c_str(), "key_format=S,value_format=u");
+
+    bool ok = close();
+    assert(ok);
+
+    ucsb::remove_dir_contents(dir_path_);
 }
 
 operation_result_t wiredtiger_t::insert(key_t key, value_spanc_t value) {
