@@ -8,7 +8,7 @@ namespace ucsb {
 
 struct scrambled_zipfian_generator_t : public generator_gt<size_t> {
   public:
-    scrambled_zipfian_generator_t(size_t min, size_t max, double zipfian_const)
+    scrambled_zipfian_generator_t(size_t min, size_t max, float zipfian_const)
         : base_(min), num_items_(max - min + 1), generator_(0, 10000000000LL, zipfian_const) {}
     scrambled_zipfian_generator_t(size_t min, size_t max)
         : base_(min), num_items_(max - min + 1),
@@ -21,7 +21,7 @@ struct scrambled_zipfian_generator_t : public generator_gt<size_t> {
   private:
     size_t scramble(size_t value) const { return base_ + fnv_hash64(value) % num_items_; }
 
-    static constexpr double zetan_k = 26.46902820178302;
+    static constexpr float zetan_k = 26.46902820178302;
 
     const size_t base_;
     const size_t num_items_;

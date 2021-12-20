@@ -17,16 +17,16 @@ struct cpu_stat_t {
     inline ~cpu_stat_t() { stop(); }
 
     struct stat_t {
-        double min = std::numeric_limits<double>::max();
-        double max = 0;
-        double avg = 0;
+        float min = std::numeric_limits<float>::max();
+        float max = 0;
+        float avg = 0;
     };
 
     inline void start() {
         if (!time_to_die_)
             return;
 
-        percent_.min = std::numeric_limits<double>::max();
+        percent_.min = std::numeric_limits<float>::max();
         percent_.max = 0;
         percent_.avg = 0;
 
@@ -48,7 +48,7 @@ struct cpu_stat_t {
     inline stat_t percent() const { return percent_; }
 
   private:
-    void recalculate(double percent) {
+    void recalculate(float percent) {
         percent_.min = std::min(percent, percent_.min);
         percent_.max = std::max(percent, percent_.max);
         percent_.avg = (percent_.avg * (requests_count_ - 1) + percent) / requests_count_;
@@ -69,7 +69,7 @@ struct cpu_stat_t {
             clock_t delta_cpu = cpu - last_cpu;
 
             if (!first_time && delta_cpu > 0) {
-                double percent = 100.0 * delta_proc / delta_cpu;
+                float percent = 100.0 * delta_proc / delta_cpu;
                 ++requests_count_;
                 recalculate(percent);
             }

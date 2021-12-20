@@ -46,7 +46,7 @@ struct fmt::formatter<ucsb::printable_bytes_t> {
         char const* suffix_k[] = {"", "B", "KB", "MB", "GB", "TB", "PB", "EB"};
 
         size_t bytes = v.bytes;
-        double float_bytes = bytes;
+        float float_bytes = bytes;
         char const length = sizeof(suffix_k) / sizeof(suffix_k[0]);
         if (suffix_idx == 0) {
             ++suffix_idx;
