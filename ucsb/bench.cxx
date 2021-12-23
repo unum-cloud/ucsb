@@ -174,6 +174,9 @@ void transaction(bm::State& state, workload_t const& workload, db_t& db) {
     cpu_stat.start();
     mem_stat.start();
 
+    size_t current_iteration = 0;
+    size_t last_printed_iteration = 0;
+    size_t const printable_iterations_distance = workload.operations_count / 10;
     for (auto _ : state) {
         operation_result_t result;
         auto operation = chooser->choose();
@@ -193,6 +196,16 @@ void transaction(bm::State& state, workload_t const& workload, db_t& db) {
         bool success = result.status == operation_status_t::ok_k;
         fails += size_t(!success) * result.entries_touched;
         bytes_processed_cnt += size_t(success) * workload.value_length * result.entries_touched;
+
+        // Print progress
+        ++current_iteration;
+        if (current_iteration - last_printed_iteration > printable_iterations_distance || current_iteration == 1 ||
+            current_iteration == workload.operations_count) {
+            float percent = 100.0 * current_iteration / workload.operations_count;
+            last_printed_iteration = current_iteration;
+            fmt::print("{}: {:.2f}%\r", workload.name, percent);
+            fflush(stdout);
+        }
     }
 
     cpu_stat.stop();
