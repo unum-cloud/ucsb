@@ -59,8 +59,8 @@ struct unumdb_t : public ucsb::db_t {
 
     void save(region_config_t const& config, region_schema_t const& schema, string_t const& name);
     bool load(region_config_t& config, region_schema_t& schema, string_t const& name);
-    void dump_fingerprint(fingerprint_t const& fingerprint, std::vector<uint8_t>& data);
-    void parse_fingerprint(std::vector<uint8_t> const& data, fingerprint_t& fingerprint);
+    void serialize(fingerprint_t const& fingerprint, std::vector<uint8_t>& data);
+    void deserialize(std::vector<uint8_t> const& data, fingerprint_t& fingerprint);
     bool load_config(db_config_t& db_config);
 
     fs::path config_path_;
@@ -264,16 +264,16 @@ void unumdb_t::save(region_config_t const& config, region_schema_t const& schema
             auto const& street = city.streets[i];
             std::vector<uint8_t> lower_data;
             std::vector<uint8_t> upper_data;
-            dump_fingerprint(street.lower_fingerprint, lower_data);
-            dump_fingerprint(street.upper_fingerprint, upper_data);
+            serialize(street.lower_fingerprint, lower_data);
+            serialize(street.upper_fingerprint, upper_data);
             nlohmann::json j_street = {{"lower_fingerprint", lower_data}, {"upper_fingerprint", upper_data}};
             nlohmann::json j_buildings;
             for (size_t j = 0; j < street.buildings.size(); ++j) {
                 auto const& building = street.buildings[j];
                 lower_data.clear();
                 upper_data.clear();
-                dump_fingerprint(building.lower_fingerprint, lower_data);
-                dump_fingerprint(building.upper_fingerprint, upper_data);
+                serialize(building.lower_fingerprint, lower_data);
+                serialize(building.upper_fingerprint, upper_data);
                 auto j_building = nlohmann::json::object({{"file_name", building.file_name.c_str()},
                                                           {"lower_fingerprint", lower_data},
                                                           {"upper_fingerprint", upper_data}});
@@ -341,16 +341,16 @@ bool unumdb_t::load(region_config_t& config, region_schema_t& schema, string_t c
             street_schema_t street;
             std::vector<uint8_t> lower_data = (*j_street)["lower_fingerprint"].get<std::vector<uint8_t>>();
             std::vector<uint8_t> upper_data = (*j_street)["upper_fingerprint"].get<std::vector<uint8_t>>();
-            parse_fingerprint(lower_data, street.lower_fingerprint);
-            parse_fingerprint(upper_data, street.upper_fingerprint);
+            deserialize(lower_data, street.lower_fingerprint);
+            deserialize(upper_data, street.upper_fingerprint);
             nlohmann::json j_buildings = (*j_street)["buildings"];
             for (auto j_building = j_buildings.begin(); j_building != j_buildings.end(); ++j_building) {
                 building_schema_t building;
                 building.file_name = string_t((*j_building)["file_name"].get<std::string>().c_str());
                 lower_data = (*j_building)["lower_fingerprint"].get<std::vector<uint8_t>>();
                 upper_data = (*j_building)["upper_fingerprint"].get<std::vector<uint8_t>>();
-                parse_fingerprint(lower_data, building.lower_fingerprint);
-                parse_fingerprint(upper_data, building.upper_fingerprint);
+                deserialize(lower_data, building.lower_fingerprint);
+                deserialize(upper_data, building.upper_fingerprint);
                 street.buildings.push_back(building);
             }
             city.streets.push_back(street);
@@ -392,17 +392,17 @@ bool unumdb_t::load_config(db_config_t& db_config) {
     return true;
 }
 
-void unumdb_t::dump_fingerprint(fingerprint_t const& fingerprint, std::vector<uint8_t>& data) {
+void unumdb_t::serialize(fingerprint_t const& fingerprint, std::vector<uint8_t>& data) {
 
     serialize_gt<fingerprint_t> serializer;
-    data.resize(serializer.dump_length(fingerprint), 0);
-    serializer.dump(fingerprint, {reinterpret_cast<byte_t*>(data.data()), data.size()});
+    data.resize(serializer.size_bytes(fingerprint), 0);
+    serializer.serialize(fingerprint, {reinterpret_cast<byte_t*>(data.data()), data.size()});
 }
 
-void unumdb_t::parse_fingerprint(std::vector<uint8_t> const& data, fingerprint_t& fingerprint) {
+void unumdb_t::deserialize(std::vector<uint8_t> const& data, fingerprint_t& fingerprint) {
 
     serialize_gt<fingerprint_t> serializer;
-    serializer.dump_parse({reinterpret_cast<byte_t const*>(data.data()), data.size()}, fingerprint);
+    serializer.deserialize({reinterpret_cast<byte_t const*>(data.data()), data.size()}, fingerprint);
 }
 
 } // namespace unum
