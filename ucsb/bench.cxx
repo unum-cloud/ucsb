@@ -228,7 +228,7 @@ int main(int argc, char** argv) {
     parse_args(argc, argv, settings);
     settings.db_dir_path = fmt::format("./tmp/{}/", settings.db_name);
     settings.results_path =
-        fmt::format("./bench/results/{}/result_{}.json", settings.db_name, settings.workload_path.stem().c_str());
+        fmt::format("./bench/results/{}/{}.json", settings.db_name, settings.workload_path.stem().c_str());
     settings.delete_db_at_the_end = false;
 
     workloads_t workloads;
