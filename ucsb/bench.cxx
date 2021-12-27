@@ -201,7 +201,7 @@ void transaction(bm::State& state, workload_t const& workload, db_t& db) {
         ++current_iteration;
         if (current_iteration - last_printed_iteration > printable_iterations_distance || current_iteration == 1 ||
             current_iteration == workload.operations_count) {
-            float percent = 100.0 * current_iteration / workload.operations_count;
+            float percent = 100.f * current_iteration / workload.operations_count;
             last_printed_iteration = current_iteration;
             fmt::print("{}: {:.2f}%\r", workload.name, percent);
             fflush(stdout);
@@ -215,9 +215,9 @@ void transaction(bm::State& state, workload_t const& workload, db_t& db) {
     state.counters["operations/s"] = bm::Counter(operations_done - fails, bm::Counter::kIsRate);
     state.counters["cpu_max,%"] = bm::Counter(cpu_stat.percent().max);
     state.counters["cpu_avg,%"] = bm::Counter(cpu_stat.percent().avg);
-    state.counters["mem_max"] = bm::Counter(mem_stat.rss().max, bm::Counter::kDefaults, bm::Counter::kIs1024);
-    state.counters["mem_avg"] = bm::Counter(mem_stat.rss().avg, bm::Counter::kDefaults, bm::Counter::kIs1024);
-    state.counters["disk"] = bm::Counter(db.size_on_disk(), bm::Counter::kDefaults, bm::Counter::kIs1024);
+    state.counters["mem_max,bytes"] = bm::Counter(mem_stat.rss().max, bm::Counter::kDefaults, bm::Counter::kIs1024);
+    state.counters["mem_avg,bytes"] = bm::Counter(mem_stat.rss().avg, bm::Counter::kDefaults, bm::Counter::kIs1024);
+    state.counters["disk,bytes"] = bm::Counter(db.size_on_disk(), bm::Counter::kDefaults, bm::Counter::kIs1024);
     ok = db.close();
     assert(ok);
 }
