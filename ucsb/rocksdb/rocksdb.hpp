@@ -29,20 +29,10 @@ using value_spanc_t = ucsb::value_spanc_t;
 using operation_status_t = ucsb::operation_status_t;
 using operation_result_t = ucsb::operation_result_t;
 
-// struct key_comparator_t : public rocksdb::Comparator {
-//     int Compare(rocksdb::Slice const& left, rocksdb::Slice const& right) const override {
-//         assert(left.size() == sizeof(key_t));
-//         assert(right.size() == sizeof(key_t));
-
-//         key_t left_key = *reinterpret_cast<key_t const*>(left.data());
-//         key_t right_key = *reinterpret_cast<key_t const*>(right.data());
-//         return left_key < right_key ? -1 : left_key > right_key;
-//     }
-//     const char* Name() const { return "KeyComparator"; }
-//     void FindShortestSeparator(std::string*, const rocksdb::Slice&) const {}
-//     void FindShortSuccessor(std::string*) const {}
-// };
-
+/**
+ * @brief RocksDB wrapper for the UCSB benchmark.
+ * https://github.com/facebook/rocksdb
+ */
 struct rocksdb_t : public ucsb::db_t {
   public:
     inline rocksdb_t() : db_(nullptr) {}
@@ -69,10 +59,24 @@ struct rocksdb_t : public ucsb::db_t {
     fs::path config_path_;
     fs::path dir_path_;
 
+    struct key_comparator_t final : public rocksdb::Comparator {
+        int Compare(rocksdb::Slice const& left, rocksdb::Slice const& right) const override {
+            assert(left.size() == sizeof(key_t));
+            assert(right.size() == sizeof(key_t));
+
+            key_t left_key = *reinterpret_cast<key_t const*>(left.data());
+            key_t right_key = *reinterpret_cast<key_t const*>(right.data());
+            return left_key < right_key ? -1 : left_key > right_key;
+        }
+        const char* Name() const { return "KeyComparator"; }
+        void FindShortestSeparator(std::string*, const rocksdb::Slice&) const {}
+        void FindShortSuccessor(std::string*) const {}
+    };
+
     rocksdb::Options options_;
     std::vector<rocksdb::ColumnFamilyDescriptor> cf_descs_;
     rocksdb::DB* db_;
-    // key_comparator_t key_cmp;
+    key_comparator_t key_cmp_;
 };
 
 void rocksdb_t::set_config(fs::path const& config_path, fs::path const& dir_path) {
@@ -92,7 +96,7 @@ bool rocksdb_t::open() {
     if (!status.ok())
         return false;
 
-    // options_.comparator = &key_cmp;
+    // options_.comparator = &key_cmp_;
     if (cf_descs_.empty())
         status = rocksdb::DB::Open(options_, dir_path_.string(), &db_);
     else

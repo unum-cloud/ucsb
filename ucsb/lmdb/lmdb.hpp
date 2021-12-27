@@ -23,13 +23,10 @@ using value_spanc_t = ucsb::value_spanc_t;
 using operation_status_t = ucsb::operation_status_t;
 using operation_result_t = ucsb::operation_result_t;
 
-// int compare_keys(MDB_val const* left, MDB_val const* right) {
-
-//     key_t left_key = *reinterpret_cast<key_t const*>(left->mv_data);
-//     key_t right_key = *reinterpret_cast<key_t const*>(right->mv_data);
-//     return left_key < right_key ? -1 : left_key > right_key;
-// }
-
+/**
+ * @brief LMDB wrapper for the UCSB benchmark.
+ * https://github.com/LMDB/lmdb
+ */
 struct lmdb_t : public ucsb::db_t {
   public:
     inline lmdb_t() : env_(nullptr), dbi_(0) {}
@@ -70,6 +67,12 @@ struct lmdb_t : public ucsb::db_t {
     MDB_dbi dbi_;
     mutable std::vector<char> value_buffer_;
 };
+
+inline static int compare_keys(MDB_val const* left, MDB_val const* right) noexcept {
+    key_t left_key = *reinterpret_cast<key_t const*>(left->mv_data);
+    key_t right_key = *reinterpret_cast<key_t const*>(right->mv_data);
+    return left_key < right_key ? -1 : left_key > right_key;
+}
 
 void lmdb_t::set_config(fs::path const& config_path, fs::path const& dir_path) {
     config_path_ = config_path;
