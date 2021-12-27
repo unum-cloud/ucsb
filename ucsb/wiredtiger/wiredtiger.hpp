@@ -47,21 +47,13 @@ void testutil_die(int e, const char* fmt, ...) {
     throw std::runtime_error("WIREDTIGER unwired");
 }
 
-// int compare_keys(WT_COLLATOR* collator, WT_SESSION* session, WT_ITEM const* left, WT_ITEM const* right, int* res) {
-
-//     (void)collator;
-//     (void)session;
-
-//     key_t left_key = *reinterpret_cast<key_t const*>(left->data);
-//     key_t right_key = *reinterpret_cast<key_t const*>(right->data);
-//     *res = left_key < right_key ? -1 : left_key > right_key;
-//     return 0;
-// }
-
-// WT_COLLATOR key_comparator = {compare_keys, nullptr, nullptr};
-
+/**
+ * @brief WiredTiger wrapper for the UCSB benchmark.
+ * WiredTiger is the core key-value engine of MongoDB.
+ * https://github.com/wiredtiger/wiredtiger
+ */
 struct wiredtiger_t : public ucsb::db_t {
-  public:
+
     inline wiredtiger_t()
         : conn_(nullptr), session_(nullptr), cursor_(nullptr), table_name_("table:access"), key_buffer_(100) {}
     inline ~wiredtiger_t() override = default;
@@ -94,6 +86,19 @@ struct wiredtiger_t : public ucsb::db_t {
     std::vector<char> key_buffer_;
     mutable std::vector<char> value_buffer_;
 };
+
+inline int compare_keys(
+    WT_COLLATOR* collator, WT_SESSION* session, WT_ITEM const* left, WT_ITEM const* right, int* res) noexcept {
+    (void)collator;
+    (void)session;
+
+    key_t left_key = *reinterpret_cast<key_t const*>(left->data);
+    key_t right_key = *reinterpret_cast<key_t const*>(right->data);
+    *res = left_key < right_key ? -1 : left_key > right_key;
+    return 0;
+}
+
+WT_COLLATOR key_comparator = {compare_keys, nullptr, nullptr};
 
 void wiredtiger_t::set_config(fs::path const& config_path, fs::path const& dir_path) {
     config_path_ = config_path;
