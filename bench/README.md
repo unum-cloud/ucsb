@@ -8,7 +8,7 @@ Participating database engines:
 
 Unique workloads:
 
-* Initialization speed
+* Initialization
 * Reads/Update: 50/50
 * Read/Insert: 95/5
 * Read
@@ -24,40 +24,40 @@ Key counts in different experiments:
 
 Benchmark duration by size:
 
-* 10GB keys: 37 minutes, 52 secs, 210 millisecs
+* 10GB keys: 45 minutes, 56 secs, 817 millisecs
 * 100GB keys: 9 hours, 45 minutes, 23 secs, 345 millisecs
 * 1TB keys: 7 days, 12 hours, 10 minutes, 4 secs, 833 millisecs
 
 Benchmark duration by DBMS:
 
-* wiredtiger keys: 2 days, 21 hours, 41 minutes, 37 secs, 815 millisecs
-* leveldb keys: 1 day, 15 hours, 7 minutes, 28 secs, 853 millisecs
-* rocksdb keys: 3 days, 1 hour, 16 minutes, 15 secs, 36 millisecs
-* unumdb keys: 8 hours, 27 minutes, 58 secs, 685 millisecs
+* wiredtiger keys: 2 days, 21 hours, 45 minutes, 5 secs, 553 millisecs
+* leveldb keys: 1 day, 15 hours, 9 minutes, 8 secs, 241 millisecs
+* rocksdb keys: 3 days, 1 hour, 17 minutes, 504 millisecs
+* unumdb keys: 8 hours, 30 minutes, 10 secs, 698 millisecs
 
-Total: 7 days, 22 hours, 33 minutes, 20 secs, 390 millisecs
+Total: 7 days, 22 hours, 41 minutes, 24 secs, 997 millisecs
 ## Initialization
-![report_init](report/init.svg)
+![init](report/init.svg)
 
 |          Brand          | CPU usage  | RAM Usage  | Disk Usage |     Speed     |
 | :---------------------: | :--------: | :--------: | :--------: | :-----------: |
 | WiredTiger *by MongoDB* | 2.65 cores | 891.40 MiB |  1.06 TiB  |   9K ops/s    |
 |   LevelDB *by Google*   | 0.99 cores | 277.62 MiB | 984.58 GiB |   28K ops/s   |
 |  RocksDB *by Facebook*  | 1.04 cores |  1.40 GiB  | 977.76 GiB |   21K ops/s   |
-|    UnumDB *by Unum*     | 2.98 cores |  8.75 GiB  | 972.20 GiB | 97K ops/s 🔞🔞🔞 |
+|    UnumDB *by Unum*     | 2.98 cores |  8.75 GiB  | 972.20 GiB | 97K ops/s 🍓🍓🍓 |
 
 ## Read Only
-![report_read](report/read.svg)
+![read](report/read.svg)
 
 |          Brand          | CPU usage  | RAM Usage  | Disk Usage |     Speed      |
 | :---------------------: | :--------: | :--------: | :--------: | :------------: |
 | WiredTiger *by MongoDB* | 3.32 cores |  1.85 GiB  |  1.06 TiB  |   26K ops/s    |
 |   LevelDB *by Google*   | 1.07 cores | 117.76 MiB | 984.13 GiB |   28K ops/s    |
 |  RocksDB *by Facebook*  | 0.40 cores |  3.87 GiB  | 977.65 GiB |   10K ops/s    |
-|    UnumDB *by Unum*     | 3.00 cores | 21.05 GiB  | 972.30 GiB | 205K ops/s 🍓🍓🍓 |
+|    UnumDB *by Unum*     | 3.00 cores | 21.05 GiB  | 972.30 GiB | 205K ops/s 🔞🔞🔞 |
 
 ## Read/Update: 50/50
-![report_readupdate_5050](report/readupdate_5050.svg)
+![readupdate_5050](report/readupdate_5050.svg)
 
 |          Brand          | CPU usage  | RAM Usage | Disk Usage |   Speed    |
 | :---------------------: | :--------: | :-------: | :--------: | :--------: |
@@ -67,7 +67,7 @@ Total: 7 days, 22 hours, 33 minutes, 20 secs, 390 millisecs
 |    UnumDB *by Unum*     | 3.00 cores | 89.79 GiB | 980.75 GiB | 170K ops/s |
 
 ## Read/Insert: 95/5
-![report_readinsert_9505](report/readinsert_9505.svg)
+![readinsert_9505](report/readinsert_9505.svg)
 
 |          Brand          | CPU usage  | RAM Usage  | Disk Usage  |   Speed    |
 | :---------------------: | :--------: | :--------: | :---------: | :--------: |
@@ -77,7 +77,7 @@ Total: 7 days, 22 hours, 33 minutes, 20 secs, 390 millisecs
 |    UnumDB *by Unum*     | 3.00 cores | 106.96 GiB | 1022.63 GiB | 153K ops/s |
 
 ## Range Select
-![report_rangeselect](report/rangeselect.svg)
+![rangeselect](report/rangeselect.svg)
 
 |          Brand          | CPU usage  | RAM Usage | Disk Usage |   Speed    |
 | :---------------------: | :--------: | :-------: | :--------: | :--------: |
@@ -87,7 +87,7 @@ Total: 7 days, 22 hours, 33 minutes, 20 secs, 390 millisecs
 |    UnumDB *by Unum*     | 2.53 cores | 47.02 GiB | 972.30 GiB | 626K ops/s |
 
 ## Full Scan
-![report_scan](report/scan.svg)
+![scan](report/scan.svg)
 
 |          Brand          | CPU usage  | RAM Usage | Disk Usage |    Speed     |
 | :---------------------: | :--------: | :-------: | :--------: | :----------: |
@@ -97,11 +97,11 @@ Total: 7 days, 22 hours, 33 minutes, 20 secs, 390 millisecs
 |    UnumDB *by Unum*     | 2.47 cores | 67.42 GiB | 972.30 GiB | 2M ops/s 🔥🔥🔥 |
 
 ## Batch Read
-![report_batchread](report/batchread.svg)
+![batchread](report/batchread.svg)
 
 |          Brand          | CPU usage  | RAM Usage | Disk Usage |     Speed      |
 | :---------------------: | :--------: | :-------: | :--------: | :------------: |
 | WiredTiger *by MongoDB* | 2.99 cores | 1.47 GiB  |  1.06 TiB  |   27K ops/s    |
 |   LevelDB *by Google*   | 1.00 cores | 90.03 MiB | 983.99 GiB |   30K ops/s    |
 |  RocksDB *by Facebook*  | 0.37 cores | 4.17 GiB  | 977.65 GiB |   11K ops/s    |
-|    UnumDB *by Unum*     | 3.00 cores | 38.32 GiB | 972.30 GiB | 541K ops/s 🔥🔥🔥 |
+|    UnumDB *by Unum*     | 3.00 cores | 38.32 GiB | 972.30 GiB | 541K ops/s 🔞🔞🔞 |
