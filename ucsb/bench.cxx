@@ -91,10 +91,14 @@ void parse_args(int argc, char* argv[], settings_t& settings) {
 }
 
 inline void register_section(std::string const& name) {
-    bm::RegisterBenchmark(name.c_str(), [=](bm::State& s) {
-        for (auto _ : s)
-            ;
-    });
+    bm::RegisterBenchmark(name.c_str(),
+                          [=](bm::State& s) {
+                              for (auto _ : s)
+                                  ;
+                          })
+        ->Iterations(1)
+        ->Unit(bm::kMicrosecond)
+        ->UseRealTime();
 }
 
 inline void drop_system_caches() {

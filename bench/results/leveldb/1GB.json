@@ -1,6 +1,6 @@
 {
   "context": {
-    "date": "2021-12-17T07:59:40+00:00",
+    "date": "2021-12-27T08:49:48+00:00",
     "host_name": "unum-bench",
     "executable": "./build_release/bin/_ucsb_bench",
     "num_cpus": 128,
@@ -32,11 +32,7 @@
         "num_sharing": 8
       }
     ],
-    "load_avg": [
-      24.65,
-      13.4,
-      11.07
-    ],
+    "load_avg": [88.88,93.02,88.26],
     "library_build_type": "release"
   },
   "benchmarks": [
@@ -50,8 +46,8 @@
       "repetition_index": 0,
       "threads": 1,
       "iterations": 1000000000,
-      "real_time": 3.5099219530820847e-07,
-      "cpu_time": 3.5999999999959675e-07,
+      "real_time": 2.3003667593002319e-07,
+      "cpu_time": 2.4000000000030941e-07,
       "time_unit": "ns"
     },
     {
@@ -64,15 +60,17 @@
       "repetition_index": 0,
       "threads": 1,
       "iterations": 1000000,
-      "real_time": 9.8930408509913832e+00,
-      "cpu_time": 9.7869067429999994e+00,
+      "real_time": 1.2719249760964885e+01,
+      "cpu_time": 8.8536168889999995e+00,
       "time_unit": "us",
-      "bytes_per_second": 1.0350710316711012e+08,
-      "disk,bytes": 1.1033628650000000e+09,
+      "bytes_per_second": 8.0507893094656795e+07,
+      "cpu_avg,%": 1.2570312500000000e+02,
+      "cpu_max,%": 2.0000000000000000e+02,
+      "disk,bytes": 1.3476228730000000e+09,
       "fails,%": 0.0000000000000000e+00,
-      "mem_avg,bytes": 1.7019779800000000e+08,
-      "mem_max,bytes": 3.9489945600000000e+08,
-      "operations/s": 1.0108115543663097e+05
+      "mem_avg,bytes": 1.5225346800000000e+08,
+      "mem_max,bytes": 3.6940185600000000e+08,
+      "operations/s": 7.8620989350250777e+04
     },
     {
       "name": "Read/iterations:1000000/real_time",
@@ -84,15 +82,17 @@
       "repetition_index": 0,
       "threads": 1,
       "iterations": 1000000,
-      "real_time": 3.3508667600108311e+00,
-      "cpu_time": 3.3183842859999988e+00,
+      "real_time": 4.6454787250841036e+00,
+      "cpu_time": 4.1704871299999997e+00,
       "time_unit": "us",
-      "bytes_per_second": 3.0559257450054210e+08,
-      "disk,bytes": 1.4787535060000000e+09,
+      "bytes_per_second": 2.2042938103897163e+08,
+      "cpu_avg,%": 1.5404255676269531e+02,
+      "cpu_max,%": 2.0000000000000000e+02,
+      "disk,bytes": 1.0616069070000000e+09,
       "fails,%": 0.0000000000000000e+00,
-      "mem_avg,bytes": 1.2566594160000000e+09,
-      "mem_max,bytes": 1.4674493440000000e+09,
-      "operations/s": 2.9843024853568565e+05
+      "mem_avg,bytes": 1.2209552100000000e+09,
+      "mem_max,bytes": 1.6751370240000000e+09,
+      "operations/s": 2.1526306742087074e+05
     },
     {
       "name": "BatchRead/iterations:5000/real_time",
@@ -104,15 +104,17 @@
       "repetition_index": 0,
       "threads": 1,
       "iterations": 5000,
-      "real_time": 5.3427848819992505e+02,
-      "cpu_time": 5.2884126959999980e+02,
+      "real_time": 8.1184189340565354e+02,
+      "cpu_time": 6.7852533639999990e+02,
       "time_unit": "us",
-      "bytes_per_second": 4.9065048619720334e+08,
-      "disk,bytes": 1.5322488610000000e+09,
+      "bytes_per_second": 3.2290031116811848e+08,
+      "cpu_avg,%": 1.4829269409179688e+02,
+      "cpu_max,%": 1.9000000000000000e+02,
+      "disk,bytes": 1.2608215740000000e+09,
       "fails,%": 0.0000000000000000e+00,
-      "mem_avg,bytes": 1.2333403350000000e+09,
-      "mem_max,bytes": 1.4102814720000000e+09,
-      "operations/s": 4.7915086542695638e+05
+      "mem_avg,bytes": 1.2276684450000000e+09,
+      "mem_max,bytes": 1.3522493440000000e+09,
+      "operations/s": 3.1533233512511570e+05
     },
     {
       "name": "RangeSelect/iterations:10000/real_time",
@@ -124,15 +126,17 @@
       "repetition_index": 0,
       "threads": 1,
       "iterations": 10000,
-      "real_time": 3.6412996199214831e+01,
-      "cpu_time": 3.6384725099999926e+01,
+      "real_time": 5.1279575994703919e+01,
+      "cpu_time": 4.7594263099999878e+01,
       "time_unit": "us",
-      "bytes_per_second": 2.8121827558427625e+09,
-      "disk,bytes": 1.2219134550000000e+09,
+      "bytes_per_second": 1.9965089885020437e+09,
+      "cpu_avg,%": 7.8333335876464844e+01,
+      "cpu_max,%": 1.0000000000000000e+02,
+      "disk,bytes": 1.0573422670000000e+09,
       "fails,%": 0.0000000000000000e+00,
-      "mem_avg,bytes": 5.1969740700000000e+08,
-      "mem_max,bytes": 8.5440512000000000e+08,
-      "operations/s": 2.7462722225026977e+06
+      "mem_avg,bytes": 5.8487134900000000e+08,
+      "mem_max,bytes": 8.4796211200000000e+08,
+      "operations/s": 1.9497158090840271e+06
     },
     {
       "name": "Scan/iterations:1/real_time",
@@ -144,15 +148,17 @@
       "repetition_index": 0,
       "threads": 1,
       "iterations": 1,
-      "real_time": 3.3192590699763969e+05,
-      "cpu_time": 3.3169014099999925e+05,
+      "real_time": 6.6246263706125319e+05,
+      "cpu_time": 4.3158945000000059e+05,
       "time_unit": "us",
-      "bytes_per_second": 3.0850258398398581e+09,
-      "disk,bytes": 1.2238848860000000e+09,
+      "bytes_per_second": 1.5457475527111397e+09,
+      "cpu_avg,%": 6.0000000000000000e+01,
+      "cpu_max,%": 1.0000000000000000e+02,
+      "disk,bytes": 1.0573385800000000e+09,
       "fails,%": 0.0000000000000000e+00,
-      "mem_avg,bytes": 5.8566963200000000e+08,
-      "mem_max,bytes": 1.0402365440000000e+09,
-      "operations/s": 3.0127205467186114e+06
+      "mem_avg,bytes": 7.1456995300000000e+08,
+      "mem_max,bytes": 1.1408793600000000e+09,
+      "operations/s": 1.5095190944444723e+06
     },
     {
       "name": "ReadUpdate_50_50/iterations:1000000/real_time",
@@ -164,15 +170,17 @@
       "repetition_index": 0,
       "threads": 1,
       "iterations": 1000000,
-      "real_time": 8.4218615200079512e+00,
-      "cpu_time": 8.3159446629999998e+00,
+      "real_time": 1.1586133504053578e+01,
+      "cpu_time": 9.4448574060000006e+00,
       "time_unit": "us",
-      "bytes_per_second": 1.2158832077293919e+08,
-      "disk,bytes": 1.3216126330000000e+09,
+      "bytes_per_second": 8.8381512231128588e+07,
+      "cpu_avg,%": 1.4730413818359375e+02,
+      "cpu_max,%": 2.1000000000000000e+02,
+      "disk,bytes": 1.6585332270000000e+09,
       "fails,%": 0.0000000000000000e+00,
-      "mem_avg,bytes": 1.2308122710000000e+09,
-      "mem_max,bytes": 1.6358359040000000e+09,
-      "operations/s": 1.1873859450482343e+05
+      "mem_avg,bytes": 1.2173967740000000e+09,
+      "mem_max,bytes": 1.5416524800000000e+09,
+      "operations/s": 8.6310070538211512e+04
     },
     {
       "name": "ReadInsert_95_5/iterations:1000000/real_time",
@@ -184,15 +192,17 @@
       "repetition_index": 0,
       "threads": 1,
       "iterations": 1000000,
-      "real_time": 2.1971395149885211e+00,
-      "cpu_time": 2.1715208299999986e+00,
+      "real_time": 2.5283274520188570e+00,
+      "cpu_time": 2.4803499259999993e+00,
       "time_unit": "us",
-      "bytes_per_second": 4.6606052688709205e+08,
-      "disk,bytes": 1.6037432420000000e+09,
+      "bytes_per_second": 4.0501083005776846e+08,
+      "cpu_avg,%": 1.9153846740722656e+02,
+      "cpu_max,%": 2.0000000000000000e+02,
+      "disk,bytes": 1.8849677810000000e+09,
       "fails,%": 0.0000000000000000e+00,
-      "mem_avg,bytes": 1.2262342240000000e+09,
-      "mem_max,bytes": 1.6216432640000000e+09,
-      "operations/s": 4.5513723328817583e+05
+      "mem_avg,bytes": 1.3476431590000000e+09,
+      "mem_max,bytes": 1.6154869760000000e+09,
+      "operations/s": 3.9551838872828952e+05
     },
     {
       "name": "Remove/iterations:50000/real_time",
@@ -204,15 +214,17 @@
       "repetition_index": 0,
       "threads": 1,
       "iterations": 50000,
-      "real_time": 6.3161246199160814e+00,
-      "cpu_time": 6.3107832600000080e+00,
+      "real_time": 2.5536605995148420e+00,
+      "cpu_time": 2.5519743200000278e+00,
       "time_unit": "us",
-      "bytes_per_second": 1.6212473021369949e+08,
-      "disk,bytes": 1.3930752290000000e+09,
+      "bytes_per_second": 4.0099299029579145e+08,
+      "cpu_avg,%": 1.6000000000000000e+02,
+      "cpu_max,%": 2.0000000000000000e+02,
+      "disk,bytes": 1.3635714160000000e+09,
       "fails,%": 0.0000000000000000e+00,
-      "mem_avg,bytes": 1.3500313500000000e+08,
-      "mem_max,bytes": 1.8595020800000000e+08,
-      "operations/s": 1.5832493184931591e+05
+      "mem_avg,bytes": 1.2697053800000000e+08,
+      "mem_max,bytes": 1.6220569600000000e+08,
+      "operations/s": 3.9159471708573384e+05
     }
   ]
 }
