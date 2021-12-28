@@ -398,14 +398,14 @@ bool unumdb_t::load_config(db_config_t& db_config) {
 void unumdb_t::serialize(fingerprint_t const& fingerprint, std::vector<uint8_t>& data) {
 
     serializer_gt<fingerprint_t> serializer;
-    data.resize(serializer.size_bytes(fingerprint), 0);
-    serializer.serialize(fingerprint, {reinterpret_cast<byte_t*>(data.data()), data.size()});
+    data.resize(serializer.serialized_bytes(fingerprint), 0);
+    serializer.save(fingerprint, {reinterpret_cast<byte_t*>(data.data()), data.size()});
 }
 
 void unumdb_t::deserialize(std::vector<uint8_t> const& data, fingerprint_t& fingerprint) {
 
     serializer_gt<fingerprint_t> serializer;
-    serializer.deserialize({reinterpret_cast<byte_t const*>(data.data()), data.size()}, fingerprint);
+    serializer.load({reinterpret_cast<byte_t const*>(data.data()), data.size()}, fingerprint);
 }
 
 } // namespace unum

@@ -65,8 +65,8 @@ struct leveldb_t : public ucsb::db_t {
         size_t filter_bits = -1;
     };
 
-    struct key_comparator_t final : public leveldb::Comparator {
-        int Compare(leveldb::Slice const& left, leveldb::Slice const& right) const override {
+    struct key_comparator_t final /*: public leveldb::Comparator*/ {
+        int Compare(leveldb::Slice const& left, leveldb::Slice const& right) const /*override*/ {
             assert(left.size() == sizeof(key_t));
             assert(right.size() == sizeof(key_t));
 
