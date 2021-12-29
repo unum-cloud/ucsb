@@ -1,0 +1,23 @@
+[
+    {
+        "name": "<name>",
+        "records_count": 1000,
+        "operations_count": 1000,
+        "insert_proportion": 0.1,
+        "update_proportion": 0.2,
+        "read_proportion": 0.6,
+        "remove_proportion": 0.1,
+        "batch_read_proportion": 0.0,
+        "range_select_proportion": 0.1,
+        "scan_proportion": 0.0,
+        "key_dist": "uniform",
+        "value_length": 1024,
+        "value_length_dist": "const",
+        "batch_min_length": 256,
+        "batch_max_length": 256,
+        "batch_length_dist": "uniform",
+        "range_select_min_length": 100,
+        "range_select_max_length": 100,
+        "range_select_length_dist": "uniform"
+    }
+]

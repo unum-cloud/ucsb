@@ -1,0 +1,18 @@
+project:
+  - name: UCSB
+
+unum:
+  - DiskKV
+
+conan:
+  - fmt/8.0.1
+  - gtest/1.10.0
+  - benchmark/1.5.2
+  - nlohmann_json/3.10.4
+  - rocksdb/6.20.3
+  - leveldb/1.23
+  - lmdb/0.9.29
+
+packages:
+  pkg-config:
+    - wiredtiger
