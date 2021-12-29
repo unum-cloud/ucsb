@@ -136,13 +136,13 @@ inline transaction_t::key_generator_t transaction_t::create_key_generator(worklo
     key_generator_t generator;
     switch (workload.key_dist) {
     case distribution_kind_t::uniform_k:
-        generator.reset(
-            new uniform_generator_t(workload.start_key, workload.start_key + workload.db_records_count - 1));
+        generator.reset(new uniform_generator_t(workload.start_key, workload.start_key + workload.records_count - 1));
         break;
     case distribution_kind_t::zipfian_k: {
         size_t new_keys = (size_t)(workload.operations_count * workload.insert_proportion * 2);
-        generator.reset(new scrambled_zipfian_generator_t(workload.start_key,
-                                                          workload.start_key + workload.db_records_count + new_keys));
+        generator.reset(
+            new scrambled_zipfian_generator_t(workload.start_key,
+                                              workload.start_key + workload.db_records_count + new_keys - 1));
         break;
     }
     case distribution_kind_t::skewed_latest_k: generator.reset(new skewed_latest_generator_t(counter_generator)); break;

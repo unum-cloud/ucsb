@@ -13,7 +13,6 @@ struct acknowledged_counter_generator_t : public counter_generator_t {
     inline acknowledged_counter_generator_t(uint64_t start)
         : counter_generator_t(start), ack_window_(window_size_k, false), limit_(start - 1) {}
 
-    inline size_t generate() override { return counter_++; }
     inline size_t last() override { return limit_; }
 
     void acknowledge(uint64_t value) {
