@@ -1,5 +1,6 @@
 #include <memory>
 #include <string>
+#include <vector>
 #include <fmt/format.h>
 #include <benchmark/benchmark.h>
 
@@ -42,6 +43,7 @@ inline void usage_message(const char* command) {
     fmt::print("-db: Database name\n");
     fmt::print("-c: Database configuration file path\n");
     fmt::print("-w: Workload file path\n");
+    fmt::print("-threads: Threads count (Optional, default: 1)\n");
 }
 
 void parse_args(int argc, char* argv[], settings_t& settings) {
@@ -75,6 +77,11 @@ void parse_args(int argc, char* argv[], settings_t& settings) {
                 exit(1);
             }
             settings.workload_path = std::string(argv[arg_idx]);
+            arg_idx++;
+        }
+        else if (strcmp(argv[arg_idx], "-threads") == 0) {
+            arg_idx++;
+            settings.threads_count = std::stoi(argv[arg_idx]);
             arg_idx++;
         }
         else {
@@ -116,8 +123,12 @@ inline std::string section_name(settings_t const& settings, workloads_t const& w
 }
 
 template <typename func_at>
-inline void register_benchmark(std::string const& name, size_t iterations_count, func_at func) {
-    bm::RegisterBenchmark(name.c_str(), func)->Iterations(iterations_count)->Unit(bm::kMicrosecond)->UseRealTime();
+inline void register_benchmark(std::string const& name, size_t iterations_count, size_t threads_count, func_at func) {
+    bm::RegisterBenchmark(name.c_str(), func)
+        ->Iterations(iterations_count)
+        ->Threads(threads_count)
+        ->Unit(bm::kMicrosecond)
+        ->UseRealTime();
 }
 
 void run_benchmarks(int argc, char* argv[], settings_t const& settings) {
@@ -146,6 +157,24 @@ void run_benchmarks(int argc, char* argv[], settings_t const& settings) {
     benchmark::RunSpecifiedBenchmarks();
 }
 
+std::vector<workload_t> split_workload_into_threads(workload_t const& workload, size_t threads_count) {
+    std::vector<workload_t> workloads;
+    workloads.reserve(threads_count);
+
+    auto records_count_per_thread = workload.db_records_count / threads_count;
+    auto operations_count_per_thread = workload.operations_count / threads_count;
+
+    for (size_t idx = 0; idx < threads_count; ++idx) {
+        workload_t thread_workload = workload;
+        thread_workload.records_count = records_count_per_thread;
+        thread_workload.operations_count = std::max(size_t(1), operations_count_per_thread);
+        thread_workload.start_key = idx * records_count_per_thread;
+        workloads.push_back(thread_workload);
+    }
+
+    return workloads;
+}
+
 inline operation_chooser_t create_operation_chooser(workload_t const& workload) {
     operation_chooser_t chooer(new ucsb::operation_chooser_t);
     chooer->add(operation_kind_t::insert_k, workload.insert_proportion);
@@ -160,10 +189,13 @@ inline operation_chooser_t create_operation_chooser(workload_t const& workload) 
 }
 
 void transaction(bm::State& state, workload_t const& workload, db_t& db) {
-    // drop_system_caches();
 
-    bool ok = db.open();
-    assert(ok);
+    if (state.thread_index() == 0) {
+        // drop_system_caches();
+        bool ok = db.open();
+        assert(ok);
+    }
+
     auto chooser = create_operation_chooser(workload);
     transaction_t transaction(workload, db);
 
@@ -172,8 +204,11 @@ void transaction(bm::State& state, workload_t const& workload, db_t& db) {
     size_t bytes_processed_count = 0;
     cpu_stat_t cpu_stat;
     mem_stat_t mem_stat;
-    cpu_stat.start();
-    mem_stat.start();
+
+    if (state.thread_index() == 0) {
+        cpu_stat.start();
+        mem_stat.start();
+    }
 
     size_t current_iteration = 0;
     size_t last_printed_iteration = 0;
@@ -209,22 +244,25 @@ void transaction(bm::State& state, workload_t const& workload, db_t& db) {
         }
     }
 
-    cpu_stat.stop();
-    mem_stat.stop();
-    state.SetBytesProcessed(bytes_processed_count);
-    state.counters["fails,%"] = bm::Counter(fails * 100.0 / operations_done);
-    state.counters["operations/s"] = bm::Counter(operations_done - fails, bm::Counter::kIsRate);
-    state.counters["cpu_max,%"] = bm::Counter(cpu_stat.percent().max);
-    state.counters["cpu_avg,%"] = bm::Counter(cpu_stat.percent().avg);
-    state.counters["mem_max,bytes"] = bm::Counter(mem_stat.rss().max, bm::Counter::kDefaults, bm::Counter::kIs1024);
-    state.counters["mem_avg,bytes"] = bm::Counter(mem_stat.rss().avg, bm::Counter::kDefaults, bm::Counter::kIs1024);
-    state.counters["disk,bytes"] = bm::Counter(db.size_on_disk(), bm::Counter::kDefaults, bm::Counter::kIs1024);
-    ok = db.close();
-    assert(ok);
+    if (state.thread_index() == 0) {
+        cpu_stat.stop();
+        mem_stat.stop();
+        state.SetBytesProcessed(bytes_processed_count);
+        state.counters["fails,%"] = bm::Counter(fails * 100.0 / operations_done);
+        state.counters["operations/s"] = bm::Counter(operations_done - fails, bm::Counter::kIsRate);
+        state.counters["cpu_max,%"] = bm::Counter(cpu_stat.percent().max);
+        state.counters["cpu_avg,%"] = bm::Counter(cpu_stat.percent().avg);
+        state.counters["mem_max,bytes"] = bm::Counter(mem_stat.rss().max, bm::Counter::kDefaults, bm::Counter::kIs1024);
+        state.counters["mem_avg,bytes"] = bm::Counter(mem_stat.rss().avg, bm::Counter::kDefaults, bm::Counter::kIs1024);
+        state.counters["disk,bytes"] = bm::Counter(db.size_on_disk(), bm::Counter::kDefaults, bm::Counter::kIs1024);
+        bool ok = db.close();
+        assert(ok);
+    }
 }
 
 int main(int argc, char** argv) {
 
+    // Setup settings
     settings_t settings;
     parse_args(argc, argv, settings);
     settings.db_dir_path = fmt::format("./tmp/{}/", settings.db_name);
@@ -232,15 +270,22 @@ int main(int argc, char** argv) {
         fmt::format("./bench/results/{}/{}.json", settings.db_name, settings.workload_path.stem().c_str());
     settings.delete_db_at_the_end = false;
 
+    // Prepare worklods
     workloads_t workloads;
     if (!ucsb::load(settings.workload_path, workloads)) {
         fmt::print("Failed to load workloads. path: {}\n", settings.workload_path.c_str());
         return 1;
     }
+    std::vector<workloads_t> threads_workloads;
+    for (auto const& workload : workloads) {
+        std::vector<workload_t> splited_workloads = split_workload_into_threads(workload, settings.threads_count);
+        threads_workloads.push_back(splited_workloads);
+    }
 
     ucsb::fs::create_directories(settings.db_dir_path);
     ucsb::fs::create_directories(settings.results_path.parent_path());
 
+    // Setup DB
     db_kind_t kind = ucsb::parse_db(settings.db_name);
     std::unique_ptr<db_t> db(factory_t {}.create(kind));
     if (!db) {
@@ -249,10 +294,12 @@ int main(int argc, char** argv) {
     }
     db->set_config(settings.db_config_path, settings.db_dir_path);
 
+    // Register benchmarks
     register_section(section_name(settings, workloads));
-    for (auto& workload : workloads) {
-        workload.records_count = workload.db_records_count;
-        register_benchmark(workload.name, workload.operations_count, [&](bm::State& state) {
+    for (auto const& splited_workloads : threads_workloads) {
+        auto const& first = splited_workloads.front();
+        register_benchmark(first.name, first.operations_count, settings.threads_count, [&](bm::State& state) {
+            auto const& workload = splited_workloads[state.thread_index()];
             transaction(state, workload, *db.get());
         });
     }

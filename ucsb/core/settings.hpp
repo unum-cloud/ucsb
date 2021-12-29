@@ -12,6 +12,7 @@ struct settings_t {
     fs::path db_dir_path;
     fs::path workload_path;
     fs::path results_path;
+    size_t threads_count = 1;
     bool delete_db_at_the_end = false;
 };
 

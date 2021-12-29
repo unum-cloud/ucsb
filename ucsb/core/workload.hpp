@@ -12,12 +12,16 @@ using json = nlohmann::json;
 
 namespace ucsb {
 
+/**
+ * @brief Single benchmark configuration (per thread)
+ * Some properties can be changed by the program based on thread count
+ */
 struct workload_t {
     std::string name;
 
-    size_t db_records_count = 0;
-    size_t records_count = 0;
-    size_t operations_count = 0;
+    size_t db_records_count = 0; // DB all records count
+    size_t records_count = 0;    // Set by the program based on threads count
+    size_t operations_count = 0; // Can be changed by the program based on threads count
 
     float insert_proportion = 0;
     float update_proportion = 0;
@@ -28,7 +32,7 @@ struct workload_t {
     float scan_proportion = 0;
     float read_modify_write_proportion = 0;
 
-    key_t start_key = 0;
+    key_t start_key = 0; // Can be changed by the program based on threads count
     distribution_kind_t key_dist = distribution_kind_t::uniform_k;
 
     value_length_t value_length = 0;
