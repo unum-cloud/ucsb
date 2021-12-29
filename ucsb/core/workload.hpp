@@ -16,6 +16,7 @@ struct workload_t {
     std::string name;
 
     size_t db_records_count = 0;
+    size_t records_count = 0;
     size_t operations_count = 0;
 
     float insert_proportion = 0;

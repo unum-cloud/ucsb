@@ -250,7 +250,8 @@ int main(int argc, char** argv) {
     db->set_config(settings.db_config_path, settings.db_dir_path);
 
     register_section(section_name(settings, workloads));
-    for (auto const& workload : workloads) {
+    for (auto& workload : workloads) {
+        workload.records_count = workload.db_records_count;
         register_benchmark(workload.name, workload.operations_count, [&](bm::State& state) {
             transaction(state, workload, *db.get());
         });
