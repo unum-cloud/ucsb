@@ -1,5 +1,5 @@
-#include <string>
 #include <memory>
+#include <string>
 #include <fmt/format.h>
 #include <benchmark/benchmark.h>
 
@@ -168,7 +168,7 @@ void transaction(bm::State& state, workload_t const& workload, db_t& db) {
 
     size_t fails = 0;
     size_t operations_done = 0;
-    size_t bytes_processed_cnt = 0;
+    size_t bytes_processed_count = 0;
     cpu_stat_t cpu_stat;
     mem_stat_t mem_stat;
     cpu_stat.start();
@@ -195,7 +195,7 @@ void transaction(bm::State& state, workload_t const& workload, db_t& db) {
         operations_done += result.entries_touched;
         bool success = result.status == operation_status_t::ok_k;
         fails += size_t(!success) * result.entries_touched;
-        bytes_processed_cnt += size_t(success) * workload.value_length * result.entries_touched;
+        bytes_processed_count += size_t(success) * workload.value_length * result.entries_touched;
 
         // Print progress
         ++current_iteration;
@@ -210,7 +210,7 @@ void transaction(bm::State& state, workload_t const& workload, db_t& db) {
 
     cpu_stat.stop();
     mem_stat.stop();
-    state.SetBytesProcessed(bytes_processed_cnt);
+    state.SetBytesProcessed(bytes_processed_count);
     state.counters["fails,%"] = bm::Counter(fails * 100.0 / operations_done);
     state.counters["operations/s"] = bm::Counter(operations_done - fails, bm::Counter::kIsRate);
     state.counters["cpu_max,%"] = bm::Counter(cpu_stat.percent().max);

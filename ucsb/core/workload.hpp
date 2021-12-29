@@ -27,6 +27,7 @@ struct workload_t {
     float scan_proportion = 0;
     float read_modify_write_proportion = 0;
 
+    key_t start_key = 0;
     distribution_kind_t key_dist = distribution_kind_t::uniform_k;
 
     value_length_t value_length = 0;
@@ -89,6 +90,7 @@ bool load(fs::path const& path, workloads_t& workloads) {
         workload.scan_proportion = (*j_workload).value("scan_proportion", 0.0);
         workload.read_modify_write_proportion = (*j_workload).value("read_modify_write_proportion", 0.0);
 
+        workload.key_start = (*j_workload).value("key_start", 0);
         workload.key_dist = parse_distribution((*j_workload).value("key_dist", "uniform"));
         if (workload.key_dist == distribution_kind_t::unknown_k) {
             fmt::print("{}\n", workload.name);
