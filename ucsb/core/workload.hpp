@@ -15,7 +15,7 @@ namespace ucsb {
 struct workload_t {
     std::string name;
 
-    size_t records_count = 0;
+    size_t db_records_count = 0;
     size_t operations_count = 0;
 
     float insert_proportion = 0;
@@ -78,7 +78,7 @@ bool load(fs::path const& path, workloads_t& workloads) {
 
         workload.name = (*j_workload)["name"].get<std::string>();
 
-        workload.records_count = (*j_workload)["records_count"].get<size_t>();
+        workload.db_records_count = (*j_workload)["records_count"].get<size_t>();
         workload.operations_count = (*j_workload)["operations_count"].get<size_t>();
 
         workload.insert_proportion = (*j_workload).value("insert_proportion", 0.0);

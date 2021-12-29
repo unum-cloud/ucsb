@@ -108,10 +108,11 @@ inline void drop_system_caches() {
 }
 
 inline std::string section_name(settings_t const& settings, workloads_t const& workloads) {
-    return workloads.empty() ? settings.db_name
-                             : fmt::format("{} ({})",
-                                           settings.db_name,
-                                           printable_bytes_t {workloads[0].records_count * workloads[0].value_length});
+    return workloads.empty()
+               ? settings.db_name
+               : fmt::format("{} ({})",
+                             settings.db_name,
+                             printable_bytes_t {workloads[0].db_records_count * workloads[0].value_length});
 }
 
 template <typename func_at>
