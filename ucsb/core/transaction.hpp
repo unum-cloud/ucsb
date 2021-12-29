@@ -20,6 +20,7 @@ namespace ucsb {
 struct transaction_t {
     using generator_t = std::unique_ptr<generator_gt<size_t>>;
     using key_generator_t = std::unique_ptr<generator_gt<key_t>>;
+    using acknowledged_key_generator_t = std::unique_ptr<acknowledged_counter_generator_t>;
     using value_length_generator_t = std::unique_ptr<generator_gt<value_length_t>>;
 
     inline transaction_t(workload_t const& workload, db_t& db);
@@ -47,7 +48,7 @@ struct transaction_t {
     db_t* db_;
 
     key_generator_t insert_key_sequence_generator;
-    acknowledged_counter_generator_t* acknowledged_key_generator;
+    acknowledged_key_generator_t acknowledged_key_generator;
     key_generator_t key_generator_;
     keys_t keys_;
 
@@ -59,16 +60,15 @@ struct transaction_t {
     std::vector<std::byte> value_buffer_;
 };
 
-inline transaction_t::transaction_t(workload_t const& workload, db_t& db)
-    : workload_(workload), db_(&db), acknowledged_key_generator(nullptr) {
+inline transaction_t::transaction_t(workload_t const& workload, db_t& db) : workload_(workload), db_(&db) {
 
     if (workload.insert_proportion == 1.0) // Initialization case
-        insert_key_sequence_generator.reset(new counter_generator_t(workload.start_key));
+        insert_key_sequence_generator = std::make_unique<counter_generator_t>(workload.start_key);
     else {
         acknowledged_key_generator =
-            new acknowledged_counter_generator_t(workload.start_key + workload.db_records_count);
-        insert_key_sequence_generator.reset(acknowledged_key_generator);
+            std::make_unique<acknowledged_counter_generator_t>(workload.start_key + workload.db_records_count);
         key_generator_ = create_key_generator(workload, *acknowledged_key_generator);
+        insert_key_sequence_generator = std::move(acknowledged_key_generator);
     }
     keys_ = keys_t(workload.batch_max_length);
 
@@ -136,16 +136,19 @@ inline transaction_t::key_generator_t transaction_t::create_key_generator(worklo
     key_generator_t generator;
     switch (workload.key_dist) {
     case distribution_kind_t::uniform_k:
-        generator.reset(new uniform_generator_t(workload.start_key, workload.start_key + workload.records_count - 1));
+        generator =
+            std::make_unique<uniform_generator_t>(workload.start_key, workload.start_key + workload.records_count - 1);
         break;
     case distribution_kind_t::zipfian_k: {
         size_t new_keys = (size_t)(workload.operations_count * workload.insert_proportion * 2);
-        generator.reset(
-            new scrambled_zipfian_generator_t(workload.start_key,
-                                              workload.start_key + workload.db_records_count + new_keys - 1));
+        generator = std::make_unique<scrambled_zipfian_generator_t>(workload.start_key,
+                                                                    workload.start_key + workload.db_records_count +
+                                                                        new_keys - 1);
         break;
     }
-    case distribution_kind_t::skewed_latest_k: generator.reset(new skewed_latest_generator_t(counter_generator)); break;
+    case distribution_kind_t::skewed_latest_k:
+        generator = std::make_unique<skewed_latest_generator_t>(counter_generator);
+        break;
     default: throw exception_t(fmt::format("Unknown key distribution: {}", int(workload.key_dist)));
     }
     return generator;
@@ -156,9 +159,13 @@ inline transaction_t::value_length_generator_t transaction_t::create_value_lengt
 
     value_length_generator_t generator;
     switch (workload.value_length_dist) {
-    case distribution_kind_t::const_k: generator.reset(new const_generator_t(workload.value_length)); break;
-    case distribution_kind_t::uniform_k: generator.reset(new uniform_generator_t(1, workload.value_length)); break;
-    case distribution_kind_t::zipfian_k: generator.reset(new zipfian_generator_t(1, workload.value_length)); break;
+    case distribution_kind_t::const_k: generator = std::make_unique<const_generator_t>(workload.value_length); break;
+    case distribution_kind_t::uniform_k:
+        generator = std::make_unique<uniform_generator_t>(1, workload.value_length);
+        break;
+    case distribution_kind_t::zipfian_k:
+        generator = std::make_unique<zipfian_generator_t>(1, workload.value_length);
+        break;
     default: throw exception_t(fmt::format("Unknown value length distribution: {}", int(workload.value_length_dist)));
     }
     return generator;
@@ -168,10 +175,10 @@ inline transaction_t::generator_t transaction_t::create_batch_length_generator(w
     generator_t generator;
     switch (workload.batch_length_dist) {
     case distribution_kind_t::uniform_k:
-        generator.reset(new uniform_generator_t(workload.batch_min_length, workload.batch_max_length));
+        generator = std::make_unique<uniform_generator_t>(workload.batch_min_length, workload.batch_max_length);
         break;
     case distribution_kind_t::zipfian_k:
-        generator.reset(new zipfian_generator_t(workload.batch_min_length, workload.batch_max_length));
+        generator = std::make_unique<zipfian_generator_t>(workload.batch_min_length, workload.batch_max_length);
         break;
     default:
         throw exception_t(fmt::format("Unknown range select length distribution: {}", int(workload.batch_length_dist)));
@@ -183,10 +190,12 @@ inline transaction_t::generator_t transaction_t::create_range_select_length_gene
     generator_t generator;
     switch (workload.range_select_length_dist) {
     case distribution_kind_t::uniform_k:
-        generator.reset(new uniform_generator_t(workload.range_select_min_length, workload.range_select_max_length));
+        generator =
+            std::make_unique<uniform_generator_t>(workload.range_select_min_length, workload.range_select_max_length);
         break;
     case distribution_kind_t::zipfian_k:
-        generator.reset(new zipfian_generator_t(workload.range_select_min_length, workload.range_select_max_length));
+        generator =
+            std::make_unique<zipfian_generator_t>(workload.range_select_min_length, workload.range_select_max_length);
         break;
     default:
         throw exception_t(

@@ -22,19 +22,19 @@ enum class db_kind_t {
 };
 
 struct factory_t {
-    inline db_t* create(db_kind_t kind);
+    inline std::shared_ptr<db_t> create(db_kind_t kind);
 };
 
-inline db_t* factory_t::create(db_kind_t kind) {
+inline std::shared_ptr<db_t> factory_t::create(db_kind_t kind) {
     switch (kind) {
-    case db_kind_t::unumdb_k: return new unum::unumdb_t();
-    case db_kind_t::rocksdb_k: return new facebook::rocksdb_t();
-    case db_kind_t::leveldb_k: return new google::leveldb_t();
-    case db_kind_t::wiredtiger_k: return new mongodb::wiredtiger_t();
-    case db_kind_t::lmdb_k: return new symas::lmdb_t();
+    case db_kind_t::unumdb_k: return std::make_shared<unum::unumdb_t>();
+    case db_kind_t::rocksdb_k: return std::make_shared<facebook::rocksdb_t>();
+    case db_kind_t::leveldb_k: return std::make_shared<google::leveldb_t>();
+    case db_kind_t::wiredtiger_k: return std::make_shared<mongodb::wiredtiger_t>();
+    case db_kind_t::lmdb_k: return std::make_shared<symas::lmdb_t>();
     default: break;
     }
-    return nullptr;
+    return {};
 }
 
 inline db_kind_t parse_db(std::string const& name) {

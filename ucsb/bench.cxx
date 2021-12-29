@@ -176,7 +176,7 @@ std::vector<workload_t> split_workload_into_threads(workload_t const& workload, 
 }
 
 inline operation_chooser_t create_operation_chooser(workload_t const& workload) {
-    operation_chooser_t chooer(new ucsb::operation_chooser_t);
+    operation_chooser_t chooer = std::make_unique<ucsb::operation_chooser_t>();
     chooer->add(operation_kind_t::insert_k, workload.insert_proportion);
     chooer->add(operation_kind_t::update_k, workload.update_proportion);
     chooer->add(operation_kind_t::read_k, workload.read_proportion);
@@ -287,7 +287,7 @@ int main(int argc, char** argv) {
 
     // Setup DB
     db_kind_t kind = ucsb::parse_db(settings.db_name);
-    std::unique_ptr<db_t> db(factory_t {}.create(kind));
+    std::shared_ptr<db_t> db = factory_t {}.create(kind);
     if (!db) {
         fmt::print("Failed to create DB: {}\n", settings.db_name);
         return 1;
@@ -300,7 +300,7 @@ int main(int argc, char** argv) {
         auto const& first = splited_workloads.front();
         register_benchmark(first.name, first.operations_count, settings.threads_count, [&](bm::State& state) {
             auto const& workload = splited_workloads[state.thread_index()];
-            transaction(state, workload, *db.get());
+            transaction(state, workload, *db);
         });
     }
 
