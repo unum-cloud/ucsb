@@ -4,6 +4,21 @@
 
 namespace ucsb {
 
+template <typename at>
+inline void add_atomic(at& value, at const& delta) noexcept {
+    __atomic_add_fetch(&value, delta, __ATOMIC_RELAXED);
+}
+
+inline bool start_with(const char* str, const char* prefix) {
+    return strncmp(str, prefix, strlen(prefix)) == 0;
+}
+
+inline void drop_system_caches() {
+    auto res = system("sudo sh -c '/usr/bin/echo 3 > /proc/sys/vm/drop_caches'");
+    if (res == 0)
+        sleep(5);
+}
+
 size_t size_on_disk(fs::path const& path) {
     size_t total_size = 0;
     for (auto const& entry : fs::directory_iterator(path)) {

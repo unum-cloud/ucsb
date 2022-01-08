@@ -33,10 +33,6 @@ using mem_stat_t = ucsb::mem_stat_t;
 using exception_t = ucsb::exception_t;
 using printable_bytes_t = ucsb::printable_bytes_t;
 
-inline bool start_with(const char* str, const char* prefix) {
-    return strncmp(str, prefix, strlen(prefix)) == 0;
-}
-
 inline void usage_message(const char* command) {
     fmt::print("Usage: {} [options]\n", command);
     fmt::print("Options:\n");
@@ -48,7 +44,7 @@ inline void usage_message(const char* command) {
 
 void parse_args(int argc, char* argv[], settings_t& settings) {
     int arg_idx = 1;
-    while (arg_idx < argc && start_with(argv[arg_idx], "-")) {
+    while (arg_idx < argc && ucsb::start_with(argv[arg_idx], "-")) {
         if (strcmp(argv[arg_idx], "-db") == 0) {
             arg_idx++;
             if (arg_idx >= argc) {
@@ -106,12 +102,6 @@ inline void register_section(std::string const& name) {
         ->Iterations(1)
         ->Unit(bm::kMicrosecond)
         ->UseRealTime();
-}
-
-inline void drop_system_caches() {
-    auto res = system("sudo sh -c '/usr/bin/echo 3 > /proc/sys/vm/drop_caches'");
-    if (res == 0)
-        sleep(5);
 }
 
 inline std::string section_name(settings_t const& settings, workloads_t const& workloads) {
@@ -191,7 +181,7 @@ inline operation_chooser_t create_operation_chooser(workload_t const& workload) 
 void transaction(bm::State& state, workload_t const& workload, db_t& db) {
 
     if (state.thread_index() == 0) {
-        // drop_system_caches();
+        // ucsb::drop_system_caches();
         bool ok = db.open();
         assert(ok);
     }
@@ -199,13 +189,16 @@ void transaction(bm::State& state, workload_t const& workload, db_t& db) {
     auto chooser = create_operation_chooser(workload);
     transaction_t transaction(workload, db);
 
-    size_t fails = 0;
-    size_t operations_done = 0;
-    size_t bytes_processed_count = 0;
+    static size_t fails = 0;
+    static size_t operations_done = 0;
+    static size_t bytes_processed_count = 0;
     cpu_stat_t cpu_stat;
     mem_stat_t mem_stat;
 
     if (state.thread_index() == 0) {
+        fails = 0;
+        operations_done = 0;
+        bytes_processed_count = 0;
         cpu_stat.start();
         mem_stat.start();
     }
@@ -228,10 +221,10 @@ void transaction(bm::State& state, workload_t const& workload, db_t& db) {
         default: throw exception_t("Unknown operation"); break;
         }
 
-        operations_done += result.entries_touched;
         bool success = result.status == operation_status_t::ok_k;
-        fails += size_t(!success) * result.entries_touched;
-        bytes_processed_count += size_t(success) * workload.value_length * result.entries_touched;
+        ucsb::add_atomic(operations_done, result.entries_touched);
+        ucsb::add_atomic(fails, size_t(!success) * result.entries_touched);
+        ucsb::add_atomic(bytes_processed_count, size_t(success) * workload.value_length * result.entries_touched);
 
         // Print progress
         ++current_iteration;
