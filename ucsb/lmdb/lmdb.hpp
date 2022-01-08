@@ -97,29 +97,39 @@ bool lmdb_t::open() {
     if (config.write_map)
         env_opt |= MDB_WRITEMAP;
 
-    int ret = mdb_env_create(&env_);
-    if (ret)
+    int res = mdb_env_create(&env_);
+    if (res)
         return false;
     if (config.map_size > 0) {
-        ret = mdb_env_set_mapsize(env_, config.map_size);
-        if (ret)
+        res = mdb_env_set_mapsize(env_, config.map_size);
+        if (res) {
+            close();
             return false;
+        }
     }
 
-    ret = mdb_env_open(env_, dir_path_.c_str(), env_opt, 0664);
-    if (ret)
+    res = mdb_env_open(env_, dir_path_.c_str(), env_opt, 0664);
+    if (res) {
+        close();
         return false;
+    }
 
     MDB_txn* txn;
-    ret = mdb_txn_begin(env_, nullptr, 0, &txn);
-    if (ret)
+    res = mdb_txn_begin(env_, nullptr, 0, &txn);
+    if (res) {
+        close();
         return false;
-    ret = mdb_open(txn, nullptr, 0, &dbi_);
-    if (ret)
+    }
+    res = mdb_open(txn, nullptr, 0, &dbi_);
+    if (res) {
+        close();
         return false;
-    ret = mdb_txn_commit(txn);
-    if (ret)
+    }
+    res = mdb_txn_commit(txn);
+    if (res) {
+        close();
         return false;
+    }
 
     return true;
 }
@@ -141,12 +151,12 @@ void lmdb_t::destroy() {
         return;
 
     MDB_txn* txn = nullptr;
-    int ret = mdb_txn_begin(env_, nullptr, 0, &txn);
-    if (ret)
+    int res = mdb_txn_begin(env_, nullptr, 0, &txn);
+    if (res)
         return;
     mdb_drop(txn, dbi_, 1);
-    ret = mdb_txn_commit(txn);
-    assert(ret == 0);
+    res = mdb_txn_commit(txn);
+    assert(res == 0);
 
     bool ok = close();
     assert(ok);
@@ -165,17 +175,17 @@ operation_result_t lmdb_t::insert(key_t key, value_spanc_t value) {
     val_slice.mv_data = const_cast<void*>(reinterpret_cast<void const*>(value.data()));
     val_slice.mv_size = value.size();
 
-    int ret = mdb_txn_begin(env_, nullptr, 0, &txn);
-    if (ret)
+    int res = mdb_txn_begin(env_, nullptr, 0, &txn);
+    if (res)
         return {0, operation_status_t::error_k};
     // mdb_set_compare(txn, &dbi_, compare_keys);
-    ret = mdb_put(txn, dbi_, &key_slice, &val_slice, 0);
-    if (ret) {
+    res = mdb_put(txn, dbi_, &key_slice, &val_slice, 0);
+    if (res) {
         mdb_txn_abort(txn);
         return {0, operation_status_t::error_k};
     }
-    ret = mdb_txn_commit(txn);
-    if (ret)
+    res = mdb_txn_commit(txn);
+    if (res)
         return {0, operation_status_t::error_k};
 
     return {1, operation_status_t::ok_k};
@@ -189,12 +199,12 @@ operation_result_t lmdb_t::update(key_t key, value_spanc_t value) {
     key_slice.mv_data = &key;
     key_slice.mv_size = sizeof(key);
 
-    int ret = mdb_txn_begin(env_, nullptr, MDB_RDONLY, &txn);
-    if (ret)
+    int res = mdb_txn_begin(env_, nullptr, MDB_RDONLY, &txn);
+    if (res)
         return {0, operation_status_t::error_k};
     // mdb_set_compare(txn, &dbi_, compare_keys);
-    ret = mdb_get(txn, dbi_, &key_slice, &val_slice);
-    if (ret) {
+    res = mdb_get(txn, dbi_, &key_slice, &val_slice);
+    if (res) {
         mdb_txn_abort(txn);
         return {1, operation_status_t::not_found_k};
     }
@@ -202,14 +212,14 @@ operation_result_t lmdb_t::update(key_t key, value_spanc_t value) {
     val_slice.mv_data = const_cast<void*>(reinterpret_cast<void const*>(value.data()));
     val_slice.mv_size = value.size();
 
-    ret = mdb_put(txn, dbi_, &key_slice, &val_slice, 0);
-    if (ret) {
+    res = mdb_put(txn, dbi_, &key_slice, &val_slice, 0);
+    if (res) {
         mdb_txn_abort(txn);
         return {0, operation_status_t::error_k};
     }
 
-    ret = mdb_txn_commit(txn);
-    if (ret)
+    res = mdb_txn_commit(txn);
+    if (res)
         return {0, operation_status_t::error_k};
 
     return {1, operation_status_t::ok_k};
@@ -223,17 +233,17 @@ operation_result_t lmdb_t::remove(key_t key) {
     key_slice.mv_data = &key;
     key_slice.mv_size = sizeof(key);
 
-    int ret = mdb_txn_begin(env_, nullptr, 0, &txn);
-    if (ret)
+    int res = mdb_txn_begin(env_, nullptr, 0, &txn);
+    if (res)
         return {0, operation_status_t::error_k};
     // mdb_set_compare(txn, &dbi_, compare_keys);
-    ret = mdb_del(txn, dbi_, &key_slice, nullptr);
-    if (ret) {
+    res = mdb_del(txn, dbi_, &key_slice, nullptr);
+    if (res) {
         mdb_txn_abort(txn);
         return {1, operation_status_t::not_found_k};
     }
-    ret = mdb_txn_commit(txn);
-    if (ret)
+    res = mdb_txn_commit(txn);
+    if (res)
         return {0, operation_status_t::error_k};
 
     return {1, operation_status_t::ok_k};
@@ -247,12 +257,12 @@ operation_result_t lmdb_t::read(key_t key, value_span_t value) const {
     key_slice.mv_data = &key;
     key_slice.mv_size = sizeof(key);
 
-    int ret = mdb_txn_begin(env_, nullptr, MDB_RDONLY, &txn);
-    if (ret)
+    int res = mdb_txn_begin(env_, nullptr, MDB_RDONLY, &txn);
+    if (res)
         return {0, operation_status_t::error_k};
     // mdb_set_compare(txn, &dbi_, compare_keys);
-    ret = mdb_get(txn, dbi_, &key_slice, &val_slice);
-    if (ret) {
+    res = mdb_get(txn, dbi_, &key_slice, &val_slice);
+    if (res) {
         mdb_txn_abort(txn);
         return {1, operation_status_t::not_found_k};
     }
@@ -267,8 +277,8 @@ operation_result_t lmdb_t::batch_read(keys_span_t keys) const {
     MDB_txn* txn = nullptr;
     MDB_val key_slice, val_slice;
 
-    int ret = mdb_txn_begin(env_, nullptr, MDB_RDONLY, &txn);
-    if (ret)
+    int res = mdb_txn_begin(env_, nullptr, MDB_RDONLY, &txn);
+    if (res)
         return {0, operation_status_t::error_k};
     // mdb_set_compare(txn, &dbi_, compare_keys);
 
@@ -276,8 +286,8 @@ operation_result_t lmdb_t::batch_read(keys_span_t keys) const {
     for (auto& key : keys) {
         key_slice.mv_data = &key;
         key_slice.mv_size = sizeof(key);
-        ret = mdb_get(txn, dbi_, &key_slice, &val_slice);
-        if (ret == 0) {
+        res = mdb_get(txn, dbi_, &key_slice, &val_slice);
+        if (res == 0) {
             if (val_slice.mv_size > value_buffer_.size())
                 value_buffer_ = std::vector<char>(val_slice.mv_size);
             memcpy(value_buffer_.data(), val_slice.mv_data, val_slice.mv_size);
@@ -297,25 +307,25 @@ operation_result_t lmdb_t::range_select(key_t key, size_t length, value_span_t s
     key_slice.mv_data = &key;
     key_slice.mv_size = sizeof(key);
 
-    int ret = mdb_txn_begin(env_, nullptr, 0, &txn);
-    if (ret)
+    int res = mdb_txn_begin(env_, nullptr, 0, &txn);
+    if (res)
         return {0, operation_status_t::error_k};
     // mdb_set_compare(txn, &dbi_, compare_keys);
-    ret = mdb_cursor_open(txn, dbi_, &cursor);
-    if (ret) {
+    res = mdb_cursor_open(txn, dbi_, &cursor);
+    if (res) {
         mdb_txn_abort(txn);
         return {0, operation_status_t::error_k};
     }
-    ret = mdb_cursor_get(cursor, &key_slice, &val_slice, MDB_SET);
-    if (ret) {
+    res = mdb_cursor_get(cursor, &key_slice, &val_slice, MDB_SET);
+    if (res) {
         mdb_txn_abort(txn);
         return {1, operation_status_t::not_found_k};
     }
 
     size_t selected_records_count = 0;
-    for (size_t i = 0; !ret && i < length; i++) {
+    for (size_t i = 0; res == 0 && i < length; i++) {
         memcpy(single_value.data(), val_slice.mv_data, val_slice.mv_size);
-        ret = mdb_cursor_get(cursor, &key_slice, &val_slice, MDB_NEXT);
+        res = mdb_cursor_get(cursor, &key_slice, &val_slice, MDB_NEXT);
         ++selected_records_count;
     }
 
@@ -330,25 +340,25 @@ operation_result_t lmdb_t::scan(value_span_t single_value) const {
     MDB_cursor* cursor = nullptr;
     MDB_val key_slice, val_slice;
 
-    int ret = mdb_txn_begin(env_, nullptr, 0, &txn);
-    if (ret)
+    int res = mdb_txn_begin(env_, nullptr, 0, &txn);
+    if (res)
         return {0, operation_status_t::error_k};
     // mdb_set_compare(txn, &dbi_, compare_keys);
-    ret = mdb_cursor_open(txn, dbi_, &cursor);
-    if (ret) {
+    res = mdb_cursor_open(txn, dbi_, &cursor);
+    if (res) {
         mdb_txn_abort(txn);
         return {0, operation_status_t::error_k};
     }
-    ret = mdb_cursor_get(cursor, &key_slice, &val_slice, MDB_FIRST);
-    if (ret) {
+    res = mdb_cursor_get(cursor, &key_slice, &val_slice, MDB_FIRST);
+    if (res) {
         mdb_txn_abort(txn);
         return {1, operation_status_t::not_found_k};
     }
 
     size_t scanned_records_count = 0;
-    while (!ret) {
+    while (!res) {
         memcpy(single_value.data(), val_slice.mv_data, val_slice.mv_size);
-        ret = mdb_cursor_get(cursor, &key_slice, &val_slice, MDB_NEXT);
+        res = mdb_cursor_get(cursor, &key_slice, &val_slice, MDB_NEXT);
         ++scanned_records_count;
     }
 
