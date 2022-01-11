@@ -185,8 +185,8 @@ operation_result_t unumdb_t::scan(value_span_t single_value) const {
     countdown_t countdown;
     citizen_span_t citizen {reinterpret_cast<byte_t*>(single_value.data()), single_value.size()};
     size_t scanned_records_count = 0;
-    auto it = region_.begin();
-    for (; it != region_.end(); ++it) {
+    auto it = region_.begin<caching_t::ram_k>();
+    for (; it != region_.end<caching_t::ram_k>(); ++it) {
         if (!it.is_removed()) {
             countdown.reset(1);
             it.get(citizen, countdown);
