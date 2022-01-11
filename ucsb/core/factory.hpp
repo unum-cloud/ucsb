@@ -27,7 +27,10 @@ struct factory_t {
 
 inline std::shared_ptr<db_t> factory_t::create(db_kind_t kind) {
     switch (kind) {
-    case db_kind_t::unumdb_k: return std::make_shared<unum::unumdb_t>();
+    case db_kind_t::unumdb_k: {
+        init_file_io_by_libc("./"); // Note: Temporary solution
+        return std::make_shared<unum::unumdb_t>();
+    }
     case db_kind_t::rocksdb_k: return std::make_shared<facebook::rocksdb_t>();
     case db_kind_t::leveldb_k: return std::make_shared<google::leveldb_t>();
     case db_kind_t::wiredtiger_k: return std::make_shared<mongodb::wiredtiger_t>();
