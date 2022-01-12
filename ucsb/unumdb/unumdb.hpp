@@ -28,7 +28,7 @@ using region_t = region_gt<key_t, data_source_t::unfixed_size_k>;
  */
 struct unumdb_t : public ucsb::db_t {
   public:
-    inline unumdb_t() : uuid_(string_to_uuid("9b1deb4d-3b7d-4bad-9bdd-b0000000000b")), region_(region_config_t()) {}
+    inline unumdb_t() : region_("", region_config_t()) {}
     inline ~unumdb_t() { close(); }
 
     void set_config(fs::path const& config_path, fs::path const& dir_path) override;
@@ -61,7 +61,6 @@ struct unumdb_t : public ucsb::db_t {
     fs::path config_path_;
     fs::path dir_path_;
 
-    uuid_t uuid_;
     region_t region_;
     mutable dbuffer_t batch_buffer_;
 };
@@ -85,16 +84,14 @@ bool unumdb_t::open() {
     else
         return false;
 
-    db_config.region_config.uuid = uuid_;
-    db_config.region_config.city.name = "Armenia";
-    region_ = region_t(db_config.region_config);
+    region_ = region_t("Kovkas", db_config.region_config);
 
     return true;
 }
 
 bool unumdb_t::close() {
     region_.flush();
-    region_ = std::move(region_config_t());
+    region_ = region_t("", region_config_t());
     return true;
 }
 
@@ -209,19 +206,19 @@ bool unumdb_t::load_config(db_config_t& db_config) {
     nlohmann::json j_config;
     i_config >> j_config;
 
-    db_config.region_config.uuid = unum::algo::rand::uuid4_t {}();
-    db_config.region_config.fixed_citizen_size = 0;
-    db_config.region_config.migration_capacity = j_config["migration_capacity"].get<size_t>();
-    db_config.region_config.migration_max_cnt = j_config["migration_max_cnt"].get<size_t>();
+    db_config.region_config.country.fixed_citizen_size = 0;
+    db_config.region_config.country.migration_capacity = j_config["migration_capacity"].get<size_t>();
+    db_config.region_config.country.migration_max_cnt = j_config["migration_max_cnt"].get<size_t>();
 
-    db_config.region_config.city.fixed_citizen_size = 0;
-    db_config.region_config.city.files_size_enlarge_factor = j_config["files_size_enlarge_factor"].get<size_t>();
+    db_config.region_config.country.city.fixed_citizen_size = 0;
+    db_config.region_config.country.city.files_size_enlarge_factor =
+        j_config["files_size_enlarge_factor"].get<size_t>();
 
-    db_config.region_config.city.street.fixed_citizen_size = 0;
-    db_config.region_config.city.street.max_files_cnt = j_config["max_files_cnt"].get<size_t>();
-    db_config.region_config.city.street.files_count_enlarge_factor =
+    db_config.region_config.country.city.street.fixed_citizen_size = 0;
+    db_config.region_config.country.city.street.max_files_cnt = j_config["max_files_cnt"].get<size_t>();
+    db_config.region_config.country.city.street.files_count_enlarge_factor =
         j_config["files_count_enlarge_factor"].get<size_t>();
-    db_config.region_config.city.street.building.fixed_citizen_size = 0;
+    db_config.region_config.country.city.street.building.fixed_citizen_size = 0;
 
     db_config.io_device = j_config["io_device"].get<std::string>().c_str();
     db_config.uring_max_files_count = j_config["uring_max_files_count"].get<size_t>();
