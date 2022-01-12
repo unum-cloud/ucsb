@@ -90,7 +90,8 @@ bool unumdb_t::open() {
 }
 
 bool unumdb_t::close() {
-    region_.flush();
+    if (!region_.name().empty())
+        region_.flush();
     region_ = region_t("", region_config_t());
     return true;
 }
