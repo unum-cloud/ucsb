@@ -5,7 +5,7 @@
 namespace ucsb {
 
 template <typename at>
-inline void add_atomic(at& value, at const& delta) noexcept {
+inline void add_atomic(at& value, at delta) noexcept {
     __atomic_add_fetch(&value, delta, __ATOMIC_RELAXED);
 }
 
