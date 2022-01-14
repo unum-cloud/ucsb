@@ -46,3 +46,7 @@ Here is how long the benchmarks took on our hardware for every size:
 * [ ] Linker error when trying to supply custom comparators to LevelDB.
 * [ ] RocksDB local builds are significantly slower than prebuilt variants.
 * [ ] WiredTiger crashes on 1 TB benchmarks, specifically on the `ReadInsert` workload.
+
+## Benchmark
+
+Run `sudo /usr/bin/python3.8 run.py`. Output is located in `bench/results/` folder.
