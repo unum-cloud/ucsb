@@ -267,7 +267,8 @@ int main(int argc, char** argv) {
     std::string result_name = settings.workloads_path.stem().c_str();
     if (!settings.workload_filter.empty())
         result_name = fmt::format("{}/{}", result_name, settings.workload_filter);
-    settings.results_path = fmt::format("./bench/results/{}/{}.json", settings.db_name, result_name);
+    settings.results_path =
+        fmt::format("./bench/results/cores_{}/{}/{}.json", settings.threads_count, settings.db_name, result_name);
     settings.delete_db_at_the_end = false;
 
     // Prepare worklods
