@@ -14,7 +14,6 @@ struct settings_t {
     std::string workload_filter;
     fs::path results_path;
     size_t threads_count = 1;
-    bool delete_db_at_the_end = false;
 };
 
 } // namespace ucsb

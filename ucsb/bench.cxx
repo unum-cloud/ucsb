@@ -269,7 +269,6 @@ int main(int argc, char** argv) {
         result_name = fmt::format("{}/{}", result_name, settings.workload_filter);
     settings.results_path =
         fmt::format("./bench/results/cores_{}/{}/{}.json", settings.threads_count, settings.db_name, result_name);
-    settings.delete_db_at_the_end = false;
 
     // Prepare worklods
     workloads_t workloads;
@@ -312,11 +311,6 @@ int main(int argc, char** argv) {
     }
 
     run_benchmarks(argc, argv, settings);
-
-    if (settings.delete_db_at_the_end) {
-        db->destroy();
-        ucsb::fs::remove_all(settings.db_dir_path);
-    }
 
     return 0;
 }
