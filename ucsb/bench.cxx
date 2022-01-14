@@ -38,7 +38,8 @@ inline void usage_message(const char* command) {
     fmt::print("Options:\n");
     fmt::print("-db: Database name\n");
     fmt::print("-c: Database configuration file path\n");
-    fmt::print("-w: Workload file path\n");
+    fmt::print("-w: Workloads file path\n");
+    fmt::print("-filter: Workload filter (Optional)\n");
     fmt::print("-threads: Threads count (Optional, default: 1)\n");
 }
 
@@ -72,7 +73,12 @@ void parse_args(int argc, char* argv[], settings_t& settings) {
                 fmt::print("Missing argument value for -w\n");
                 exit(1);
             }
-            settings.workload_path = std::string(argv[arg_idx]);
+            settings.workloads_path = std::string(argv[arg_idx]);
+            arg_idx++;
+        }
+        else if (strcmp(argv[arg_idx], "-filter") == 0) {
+            arg_idx++;
+            settings.workload_filter = std::string(argv[arg_idx]);
             arg_idx++;
         }
         else if (strcmp(argv[arg_idx], "-threads") == 0) {
@@ -181,7 +187,6 @@ inline operation_chooser_t create_operation_chooser(workload_t const& workload) 
 void transaction(bm::State& state, workload_t const& workload, db_t& db) {
 
     if (state.thread_index() == 0) {
-        // ucsb::drop_system_caches();
         bool ok = db.open();
         assert(ok);
     }
@@ -259,20 +264,28 @@ int main(int argc, char** argv) {
     settings_t settings;
     parse_args(argc, argv, settings);
     settings.db_dir_path = fmt::format("./tmp/{}/", settings.db_name);
-    settings.results_path =
-        fmt::format("./bench/results/{}/{}.json", settings.db_name, settings.workload_path.stem().c_str());
+    std::string result_name = settings.workloads_path.stem().c_str();
+    if (!settings.workload_filter.empty())
+        result_name = fmt::format("{}/{}", result_name, settings.workload_filter);
+    settings.results_path = fmt::format("./bench/results/{}/{}.json", settings.db_name, result_name);
     settings.delete_db_at_the_end = false;
 
     // Prepare worklods
     workloads_t workloads;
-    if (!ucsb::load(settings.workload_path, workloads)) {
-        fmt::print("Failed to load workloads. path: {}\n", settings.workload_path.c_str());
+    if (!ucsb::load(settings.workloads_path, workloads)) {
+        fmt::print("Failed to load workloads. path: {}\n", settings.workloads_path.c_str());
         return 1;
     }
     std::vector<workloads_t> threads_workloads;
     for (auto const& workload : workloads) {
-        std::vector<workload_t> splited_workloads = split_workload_into_threads(workload, settings.threads_count);
-        threads_workloads.push_back(splited_workloads);
+        if (settings.workload_filter.empty() || workload.name == settings.workload_filter) {
+            std::vector<workload_t> splited_workloads = split_workload_into_threads(workload, settings.threads_count);
+            threads_workloads.push_back(splited_workloads);
+        }
+    }
+    if (threads_workloads.empty()) {
+        fmt::print("Filter dones't match any workload. filter: {}\n", settings.workload_filter);
+        return 1;
     }
 
     ucsb::fs::create_directories(settings.db_dir_path);
