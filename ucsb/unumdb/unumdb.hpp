@@ -143,7 +143,17 @@ operation_result_t unumdb_t::read(key_t key, value_span_t value) const {
 }
 
 operation_result_t unumdb_t::batch_insert(keys_spanc_t keys, values_spanc_t values, value_sizes_spanc_t sizes) {
-    return {0, operation_status_t::not_implemented_k};
+
+    span_gt<fingerprint_t> fingerprints {
+        const_cast<fingerprint_t*>(reinterpret_cast<fingerprint_t const*>(keys.data())),
+        keys.size()};
+    span_bytes_t citizens {const_cast<byte_t*>(reinterpret_cast<byte_t const*>(values.data())), values.size()};
+    span_gt<citizen_size_t> citizen_sizes {
+        const_cast<citizen_size_t*>(reinterpret_cast<citizen_size_t const*>(sizes.data())),
+        sizes.size()};
+    region_.insert(fingerprints, citizens, citizen_sizes, ds_info_t::sorted_k);
+
+    return {keys.size(), operation_status_t::ok_k};
 }
 
 operation_result_t unumdb_t::batch_read(keys_spanc_t keys) const {
