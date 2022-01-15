@@ -25,8 +25,9 @@ struct workload_t {
 
     float insert_proportion = 0;
     float update_proportion = 0;
-    float read_proportion = 0;
     float remove_proportion = 0;
+    float read_proportion = 0;
+    float batch_insert_proportion = 0;
     float batch_read_proportion = 0;
     float range_select_proportion = 0;
     float scan_proportion = 0;
@@ -38,9 +39,13 @@ struct workload_t {
     value_length_t value_length = 0;
     distribution_kind_t value_length_dist = distribution_kind_t::const_k;
 
-    size_t batch_min_length = 0;
-    size_t batch_max_length = 0;
-    distribution_kind_t batch_length_dist = distribution_kind_t::uniform_k;
+    size_t batch_insert_min_length = 0;
+    size_t batch_insert_max_length = 0;
+    distribution_kind_t batch_insert_length_dist = distribution_kind_t::uniform_k;
+
+    size_t batch_read_min_length = 0;
+    size_t batch_read_max_length = 0;
+    distribution_kind_t batch_read_length_dist = distribution_kind_t::uniform_k;
 
     size_t range_select_min_length = 0;
     size_t range_select_max_length = 0;
@@ -88,8 +93,9 @@ bool load(fs::path const& path, workloads_t& workloads) {
 
         workload.insert_proportion = (*j_workload).value("insert_proportion", 0.0);
         workload.update_proportion = (*j_workload).value("update_proportion", 0.0);
-        workload.read_proportion = (*j_workload).value("read_proportion", 0.0);
         workload.remove_proportion = (*j_workload).value("remove_proportion", 0.0);
+        workload.read_proportion = (*j_workload).value("read_proportion", 0.0);
+        workload.batch_insert_proportion = (*j_workload).value("batch_insert_proportion", 0.0);
         workload.batch_read_proportion = (*j_workload).value("batch_read_proportion", 0.0);
         workload.range_select_proportion = (*j_workload).value("range_select_proportion", 0.0);
         workload.scan_proportion = (*j_workload).value("scan_proportion", 0.0);
@@ -110,10 +116,19 @@ bool load(fs::path const& path, workloads_t& workloads) {
             return false;
         }
 
-        workload.batch_min_length = (*j_workload).value("batch_min_length", 256);
-        workload.batch_max_length = (*j_workload).value("batch_max_length", 256);
-        workload.batch_length_dist = parse_distribution((*j_workload).value("batch_length_dist", "uniform"));
-        if (workload.batch_length_dist == distribution_kind_t::unknown_k) {
+        workload.batch_insert_min_length = (*j_workload).value("batch_insert_min_length", 256);
+        workload.batch_insert_max_length = (*j_workload).value("batch_insert_max_length", 256);
+        workload.batch_insert_length_dist =
+            parse_distribution((*j_workload).value("batch_insert_length_dist", "uniform"));
+        if (workload.batch_insert_length_dist == distribution_kind_t::unknown_k) {
+            workloads.clear();
+            return false;
+        }
+
+        workload.batch_read_min_length = (*j_workload).value("batch_read_min_length", 256);
+        workload.batch_read_max_length = (*j_workload).value("batch_read_max_length", 256);
+        workload.batch_read_length_dist = parse_distribution((*j_workload).value("batch_read_length_dist", "uniform"));
+        if (workload.batch_read_length_dist == distribution_kind_t::unknown_k) {
             workloads.clear();
             return false;
         }

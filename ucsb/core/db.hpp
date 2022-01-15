@@ -58,6 +58,11 @@ struct db_t {
     virtual operation_result_t read(key_t key, value_span_t value) const = 0;
 
     /**
+     * @brief Performs many insert at once in a batch-asynchronous fashion. Keys are unique
+     */
+    virtual operation_result_t batch_insert(keys_spanc_t keys, values_spanc_t values, value_sizes_spanc_t sizes) = 0;
+
+    /**
      * @brief Performs many reads at once in a batch-asynchronous fashion.
      * This means, that the order of lookups within the batch is irrelevant
      * and the engine can reorganize them for faster execution.
@@ -67,7 +72,7 @@ struct db_t {
      * wise). For this benchmark we don't return the retrieved the values and only
      * check them under the hood.
      */
-    virtual operation_result_t batch_read(keys_span_t keys) const = 0;
+    virtual operation_result_t batch_read(keys_spanc_t keys) const = 0;
 
     /**
      * @brief Performs many reads at once in an ordered fashion,

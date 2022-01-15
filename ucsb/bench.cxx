@@ -201,8 +201,9 @@ inline operation_chooser_t create_operation_chooser(workload_t const& workload) 
     operation_chooser_t chooer = std::make_unique<ucsb::operation_chooser_t>();
     chooer->add(operation_kind_t::insert_k, workload.insert_proportion);
     chooer->add(operation_kind_t::update_k, workload.update_proportion);
-    chooer->add(operation_kind_t::read_k, workload.read_proportion);
     chooer->add(operation_kind_t::remove_k, workload.remove_proportion);
+    chooer->add(operation_kind_t::read_k, workload.read_proportion);
+    chooer->add(operation_kind_t::batch_insert_k, workload.batch_insert_proportion);
     chooer->add(operation_kind_t::batch_read_k, workload.batch_read_proportion);
     chooer->add(operation_kind_t::range_select_k, workload.range_select_proportion);
     chooer->add(operation_kind_t::scan_k, workload.scan_proportion);
@@ -243,8 +244,9 @@ void transaction(bm::State& state, workload_t const& workload, db_t& db) {
         switch (operation) {
         case operation_kind_t::insert_k: result = transaction.do_insert(); break;
         case operation_kind_t::update_k: result = transaction.do_update(); break;
-        case operation_kind_t::read_k: result = transaction.do_read(); break;
         case operation_kind_t::remove_k: result = transaction.do_remove(); break;
+        case operation_kind_t::read_k: result = transaction.do_read(); break;
+        case operation_kind_t::batch_insert_k: result = transaction.do_batch_insert(); break;
         case operation_kind_t::batch_read_k: result = transaction.do_batch_read(); break;
         case operation_kind_t::range_select_k: result = transaction.do_range_select(); break;
         case operation_kind_t::scan_k: result = transaction.do_scan(); break;
@@ -272,7 +274,7 @@ void transaction(bm::State& state, workload_t const& workload, db_t& db) {
         cpu_stat.stop();
         mem_stat.stop();
         state.SetBytesProcessed(bytes_processed_count);
-        state.counters["fails,%"] = bm::Counter(fails * 100.0 / operations_done);
+        state.counters["fails,%"] = bm::Counter(operations_done ? fails * 100.0 / operations_done : 100.0);
         state.counters["operations/s"] = bm::Counter(operations_done - fails, bm::Counter::kIsRate);
         state.counters["cpu_max,%"] = bm::Counter(cpu_stat.percent().max);
         state.counters["cpu_avg,%"] = bm::Counter(cpu_stat.percent().avg);

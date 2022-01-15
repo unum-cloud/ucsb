@@ -21,9 +21,9 @@
         "batch_read_proportion": 1.0,
         "key_dist": "zipfian",
         "value_length": 1024,
-        "batch_min_length": 256,
-        "batch_max_length": 256,
-        "batch_length_dist": "uniform"
+        "batch_read_min_length": 256,
+        "batch_read_max_length": 256,
+        "batch_read_length_dist": "uniform"
     },
     {
         "name": "RangeSelect",
@@ -61,6 +61,17 @@
         "insert_proportion": 0.05,
         "key_dist": "latest",
         "value_length": 1024
+    },
+    {
+        "name": "BatchInsert",
+        "records_count": 100000000,
+        "operations_count": 2000,
+        "batch_insert_proportion": 1.0,
+        "key_dist": "zipfian",
+        "value_length": 1024,
+        "batch_insert_min_length": 4096,
+        "batch_insert_max_length": 4096,
+        "batch_insert_length_dist": "uniform"
     },
     {
         "name": "Remove",
