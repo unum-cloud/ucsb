@@ -172,7 +172,48 @@ operation_result_t rocksdb_t::read(key_t key, value_span_t value) const {
 }
 
 operation_result_t rocksdb_t::batch_insert(keys_spanc_t keys, values_spanc_t values, value_sizes_spanc_t sizes) {
-    return {0, operation_status_t::not_implemented_k};
+
+    std::string sst_file_path("/tmp/rocksdb_tmp.sst");
+    rocksdb::SstFileWriter sst_file_writer(rocksdb::EnvOptions(), options_, options_.comparator);
+    rocksdb::Status status = sst_file_writer.Open(sst_file_path);
+    if (!status.ok()) {
+        fs::remove(sst_file_path);
+        return {0, operation_status_t::error_k};
+    }
+
+    size_t idx = 0;
+    size_t offset = 0;
+    auto adsfasd = keys.size();
+    for (; idx < keys.size(); ++idx) {
+        auto key = keys[idx];
+
+        // Warning: if not using custom comparator need to swap little endian to big endian
+        if (options_.comparator != &key_cmp_)
+            key = __builtin_bswap64(key);
+
+        rocksdb::Slice slice {reinterpret_cast<char const*>(&key), sizeof(key)};
+        std::string data(reinterpret_cast<char const*>(values.data() + offset), sizes[idx]);
+        status = sst_file_writer.Add(slice, data);
+        if (!status.ok())
+            break;
+        offset += sizes[idx];
+    }
+    status = sst_file_writer.Finish();
+    if (!status.ok()) {
+        fs::remove(sst_file_path);
+        return {0, operation_status_t::error_k};
+    }
+
+    rocksdb::IngestExternalFileOptions ingest_opt;
+    ingest_opt.move_files = true;
+    status = db_->IngestExternalFile({sst_file_path}, ingest_opt);
+    if (!status.ok()) {
+        fs::remove(sst_file_path);
+        return {0, operation_status_t::error_k};
+    }
+    fs::remove(sst_file_path);
+
+    return {idx, operation_status_t::ok_k};
 }
 
 operation_result_t rocksdb_t::batch_read(keys_spanc_t keys) const {
