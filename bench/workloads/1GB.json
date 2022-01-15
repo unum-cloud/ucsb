@@ -65,7 +65,7 @@
     {
         "name": "BatchInsert",
         "records_count": 1000000,
-        "operations_count": 20,
+        "operations_count": 25,
         "batch_insert_proportion": 1.0,
         "key_dist": "zipfian",
         "value_length": 1024,
@@ -76,7 +76,7 @@
     {
         "name": "Remove",
         "records_count": 1000000,
-        "operations_count": 50000,
+        "operations_count": 150000,
         "remove_proportion": 1.0,
         "key_dist": "zipfian"
     }
