@@ -5,14 +5,17 @@
 
 namespace ucsb {
 
-struct const_generator_t : generator_gt<size_t> {
-    inline const_generator_t(size_t constant) : constant_(constant) {}
+template <typename value_at>
+struct const_generator_gt : generator_gt<value_at> {
+    using value_t = value_at;
 
-    inline size_t generate() override { return constant_; }
-    inline size_t last() override { return constant_; }
+    inline const_generator_gt(value_t constant) : constant_(constant) {}
+
+    inline value_t generate() override { return constant_; }
+    inline value_t last() override { return constant_; }
 
   private:
-    size_t constant_;
+    value_t constant_;
 };
 
 } // namespace ucsb

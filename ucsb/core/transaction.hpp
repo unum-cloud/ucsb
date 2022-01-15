@@ -19,10 +19,10 @@
 namespace ucsb {
 
 struct transaction_t {
-    using generator_t = std::unique_ptr<generator_gt<size_t>>;
     using key_generator_t = std::unique_ptr<generator_gt<key_t>>;
     using acknowledged_key_generator_t = std::unique_ptr<acknowledged_counter_generator_t>;
     using value_length_generator_t = std::unique_ptr<generator_gt<value_length_t>>;
+    using length_generator_t = std::unique_ptr<generator_gt<size_t>>;
     using values_and_sizes_spans_t = std::pair<values_span_t, value_sizes_span_t>;
 
     inline transaction_t(workload_t const& workload, db_t& db);
@@ -40,9 +40,9 @@ struct transaction_t {
   private:
     inline key_generator_t create_key_generator(workload_t const& workload, counter_generator_t& counter_generator);
     inline value_length_generator_t create_value_length_generator(workload_t const& workload);
-    inline generator_t create_batch_insert_length_generator(workload_t const& workload);
-    inline generator_t create_batch_read_length_generator(workload_t const& workload);
-    inline generator_t create_range_select_length_generator(workload_t const& workload);
+    inline length_generator_t create_batch_insert_length_generator(workload_t const& workload);
+    inline length_generator_t create_batch_read_length_generator(workload_t const& workload);
+    inline length_generator_t create_range_select_length_generator(workload_t const& workload);
 
     inline key_t generate_key();
     inline keys_spanc_t generate_batch_insert_keys();
@@ -64,9 +64,9 @@ struct transaction_t {
     values_buffer_t values_buffer_;
     value_sizes_t value_sizes_buffer_;
 
-    generator_t batch_insert_length_generator_;
-    generator_t batch_read_length_generator_;
-    generator_t range_select_length_generator_;
+    length_generator_t batch_insert_length_generator_;
+    length_generator_t batch_read_length_generator_;
+    length_generator_t range_select_length_generator_;
 };
 
 inline transaction_t::transaction_t(workload_t const& workload, db_t& db) : workload_(workload), db_(&db) {
@@ -154,8 +154,8 @@ inline transaction_t::key_generator_t transaction_t::create_key_generator(worklo
     key_generator_t generator;
     switch (workload.key_dist) {
     case distribution_kind_t::uniform_k:
-        generator =
-            std::make_unique<uniform_generator_t>(workload.start_key, workload.start_key + workload.records_count - 1);
+        generator = std::make_unique<uniform_generator_gt<key_t>>(workload.start_key,
+                                                                  workload.start_key + workload.records_count - 1);
         break;
     case distribution_kind_t::zipfian_k: {
         size_t new_keys = (size_t)(workload.operations_count * workload.insert_proportion * 2);
@@ -177,24 +177,25 @@ inline transaction_t::value_length_generator_t transaction_t::create_value_lengt
 
     value_length_generator_t generator;
     switch (workload.value_length_dist) {
-    case distribution_kind_t::const_k: generator = std::make_unique<const_generator_t>(workload.value_length); break;
-    case distribution_kind_t::uniform_k:
-        generator = std::make_unique<uniform_generator_t>(1, workload.value_length);
+    case distribution_kind_t::const_k:
+        generator = std::make_unique<const_generator_gt<value_length_t>>(workload.value_length);
         break;
-    case distribution_kind_t::zipfian_k:
-        generator = std::make_unique<zipfian_generator_t>(1, workload.value_length);
+    case distribution_kind_t::uniform_k:
+        generator = std::make_unique<uniform_generator_gt<value_length_t>>(1, workload.value_length);
         break;
     default: throw exception_t(fmt::format("Unknown value length distribution: {}", int(workload.value_length_dist)));
     }
     return generator;
 }
 
-inline transaction_t::generator_t transaction_t::create_batch_insert_length_generator(workload_t const& workload) {
-    generator_t generator;
+inline transaction_t::length_generator_t transaction_t::create_batch_insert_length_generator(
+    workload_t const& workload) {
+
+    length_generator_t generator;
     switch (workload.batch_insert_length_dist) {
     case distribution_kind_t::uniform_k:
-        generator =
-            std::make_unique<uniform_generator_t>(workload.batch_insert_min_length, workload.batch_insert_max_length);
+        generator = std::make_unique<uniform_generator_gt<size_t>>(workload.batch_insert_min_length,
+                                                                   workload.batch_insert_max_length);
         break;
     case distribution_kind_t::zipfian_k:
         generator =
@@ -207,12 +208,12 @@ inline transaction_t::generator_t transaction_t::create_batch_insert_length_gene
     return generator;
 }
 
-inline transaction_t::generator_t transaction_t::create_batch_read_length_generator(workload_t const& workload) {
-    generator_t generator;
+inline transaction_t::length_generator_t transaction_t::create_batch_read_length_generator(workload_t const& workload) {
+    length_generator_t generator;
     switch (workload.batch_read_length_dist) {
     case distribution_kind_t::uniform_k:
-        generator =
-            std::make_unique<uniform_generator_t>(workload.batch_read_min_length, workload.batch_read_max_length);
+        generator = std::make_unique<uniform_generator_gt<size_t>>(workload.batch_read_min_length,
+                                                                   workload.batch_read_max_length);
         break;
     case distribution_kind_t::zipfian_k:
         generator =
@@ -225,12 +226,14 @@ inline transaction_t::generator_t transaction_t::create_batch_read_length_genera
     return generator;
 }
 
-inline transaction_t::generator_t transaction_t::create_range_select_length_generator(workload_t const& workload) {
-    generator_t generator;
+inline transaction_t::length_generator_t transaction_t::create_range_select_length_generator(
+    workload_t const& workload) {
+
+    length_generator_t generator;
     switch (workload.range_select_length_dist) {
     case distribution_kind_t::uniform_k:
-        generator =
-            std::make_unique<uniform_generator_t>(workload.range_select_min_length, workload.range_select_max_length);
+        generator = std::make_unique<uniform_generator_gt<size_t>>(workload.range_select_min_length,
+                                                                   workload.range_select_max_length);
         break;
     case distribution_kind_t::zipfian_k:
         generator =
@@ -273,7 +276,7 @@ inline keys_spanc_t transaction_t::generate_batch_read_keys() {
 }
 
 inline value_spanc_t transaction_t::generate_value() {
-    size_t length = value_length_generator_->generate();
+    value_length_t length = value_length_generator_->generate();
     value_sizes_buffer_[0] = length;
     value_span_t value(values_buffer_.data(), length);
     for (size_t i = 0; i < value.size(); ++i)
@@ -289,7 +292,7 @@ inline transaction_t::values_and_sizes_spans_t transaction_t::generate_values() 
     size_t total_length = 0;
     size_t values_count = std::max(workload_.batch_insert_max_length, size_t(1));
     for (size_t i = 0; i < values_count; ++i) {
-        size_t length = value_length_generator_->generate();
+        value_length_t length = value_length_generator_->generate();
         value_sizes_buffer_[i] = length;
         total_length += length;
     }
