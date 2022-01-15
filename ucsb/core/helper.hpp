@@ -1,5 +1,8 @@
 #pragma once
 
+#include <string>
+#include <vector>
+
 #include "ucsb/core/types.hpp"
 
 namespace ucsb {
@@ -11,6 +14,19 @@ inline void add_atomic(at& value, at delta) noexcept {
 
 inline bool start_with(const char* str, const char* prefix) {
     return strncmp(str, prefix, strlen(prefix)) == 0;
+}
+
+std::vector<std::string> split(std::string const& str, char delimiter) {
+    size_t start = 0;
+    size_t end = 0;
+    std::vector<std::string> tokens;
+
+    while ((start = str.find_first_not_of(delimiter, end)) != std::string::npos) {
+        end = str.find(delimiter, start);
+        tokens.push_back(str.substr(start, end - start));
+    }
+
+    return tokens;
 }
 
 size_t size_on_disk(fs::path const& path) {

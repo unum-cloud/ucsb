@@ -76,14 +76,24 @@ void parse_args(int argc, char* argv[], settings_t& settings) {
             settings.workloads_path = std::string(argv[arg_idx]);
             arg_idx++;
         }
-        else if (strcmp(argv[arg_idx], "-filter") == 0) {
-            arg_idx++;
-            settings.workload_filter = std::string(argv[arg_idx]);
-            arg_idx++;
-        }
         else if (strcmp(argv[arg_idx], "-threads") == 0) {
             arg_idx++;
+            if (arg_idx >= argc) {
+                usage_message(argv[0]);
+                fmt::print("Missing argument value for -threads\n");
+                exit(1);
+            }
             settings.threads_count = std::stoi(argv[arg_idx]);
+            arg_idx++;
+        }
+        else if (strcmp(argv[arg_idx], "-filter") == 0) {
+            arg_idx++;
+            if (arg_idx >= argc) {
+                usage_message(argv[0]);
+                fmt::print("Missing argument value for -filter\n");
+                exit(1);
+            }
+            settings.workload_filter = std::string(argv[arg_idx]);
             arg_idx++;
         }
         else {
@@ -151,6 +161,22 @@ void run_benchmarks(int argc, char* argv[], settings_t const& settings) {
     }
 
     benchmark::RunSpecifiedBenchmarks();
+}
+
+workloads_t filter_workloads(workloads_t const& workloads, std::string const& filter) {
+    if (filter.empty())
+        return workloads;
+
+    std::vector<std::string> tokens = ucsb::split(filter, ',');
+    std::set<std::string> keys(tokens.begin(), tokens.end());
+
+    workloads_t filtered_workloads;
+    for (auto const& workload : workloads) {
+        if (keys.contains(workload.name))
+            filtered_workloads.push_back(workload);
+    }
+
+    return filtered_workloads;
 }
 
 std::vector<workload_t> split_workload_into_threads(workload_t const& workload, size_t threads_count) {
@@ -276,16 +302,19 @@ int main(int argc, char** argv) {
         fmt::print("Failed to load workloads. path: {}\n", settings.workloads_path.c_str());
         return 1;
     }
-    std::vector<workloads_t> threads_workloads;
-    for (auto const& workload : workloads) {
-        if (settings.workload_filter.empty() || workload.name == settings.workload_filter) {
-            std::vector<workload_t> splited_workloads = split_workload_into_threads(workload, settings.threads_count);
-            threads_workloads.push_back(splited_workloads);
-        }
+    if (workloads.empty()) {
+        fmt::print("Workloads file is empty. path: {}\n", settings.workloads_path.c_str());
+        return 1;
     }
-    if (threads_workloads.empty()) {
+    workloads = filter_workloads(workloads, settings.workload_filter);
+    if (workloads.empty()) {
         fmt::print("Filter dones't match any workload. filter: {}\n", settings.workload_filter);
         return 1;
+    }
+    std::vector<workloads_t> threads_workloads;
+    for (auto const& workload : workloads) {
+        std::vector<workload_t> splited_workloads = split_workload_into_threads(workload, settings.threads_count);
+        threads_workloads.push_back(splited_workloads);
     }
 
     ucsb::fs::create_directories(settings.db_dir_path);
