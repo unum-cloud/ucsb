@@ -144,6 +144,7 @@ operation_result_t unumdb_t::read(key_t key, value_span_t value) const {
 
 operation_result_t unumdb_t::batch_insert(keys_spanc_t keys, values_spanc_t values, value_sizes_spanc_t sizes) {
 
+    // Warning: Region task non const argument because it does implase sorting
     span_gt<fingerprint_t> fingerprints {
         const_cast<fingerprint_t*>(reinterpret_cast<fingerprint_t const*>(keys.data())),
         keys.size()};
