@@ -1,10 +1,11 @@
 
 import os
+import time
 import shutil
 import subprocess
-import time
 
 drop_caches = False
+cleanup_previous_dbmses = False
 
 threads = [
     1,
@@ -40,8 +41,6 @@ workload_names = [
     'Remove',
 ]
 
-destory_dbs = len(threads) > 1 or len(sizes) > 1
-
 
 def get_db_config_path(db_name, size):
     path = f'./bench/configs/{db_name}/{size}.cfg'
@@ -57,7 +56,7 @@ def drop_system_caches():
     subprocess.run(['sudo', 'sh', '-c', '/usr/bin/echo', '3', '>', '/proc/sys/vm/drop_caches'])
 
 
-def run(db_name, size, threads_count, workload_name):
+def run(db_name, size, threads_count, workload_names):
     config_path = get_db_config_path(db_name, size)
     workloads_path = get_worklods_path(size)
 
@@ -67,7 +66,7 @@ def run(db_name, size, threads_count, workload_name):
             '-c', config_path,
             '-w', workloads_path,
             '-threads', str(threads_count),
-            '-filter', workload_name,
+            '-filter', ','.join(workload_names),
         ],
         stdout=subprocess.PIPE)
 
@@ -78,14 +77,18 @@ def run(db_name, size, threads_count, workload_name):
         if not line:
             break
 
+
+if cleanup_previous_dbmses:
+    shutil.rmtree('./tmp/')
+
 for threads_count in threads:
     for size in sizes:
-        if destory_dbs:
-            shutil.rmtree('./tmp/')
         for db_name in db_names:
-            for workload_name in workload_names:
-                if drop_caches:
+            if drop_caches:
+                for workload_name in workload_names:
                     drop_system_caches()
                     time.sleep(8)
-                run(db_name, size, threads_count, workload_name)
+                    run(db_name, size, threads_count, [workload_name])
+            else:
+                run(db_name, size, threads_count, workload_names)
 

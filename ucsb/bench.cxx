@@ -286,15 +286,8 @@ void transaction(bm::State& state, workload_t const& workload, db_t& db) {
 
 int main(int argc, char** argv) {
 
-    // Setup settings
     settings_t settings;
     parse_args(argc, argv, settings);
-    settings.db_dir_path = fmt::format("./tmp/{}/", settings.db_name);
-    std::string result_name = settings.workloads_path.stem().c_str();
-    if (!settings.workload_filter.empty())
-        result_name = fmt::format("{}/{}", result_name, settings.workload_filter);
-    settings.results_path =
-        fmt::format("./bench/results/cores_{}/{}/{}.json", settings.threads_count, settings.db_name, result_name);
 
     // Prepare worklods
     workloads_t workloads;
@@ -316,6 +309,14 @@ int main(int argc, char** argv) {
         std::vector<workload_t> splited_workloads = split_workload_into_threads(workload, settings.threads_count);
         threads_workloads.push_back(splited_workloads);
     }
+
+    // Setup settings
+    settings.db_dir_path = fmt::format("./tmp/{}/{}/", settings.db_name, settings.workloads_path.stem().c_str());
+    std::string result_name = settings.workloads_path.stem().c_str();
+    if (!settings.workload_filter.empty() && workloads.size() == 1)
+        result_name = fmt::format("{}/{}", result_name, workloads.front().name);
+    settings.results_path =
+        fmt::format("./bench/results/cores_{}/{}/{}.json", settings.threads_count, settings.db_name, result_name);
 
     ucsb::fs::create_directories(settings.db_dir_path);
     ucsb::fs::create_directories(settings.results_path.parent_path());

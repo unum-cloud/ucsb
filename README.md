@@ -49,4 +49,4 @@ Here is how long the benchmarks took on our hardware for every size:
 
 ## Benchmark
 
-Run `sudo /usr/bin/python3.8 run.py`. Output is located in `bench/results/` folder.
+Run `sudo /usr/bin/python3 run.py`. Output is located in `bench/results/` folder.
