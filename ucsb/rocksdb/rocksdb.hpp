@@ -204,9 +204,9 @@ operation_result_t rocksdb_t::batch_insert(keys_spanc_t keys, values_spanc_t val
         return {0, operation_status_t::error_k};
     }
 
-    rocksdb::IngestExternalFileOptions ingest_opt;
-    ingest_opt.move_files = true;
-    status = db_->IngestExternalFile({sst_file_path}, ingest_opt);
+    rocksdb::IngestExternalFileOptions ingest_options;
+    ingest_options.move_files = true;
+    status = db_->IngestExternalFile({sst_file_path}, ingest_options);
     if (!status.ok()) {
         fs::remove(sst_file_path);
         return {0, operation_status_t::error_k};
