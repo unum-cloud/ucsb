@@ -58,9 +58,10 @@ struct db_t {
     virtual operation_result_t read(key_t key, value_span_t value) const = 0;
 
     /**
-     * @brief Performs many insert at once in a batch-asynchronous fashion. Keys are unique
+     * @brief Performs many insert at once in a batch-asynchronous fashion.
+     * Keys are in strict ascending order
      */
-    virtual operation_result_t batch_insert(keys_spanc_t keys, values_spanc_t values, value_sizes_spanc_t sizes) = 0;
+    virtual operation_result_t batch_insert(keys_spanc_t keys, values_spanc_t values, value_lengths_spanc_t sizes) = 0;
 
     /**
      * @brief Performs many reads at once in a batch-asynchronous fashion.

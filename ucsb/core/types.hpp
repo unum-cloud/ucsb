@@ -21,8 +21,8 @@ using value_spanc_t = std::span<const std::byte>;
 using values_buffer_t = std::vector<std::byte>;
 using values_span_t = std::span<std::byte>;
 using values_spanc_t = std::span<const std::byte>;
-using value_sizes_t = std::vector<value_length_t>;
-using value_sizes_span_t = std::span<value_length_t>;
-using value_sizes_spanc_t = std::span<const value_length_t>;
+using value_lengths_t = std::vector<value_length_t>;
+using value_lengths_span_t = std::span<value_length_t>;
+using value_lengths_spanc_t = std::span<const value_length_t>;
 
 } // namespace ucsb

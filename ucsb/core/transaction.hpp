@@ -23,7 +23,7 @@ struct transaction_t {
     using acknowledged_key_generator_t = std::unique_ptr<acknowledged_counter_generator_t>;
     using value_length_generator_t = std::unique_ptr<generator_gt<value_length_t>>;
     using length_generator_t = std::unique_ptr<generator_gt<size_t>>;
-    using values_and_sizes_spans_t = std::pair<values_span_t, value_sizes_span_t>;
+    using values_and_sizes_spans_t = std::pair<values_span_t, value_lengths_span_t>;
 
     inline transaction_t(workload_t const& workload, db_t& db);
 
@@ -62,7 +62,7 @@ struct transaction_t {
     value_length_generator_t value_length_generator_;
     random_byte_generator_t value_generator_;
     values_buffer_t values_buffer_;
-    value_sizes_t value_sizes_buffer_;
+    value_lengths_t value_sizes_buffer_;
 
     length_generator_t batch_insert_length_generator_;
     length_generator_t batch_read_length_generator_;
@@ -84,7 +84,7 @@ inline transaction_t::transaction_t(workload_t const& workload, db_t& db) : work
     value_length_generator_ = create_value_length_generator(workload);
     size_t values_count = std::max(workload.batch_insert_max_length, size_t(1));
     values_buffer_ = values_buffer_t(values_count * workload.value_length);
-    value_sizes_buffer_ = value_sizes_t(values_count, 0);
+    value_sizes_buffer_ = value_lengths_t(values_count, 0);
 
     batch_insert_length_generator_ = create_batch_insert_length_generator(workload);
     batch_read_length_generator_ = create_batch_read_length_generator(workload);
@@ -297,7 +297,7 @@ inline transaction_t::values_and_sizes_spans_t transaction_t::generate_values() 
         total_length += length;
     }
     return std::make_pair(values_span_t(values_buffer_.data(), total_length),
-                          value_sizes_span_t(value_sizes_buffer_.data(), values_count));
+                          value_lengths_span_t(value_sizes_buffer_.data(), values_count));
 }
 
 inline value_span_t transaction_t::value_buffer() {

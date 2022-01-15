@@ -26,7 +26,7 @@ using keys_spanc_t = ucsb::keys_spanc_t;
 using value_span_t = ucsb::value_span_t;
 using value_spanc_t = ucsb::value_spanc_t;
 using values_spanc_t = ucsb::values_spanc_t;
-using value_sizes_spanc_t = ucsb::value_sizes_spanc_t;
+using value_lengths_spanc_t = ucsb::value_lengths_spanc_t;
 using operation_status_t = ucsb::operation_status_t;
 using operation_result_t = ucsb::operation_result_t;
 
@@ -50,7 +50,7 @@ struct leveldb_t : public ucsb::db_t {
     operation_result_t remove(key_t key) override;
 
     operation_result_t read(key_t key, value_span_t value) const override;
-    operation_result_t batch_insert(keys_spanc_t keys, values_spanc_t values, value_sizes_spanc_t sizes) override;
+    operation_result_t batch_insert(keys_spanc_t keys, values_spanc_t values, value_lengths_spanc_t sizes) override;
     operation_result_t batch_read(keys_spanc_t keys) const override;
 
     operation_result_t range_select(key_t key, size_t length, value_span_t single_value) const override;
@@ -140,9 +140,9 @@ void leveldb_t::destroy() {
 }
 
 operation_result_t leveldb_t::insert(key_t key, value_spanc_t value) {
+    leveldb::Slice slice {reinterpret_cast<char const*>(&key), sizeof(key)};
     std::string data(reinterpret_cast<char const*>(value.data()), value.size());
     leveldb::WriteOptions wopt;
-    leveldb::Slice slice {reinterpret_cast<char const*>(&key), sizeof(key)};
     leveldb::Status status = db_->Put(wopt, slice, data);
     if (!status.ok())
         return {0, operation_status_t::error_k};
@@ -190,7 +190,7 @@ operation_result_t leveldb_t::read(key_t key, value_span_t value) const {
     return {1, operation_status_t::ok_k};
 }
 
-operation_result_t leveldb_t::batch_insert(keys_spanc_t keys, values_spanc_t values, value_sizes_spanc_t sizes) {
+operation_result_t leveldb_t::batch_insert(keys_spanc_t keys, values_spanc_t values, value_lengths_spanc_t sizes) {
     return {0, operation_status_t::not_implemented_k};
 }
 

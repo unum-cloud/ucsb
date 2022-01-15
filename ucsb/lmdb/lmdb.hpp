@@ -21,7 +21,7 @@ using keys_spanc_t = ucsb::keys_spanc_t;
 using value_span_t = ucsb::value_span_t;
 using value_spanc_t = ucsb::value_spanc_t;
 using values_spanc_t = ucsb::values_spanc_t;
-using value_sizes_spanc_t = ucsb::value_sizes_spanc_t;
+using value_lengths_spanc_t = ucsb::value_lengths_spanc_t;
 using operation_status_t = ucsb::operation_status_t;
 using operation_result_t = ucsb::operation_result_t;
 
@@ -44,7 +44,7 @@ struct lmdb_t : public ucsb::db_t {
     operation_result_t remove(key_t key) override;
 
     operation_result_t read(key_t key, value_span_t value) const override;
-    operation_result_t batch_insert(keys_spanc_t keys, values_spanc_t values, value_sizes_spanc_t sizes) override;
+    operation_result_t batch_insert(keys_spanc_t keys, values_spanc_t values, value_lengths_spanc_t sizes) override;
     operation_result_t batch_read(keys_spanc_t keys) const override;
 
     operation_result_t range_select(key_t key, size_t length, value_span_t single_value) const override;
@@ -275,7 +275,7 @@ operation_result_t lmdb_t::read(key_t key, value_span_t value) const {
     return {1, operation_status_t::ok_k};
 }
 
-operation_result_t lmdb_t::batch_insert(keys_spanc_t keys, values_spanc_t values, value_sizes_spanc_t sizes) {
+operation_result_t lmdb_t::batch_insert(keys_spanc_t keys, values_spanc_t values, value_lengths_spanc_t sizes) {
     return {0, operation_status_t::not_implemented_k};
 }
 
