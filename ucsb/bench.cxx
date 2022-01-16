@@ -23,6 +23,7 @@ using workloads_t = ucsb::workloads_t;
 using db_t = ucsb::db_t;
 using db_kind_t = ucsb::db_kind_t;
 using factory_t = ucsb::factory_t;
+using timer_ref_t = ucsb::timer_ref_t;
 using transaction_t = ucsb::transaction_t;
 using operation_kind_t = ucsb::operation_kind_t;
 using operation_status_t = ucsb::operation_status_t;
@@ -204,12 +205,12 @@ inline operation_chooser_t create_operation_chooser(workload_t const& workload) 
     chooser->add(operation_kind_t::update_k, workload.update_proportion);
     chooser->add(operation_kind_t::remove_k, workload.remove_proportion);
     chooser->add(operation_kind_t::read_k, workload.read_proportion);
+    chooser->add(operation_kind_t::read_modify_write_k, workload.read_modify_write_proportion);
     chooser->add(operation_kind_t::batch_insert_k, workload.batch_insert_proportion);
     chooser->add(operation_kind_t::batch_read_k, workload.batch_read_proportion);
     chooser->add(operation_kind_t::bulk_import_k, workload.bulk_import_proportion);
     chooser->add(operation_kind_t::range_select_k, workload.range_select_proportion);
     chooser->add(operation_kind_t::scan_k, workload.scan_proportion);
-    chooser->add(operation_kind_t::read_modify_write_k, workload.read_modify_write_proportion);
     return chooser;
 }
 
@@ -221,7 +222,8 @@ void transaction(bm::State& state, workload_t const& workload, db_t& db) {
     }
 
     auto chooser = create_operation_chooser(workload);
-    transaction_t transaction(workload, db);
+    timer_ref_t timer(state);
+    transaction_t transaction(workload, db, timer);
 
     static size_t fails = 0;
     static size_t operations_done = 0;
@@ -248,12 +250,12 @@ void transaction(bm::State& state, workload_t const& workload, db_t& db) {
         case operation_kind_t::update_k: result = transaction.do_update(); break;
         case operation_kind_t::remove_k: result = transaction.do_remove(); break;
         case operation_kind_t::read_k: result = transaction.do_read(); break;
+        case operation_kind_t::read_modify_write_k: result = transaction.do_read_modify_write(); break;
         case operation_kind_t::batch_insert_k: result = transaction.do_batch_insert(); break;
         case operation_kind_t::batch_read_k: result = transaction.do_batch_read(); break;
         case operation_kind_t::bulk_import_k: result = transaction.do_bulk_import(); break;
         case operation_kind_t::range_select_k: result = transaction.do_range_select(); break;
         case operation_kind_t::scan_k: result = transaction.do_scan(); break;
-        case operation_kind_t::read_modify_write_k: result = transaction.do_read_modify_write(); break;
         default: throw exception_t("Unknown operation"); break;
         }
 
