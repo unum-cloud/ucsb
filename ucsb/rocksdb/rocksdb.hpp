@@ -55,8 +55,8 @@ struct rocksdb_t : public ucsb::db_t {
     operation_result_t batch_read(keys_spanc_t keys) const override;
 
     bulk_metadata_t prepare_bulk_import_data(keys_spanc_t keys,
-                                                 values_spanc_t values,
-                                                 value_lengths_spanc_t sizes) const override;
+                                             values_spanc_t values,
+                                             value_lengths_spanc_t sizes) const override;
     operation_result_t bulk_import(bulk_metadata_t const& metadata) override;
 
     operation_result_t range_select(key_t key, size_t length, value_span_t single_value) const override;
@@ -238,15 +238,15 @@ operation_result_t rocksdb_t::batch_read(keys_spanc_t keys) const {
 }
 
 bulk_metadata_t rocksdb_t::prepare_bulk_import_data(keys_spanc_t keys,
-                                                        values_spanc_t values,
-                                                        value_lengths_spanc_t sizes) const {
+                                                    values_spanc_t values,
+                                                    value_lengths_spanc_t sizes) const {
     size_t data_idx = 0;
     size_t data_offset = 0;
     bulk_metadata_t bulk_metadata;
-    for(size_t i = 0; true; ++i) {
+    for (size_t i = 0; true; ++i) {
         std::string sst_file_path = fmt::format("/tmp/rocksdb_tmp_{}.sst", i);
         bulk_metadata.files.insert(sst_file_path);
-        
+
         rocksdb::SstFileWriter sst_file_writer(rocksdb::EnvOptions(), options_, options_.comparator);
         rocksdb::Status status = sst_file_writer.Open(sst_file_path);
         if (!status.ok())
@@ -272,23 +272,23 @@ bulk_metadata_t rocksdb_t::prepare_bulk_import_data(keys_spanc_t keys,
             break;
     }
 
-    if(data_idx != keys.size()) {
-        for(auto const& file_path : bulk_metadata.files)
+    if (data_idx != keys.size()) {
+        for (auto const& file_path : bulk_metadata.files)
             fs::remove(file_path);
-        throw ucsb::exception_t("RocksDB sst file creation failed");
+        return bulk_metadata_t();
     }
 
     return bulk_metadata;
 }
 
 operation_result_t rocksdb_t::bulk_import(bulk_metadata_t const& metadata) {
-    
+
     rocksdb::IngestExternalFileOptions ingest_options;
     ingest_options.move_files = true;
-    for(auto file_it = metadata.files.cbegin(); file_it != metadata.files.cend(); ++file_it) {
+    for (auto file_it = metadata.files.cbegin(); file_it != metadata.files.cend(); ++file_it) {
         rocksdb::Status status = db_->IngestExternalFile({*file_it}, ingest_options);
         if (!status.ok()) {
-            for(; file_it != metadata.files.cend(); ++file_it)
+            for (; file_it != metadata.files.cend(); ++file_it)
                 fs::remove(*file_it);
             return {0, operation_status_t::error_k};
         }

@@ -48,8 +48,8 @@ struct unumdb_t : public ucsb::db_t {
     operation_result_t batch_read(keys_spanc_t keys) const override;
 
     bulk_metadata_t prepare_bulk_import_data(keys_spanc_t keys,
-                                                 values_spanc_t values,
-                                                 value_lengths_spanc_t sizes) const override;
+                                             values_spanc_t values,
+                                             value_lengths_spanc_t sizes) const override;
     operation_result_t bulk_import(bulk_metadata_t const& metadata) override;
 
     operation_result_t range_select(key_t key, size_t length, value_span_t single_value) const override;
@@ -188,8 +188,8 @@ operation_result_t unumdb_t::batch_read(keys_spanc_t keys) const {
 }
 
 bulk_metadata_t unumdb_t::prepare_bulk_import_data(keys_spanc_t keys,
-                                                       values_spanc_t values,
-                                                       value_lengths_spanc_t sizes) const {
+                                                   values_spanc_t values,
+                                                   value_lengths_spanc_t sizes) const {
     bulk_metadata_t bulk_metadata;
     std::string file_path = fmt::format("/tmp/unumdb_tmp");
 
@@ -200,7 +200,7 @@ bulk_metadata_t unumdb_t::prepare_bulk_import_data(keys_spanc_t keys,
 }
 
 operation_result_t unumdb_t::bulk_import(bulk_metadata_t const& metadata) {
-    for(auto const& file_path : metadata.files)
+    for (auto const& file_path : metadata.files)
         region_.import({file_path.data(), file_path.size()});
 
     return {metadata.files.size(), operation_status_t::ok_k};

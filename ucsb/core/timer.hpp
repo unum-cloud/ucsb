@@ -9,8 +9,8 @@ namespace ucsb {
 struct timer_ref_t {
     inline timer_ref_t(bm::State& state) : state_(&state) {}
 
-    inline pause() { state_->PauseTiming(); }
-    inline resume() { state_->ResumeTiming(); }
+    inline void pause() { state_->PauseTiming(); }
+    inline void resume() { state_->ResumeTiming(); }
 
   private:
     bm::State* state_;
