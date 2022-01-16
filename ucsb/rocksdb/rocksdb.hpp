@@ -189,7 +189,6 @@ operation_result_t rocksdb_t::batch_insert(keys_spanc_t keys, values_spanc_t val
 
     size_t idx = 0;
     size_t offset = 0;
-    auto adsfasd = keys.size();
     for (; idx < keys.size(); ++idx) {
         auto key = keys[idx];
 
@@ -241,10 +240,62 @@ operation_result_t rocksdb_t::batch_read(keys_spanc_t keys) const {
 bulk_metadata_t rocksdb_t::prepare_bulk_import_data(keys_spanc_t keys,
                                                         values_spanc_t values,
                                                         value_lengths_spanc_t sizes) const {
+    size_t data_idx = 0;
+    size_t data_offset = 0;
+    bulk_metadata_t bulk_metadata;
+    for(size_t i = 0; true; ++i) {
+        std::string sst_file_path = fmt::format("/tmp/rocksdb_tmp_{}.sst", i);
+        bulk_metadata.files.insert(sst_file_path);
+        
+        rocksdb::SstFileWriter sst_file_writer(rocksdb::EnvOptions(), options_, options_.comparator);
+        rocksdb::Status status = sst_file_writer.Open(sst_file_path);
+        if (!status.ok())
+            break;
+
+        for (; data_idx < keys.size(); ++data_idx) {
+            auto key = keys[data_idx];
+
+            // Warning: if not using custom comparator need to swap little endian to big endian
+            if (options_.comparator != &key_cmp_)
+                key = __builtin_bswap64(key);
+
+            rocksdb::Slice slice {reinterpret_cast<char const*>(&key), sizeof(key)};
+            std::string data(reinterpret_cast<char const*>(values.data() + data_offset), sizes[data_idx]);
+            status = sst_file_writer.Add(slice, data);
+            if (status.ok())
+                data_offset += sizes[data_idx];
+            else
+                break;
+        }
+        status = sst_file_writer.Finish();
+        if (!status.ok() || data_idx == keys.size())
+            break;
+    }
+
+    if(data_idx != keys.size()){
+        for(auto file_path : bulk_metadata.files)
+            fs::remove(file_path);
+        throw ucsb::exception_t("RocksDB sst file creation failed");
+    }
+
+    return bulk_metadata;
 }
 
 operation_result_t rocksdb_t::bulk_import(bulk_metadata_t const& metadata) {
-    return {0, operation_status_t::not_implemented_k};
+    
+    rocksdb::IngestExternalFileOptions ingest_options;
+    ingest_options.move_files = true;
+    for(auto sst_file_path : metadata.files) {
+        rocksdb::Status status = db_->IngestExternalFile({sst_file_path}, ingest_options);
+        if (!status.ok()) {
+            for(auto file_path : metadata.files)
+                fs::remove(file_path);
+            return {0, operation_status_t::error_k};
+        }
+        fs::remove(sst_file_path);
+    }
+
+    return {0, operation_status_t::ok_k};
 }
 
 operation_result_t rocksdb_t::range_select(key_t key, size_t length, value_span_t single_value) const {

@@ -1,6 +1,5 @@
 #pragma once
-
-#include <unordered_map>
+#include <set>
 
 #include "ucsb/core/types.hpp"
 #include "ucsb/core/operation.hpp"
@@ -8,7 +7,7 @@
 namespace ucsb {
 
 struct bulk_metadata_t {
-    std::unordered_map<std::string, std::string> properties;
+    std::set<std::string> files;
 };
 
 /**

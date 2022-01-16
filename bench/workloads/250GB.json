@@ -1,0 +1,13 @@
+[
+    {
+        "name": "BulkImport",
+        "records_count": 26000000,
+        "operations_count": 400,
+        "bulk_import_proportion": 1.0,
+        "key_dist": "zipfian",
+        "value_length": 1024,
+        "bulk_import_min_length": 65000,
+        "bulk_import_max_length": 65000,
+        "bulk_import_length_dist": "uniform"
+    }
+]

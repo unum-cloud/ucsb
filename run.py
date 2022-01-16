@@ -27,6 +27,7 @@ sizes = [
     '1GB',
     '10GB',
     '100GB',
+    '250GB',
     '1TB',
 ]
 
@@ -39,6 +40,7 @@ workload_names = [
     'ReadUpdate_50_50',
     'ReadInsert_95_5',
     'BatchInsert',
+    'BulkImport',
     'Remove',
 ]
 
@@ -52,6 +54,7 @@ def get_db_config_path(db_name, size):
 
 def get_worklods_path(size):
     return f'./bench/workloads/{size}.json'
+
 
 def drop_system_caches():
     subprocess.run(['sudo', 'sh', '-c', '/usr/bin/echo', '3', '>', '/proc/sys/vm/drop_caches'])

@@ -312,9 +312,9 @@ inline keys_spanc_t transaction_t::generate_batch_read_keys() {
 }
 
 inline keys_spanc_t transaction_t::generate_bulk_import_keys() {
-    size_t batch_length = bulk_import_length_generator_->generate();
-    keys_span_t keys(keys_buffer_.data(), batch_length);
-    for (size_t i = 0; i < batch_length; ++i) {
+    size_t bulk_length = bulk_import_length_generator_->generate();
+    keys_span_t keys(keys_buffer_.data(), bulk_length);
+    for (size_t i = 0; i < bulk_length; ++i) {
         key_t key = insert_key_sequence_generator->generate();
         keys[i] = key;
         if (acknowledged_key_generator)

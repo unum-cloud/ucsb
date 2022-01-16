@@ -192,8 +192,7 @@ bulk_metadata_t unumdb_t::prepare_bulk_import_data(keys_spanc_t keys,
                                                        value_lengths_spanc_t sizes) const {
 }
 
-operation_result_t unumdb_t::bulk_import(bulk_metadata_t const& metadata)
- {
+operation_result_t unumdb_t::bulk_import(bulk_metadata_t const& metadata) {
     return {0, operation_status_t::not_implemented_k};
 }
 
