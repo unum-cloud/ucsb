@@ -1,6 +1,8 @@
 
 import os
+import sys
 import time
+import errno
 import shutil
 import subprocess
 
@@ -57,7 +59,7 @@ def get_worklods_path(size):
 
 
 def drop_system_caches():
-    subprocess.run(['sudo', 'sh', '-c', '/usr/bin/echo', '3', '>', '/proc/sys/vm/drop_caches'])
+    subprocess.run(['sh', '-c', '/usr/bin/echo', '3', '>', '/proc/sys/vm/drop_caches'])
 
 
 def run(db_name, size, threads_count, workload_names):
@@ -65,7 +67,6 @@ def run(db_name, size, threads_count, workload_names):
     workloads_path = get_worklods_path(size)
 
     process = subprocess.Popen([
-            'sudo',
             './build_release/bin/_ucsb_bench',
             '-db', db_name,
             '-c', config_path,
@@ -82,6 +83,8 @@ def run(db_name, size, threads_count, workload_names):
         if not line:
             break
 
+if os.geteuid() != 0:
+    sys.exit("Run as sudo!")
 
 if cleanup_previous_dbmses:
     shutil.rmtree('./tmp/')
