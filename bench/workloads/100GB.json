@@ -76,7 +76,7 @@
     {
         "name": "Remove",
         "records_count": 100000000,
-        "operations_count": 25000000,
+        "operations_count": 15000000,
         "remove_proportion": 1.0,
         "key_dist": "zipfian"
     }
