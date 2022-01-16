@@ -39,6 +39,7 @@ workload_names = [
     'ReadUpdate_50_50',
     'ReadInsert_95_5',
     'BatchInsert',
+    'BatchInsert',
     'Remove',
 ]
 

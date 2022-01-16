@@ -32,12 +32,12 @@ struct transaction_t {
     inline operation_result_t do_update();
     inline operation_result_t do_remove();
     inline operation_result_t do_read();
+    inline operation_result_t do_read_modify_write();
     inline operation_result_t do_batch_insert();
     inline operation_result_t do_batch_read();
     inline operation_result_t do_bulk_import();
     inline operation_result_t do_range_select();
     inline operation_result_t do_scan();
-    inline operation_result_t do_read_modify_write();
 
   private:
     inline key_generator_t create_key_generator(workload_t const& workload, counter_generator_t& counter_generator);
@@ -127,6 +127,15 @@ inline operation_result_t transaction_t::do_read() {
     return db_->read(key, value);
 }
 
+inline operation_result_t transaction_t::do_read_modify_write() {
+    key_t key = generate_key();
+    value_span_t read_value = value_buffer();
+    db_->read(key, read_value);
+
+    value_spanc_t value = generate_value();
+    return db_->update(key, value);
+}
+
 inline operation_result_t transaction_t::do_batch_insert() {
     // Note: Pause benchmark timer to do data preparation, to measure batch insert time only
     timer_.pause();
@@ -163,15 +172,6 @@ inline operation_result_t transaction_t::do_range_select() {
 inline operation_result_t transaction_t::do_scan() {
     value_span_t single_value = value_buffer();
     return db_->scan(single_value);
-}
-
-inline operation_result_t transaction_t::do_read_modify_write() {
-    key_t key = generate_key();
-    value_span_t read_value = value_buffer();
-    db_->read(key, read_value);
-
-    value_spanc_t value = generate_value();
-    return db_->update(key, value);
 }
 
 inline transaction_t::key_generator_t transaction_t::create_key_generator(workload_t const& workload,

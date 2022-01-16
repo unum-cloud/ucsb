@@ -27,12 +27,12 @@ struct workload_t {
     float update_proportion = 0;
     float remove_proportion = 0;
     float read_proportion = 0;
+    float read_modify_write_proportion = 0;
     float batch_insert_proportion = 0;
     float batch_read_proportion = 0;
     float bulk_import_proportion = 0;
     float range_select_proportion = 0;
     float scan_proportion = 0;
-    float read_modify_write_proportion = 0;
 
     key_t start_key = 0; // Can be changed by the program based on threads count
     distribution_kind_t key_dist = distribution_kind_t::uniform_k;
@@ -100,12 +100,12 @@ bool load(fs::path const& path, workloads_t& workloads) {
         workload.update_proportion = (*j_workload).value("update_proportion", 0.0);
         workload.remove_proportion = (*j_workload).value("remove_proportion", 0.0);
         workload.read_proportion = (*j_workload).value("read_proportion", 0.0);
+        workload.read_modify_write_proportion = (*j_workload).value("read_modify_write_proportion", 0.0);
         workload.batch_insert_proportion = (*j_workload).value("batch_insert_proportion", 0.0);
         workload.batch_read_proportion = (*j_workload).value("batch_read_proportion", 0.0);
         workload.bulk_import_proportion = (*j_workload).value("bulk_import_proportion", 0.0);
         workload.range_select_proportion = (*j_workload).value("range_select_proportion", 0.0);
         workload.scan_proportion = (*j_workload).value("scan_proportion", 0.0);
-        workload.read_modify_write_proportion = (*j_workload).value("read_modify_write_proportion", 0.0);
 
         workload.start_key = (*j_workload).value("start_key", 0);
         workload.key_dist = parse_distribution((*j_workload).value("key_dist", "uniform"));
