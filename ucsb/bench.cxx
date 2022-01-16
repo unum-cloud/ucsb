@@ -2,6 +2,7 @@
 #include <string>
 #include <vector>
 #include <fmt/format.h>
+#include <nlohmann/json.hpp>
 #include <benchmark/benchmark.h>
 
 #include "ucsb/core/types.hpp"
@@ -14,6 +15,7 @@
 #include "ucsb/core/operation.hpp"
 #include "ucsb/core/exception.hpp"
 #include "ucsb/core/format.hpp"
+#include "ucsb/core/results.hpp"
 
 namespace bm = benchmark;
 
@@ -294,8 +296,19 @@ void transaction(bm::State& state, workload_t const& workload, db_t& db) {
 
 int main(int argc, char** argv) {
 
+    // Setup settings
     settings_t settings;
     parse_args(argc, argv, settings);
+    settings.db_dir_path = fmt::format("./tmp/{}/{}/", settings.db_name, settings.workloads_path.stem().c_str());
+    std::string results_dir_path(fmt::format("./bench/results/cores_{}/{}/", settings.threads_count, settings.db_name));
+    std::string results_file_path = fmt::format("{}{}.json", results_dir_path, settings.workloads_path.stem().c_str());
+    std::string partial_results_file_path =
+        fmt::format("{}{}_partial.json", results_dir_path, settings.workloads_path.stem().c_str());
+    bool partial_benchmark = !settings.workload_filter.empty();
+    if (partial_benchmark)
+        settings.results_path = partial_results_file_path;
+    else
+        settings.results_path = results_file_path;
 
     // Prepare worklods
     workloads_t workloads;
@@ -317,14 +330,6 @@ int main(int argc, char** argv) {
         std::vector<workload_t> splited_workloads = split_workload_into_threads(workload, settings.threads_count);
         threads_workloads.push_back(splited_workloads);
     }
-
-    // Setup settings
-    settings.db_dir_path = fmt::format("./tmp/{}/{}/", settings.db_name, settings.workloads_path.stem().c_str());
-    std::string result_name = settings.workloads_path.stem().c_str();
-    if (!settings.workload_filter.empty() && workloads.size() == 1)
-        result_name = fmt::format("{}/{}", result_name, workloads.front().name);
-    settings.results_path =
-        fmt::format("./bench/results/cores_{}/{}/{}.json", settings.threads_count, settings.db_name, result_name);
 
     ucsb::fs::create_directories(settings.db_dir_path);
     ucsb::fs::create_directories(settings.results_path.parent_path());
@@ -349,6 +354,11 @@ int main(int argc, char** argv) {
     }
 
     run_benchmarks(argc, argv, settings);
+
+    if (partial_benchmark) {
+        ucsb::marge_results(partial_results_file_path, results_file_path);
+        ucsb::fs::remove(partial_results_file_path);
+    }
 
     return 0;
 }
