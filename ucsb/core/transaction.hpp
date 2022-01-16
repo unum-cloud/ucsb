@@ -4,9 +4,10 @@
 #include <vector>
 #include <fmt/format.h>
 
-#include "types.hpp"
+#include "ucsb/core/types.hpp"
 #include "ucsb/core/db.hpp"
 #include "ucsb/core/workload.hpp"
+#include "ucsb/core/timer.hpp"
 #include "ucsb/core/generators/generator.hpp"
 #include "ucsb/core/generators/const_generator.hpp"
 #include "ucsb/core/generators/counter_generator.hpp"
@@ -25,7 +26,7 @@ struct transaction_t {
     using length_generator_t = std::unique_ptr<generator_gt<size_t>>;
     using values_and_sizes_spansc_t = std::pair<values_spanc_t, value_lengths_spanc_t>;
 
-    inline transaction_t(workload_t const& workload, db_t& db);
+    inline transaction_t(workload_t const& workload, db_t& db, timer_ref_t timer);
 
     inline operation_result_t do_insert();
     inline operation_result_t do_update();
@@ -56,6 +57,7 @@ struct transaction_t {
 
     workload_t workload_;
     db_t* db_;
+    timer_ref_t timer_;
 
     key_generator_t insert_key_sequence_generator;
     acknowledged_key_generator_t acknowledged_key_generator;
@@ -73,7 +75,8 @@ struct transaction_t {
     length_generator_t range_select_length_generator_;
 };
 
-inline transaction_t::transaction_t(workload_t const& workload, db_t& db) : workload_(workload), db_(&db) {
+inline transaction_t::transaction_t(workload_t const& workload, db_t& db, timer_ref_t timer)
+    : workload_(workload), db_(&db), timer_(timer) {
 
     if (workload.insert_proportion == 1.0 || workload.batch_insert_proportion == 1.0 ||
         workload.bulk_import_proportion == 1.0) // Initialization case
@@ -125,8 +128,12 @@ inline operation_result_t transaction_t::do_read() {
 }
 
 inline operation_result_t transaction_t::do_batch_insert() {
+    // Note: Pause benchmark timer to do data preparation, to measure batch insert time only
+    timer_.pause();
     keys_spanc_t keys = generate_batch_insert_keys();
     values_and_sizes_spansc_t values_and_sizes = generate_values(keys.size());
+    timer_.resume();
+
     return db_->batch_insert(keys, values_and_sizes.first, values_and_sizes.second);
 }
 
@@ -136,10 +143,12 @@ inline operation_result_t transaction_t::do_batch_read() {
 }
 
 inline operation_result_t transaction_t::do_bulk_import() {
-    // TODO: Need pause timing
+    // Note: Pause benchmark timer to do data preparation, to measure bulk import time only
+    timer_.pause();
     keys_spanc_t keys = generate_bulk_import_keys();
     values_and_sizes_spansc_t values_and_sizes = generate_values(keys.size());
     auto meta_data = db_->prepare_data_for_bulk_import(keys, values_and_sizes.first, values_and_sizes.second);
+    timer_.resume();
 
     return db_->bulk_import(meta_data);
 }

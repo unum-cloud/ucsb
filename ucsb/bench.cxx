@@ -23,6 +23,7 @@ using workloads_t = ucsb::workloads_t;
 using db_t = ucsb::db_t;
 using db_kind_t = ucsb::db_kind_t;
 using factory_t = ucsb::factory_t;
+using timer_ref_t = ucsb::timer_ref_t;
 using transaction_t = ucsb::transaction_t;
 using operation_kind_t = ucsb::operation_kind_t;
 using operation_status_t = ucsb::operation_status_t;
@@ -221,7 +222,8 @@ void transaction(bm::State& state, workload_t const& workload, db_t& db) {
     }
 
     auto chooser = create_operation_chooser(workload);
-    transaction_t transaction(workload, db);
+    timer_ref_t timer(state);
+    transaction_t transaction(workload, db, timer);
 
     static size_t fails = 0;
     static size_t operations_done = 0;
