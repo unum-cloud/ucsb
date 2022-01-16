@@ -73,17 +73,17 @@
         "batch_insert_max_length": 4096,
         "batch_insert_length_dist": "uniform"
     },
-    {
-        "name": "BulkImport",
-        "records_count": 1000000,
-        "operations_count": 25,
-        "bulk_import_proportion": 1.0,
-        "key_dist": "zipfian",
-        "value_length": 1024,
-        "bulk_import_min_length": 4096,
-        "bulk_import_max_length": 4096,
-        "bulk_import_length_dist": "uniform"
-    },
+    // {
+    //     "name": "BulkImport",
+    //     "records_count": 1000000,
+    //     "operations_count": 25,
+    //     "bulk_import_proportion": 1.0,
+    //     "key_dist": "zipfian",
+    //     "value_length": 1024,
+    //     "bulk_import_min_length": 4096,
+    //     "bulk_import_max_length": 4096,
+    //     "bulk_import_length_dist": "uniform"
+    // },
     {
         "name": "Remove",
         "records_count": 1000000,
