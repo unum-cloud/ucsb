@@ -292,7 +292,6 @@ operation_result_t rocksdb_t::bulk_import(bulk_metadata_t const& metadata) {
                 fs::remove(*file_it);
             return {0, operation_status_t::error_k};
         }
-        fs::remove(*file_it);
     }
 
     return {metadata.files.size(), operation_status_t::ok_k};
