@@ -7,7 +7,7 @@ import shutil
 import subprocess
 
 drop_caches = False
-cleanup_previous_dbmses = False
+cleanup_previous_dbs = False
 
 threads = [
     1,
@@ -86,7 +86,7 @@ def run(db_name, size, threads_count, workload_names):
 if os.geteuid() != 0:
     sys.exit("Run as sudo!")
 
-if cleanup_previous_dbmses:
+if cleanup_previous_dbs:
     shutil.rmtree('./tmp/')
 
 for threads_count in threads:
