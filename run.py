@@ -65,6 +65,7 @@ def run(db_name, size, threads_count, workload_names):
     workloads_path = get_worklods_path(size)
 
     process = subprocess.Popen([
+            'sudo',
             './build_release/bin/_ucsb_bench',
             '-db', db_name,
             '-c', config_path,
