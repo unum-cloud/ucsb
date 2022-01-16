@@ -190,11 +190,37 @@ operation_result_t unumdb_t::batch_read(keys_spanc_t keys) const {
 bulk_metadata_t unumdb_t::prepare_bulk_import_data(keys_spanc_t keys,
                                                    values_spanc_t values,
                                                    value_lengths_spanc_t sizes) const {
+    size_t data_idx = 0;
+    size_t data_offset = 0;
     bulk_metadata_t bulk_metadata;
-    std::string file_path = fmt::format("/tmp/unumdb_tmp");
+    for (size_t i = 0; i < keys.size(); i += 130'000) {
+        std::string file_name = fmt::format("udb_building_{}", i / 130'000);
+        bulk_metadata.files.insert(file_name);
 
-    bulk_metadata.files.insert(file_path);
-    auto building = region_t::building_constructor_t::build("tmp", {file_path.data(), file_path.size()}, {});
+        size_t next_data_idx = i + 130'000;
+        if (next_data_idx > keys.size())
+            next_data_idx = keys.size();
+
+        size_t next_data_offset = data_offset;
+        for (size_t j = 0; j < next_data_idx; ++j)
+            next_data_offset += sizes[j];
+
+        span_gt<fingerprint_t> fingerprints {
+            const_cast<fingerprint_t*>(reinterpret_cast<fingerprint_t const*>(keys.data() + i)),
+            next_data_idx - i};
+        span_bytes_t citizens {const_cast<byte_t*>(reinterpret_cast<byte_t const*>(values.data() + next_data_offset)),
+                               next_data_offset - data_offset};
+        span_gt<citizen_size_t> citizen_sizes {
+            const_cast<citizen_size_t*>(reinterpret_cast<citizen_size_t const*>(sizes.data() + i)),
+            next_data_idx - i};
+
+        auto building = region_t::building_constructor_t::build({file_name.data(), file_name.size()},
+                                                                {},
+                                                                fingerprints,
+                                                                citizens,
+                                                                citizen_sizes,
+                                                                ds_info_t::sorted_k);
+    }
 
     return bulk_metadata;
 }
