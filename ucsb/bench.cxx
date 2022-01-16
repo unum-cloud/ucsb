@@ -199,18 +199,18 @@ std::vector<workload_t> split_workload_into_threads(workload_t const& workload, 
 }
 
 inline operation_chooser_t create_operation_chooser(workload_t const& workload) {
-    operation_chooser_t chooer = std::make_unique<ucsb::operation_chooser_t>();
-    chooer->add(operation_kind_t::insert_k, workload.insert_proportion);
-    chooer->add(operation_kind_t::update_k, workload.update_proportion);
-    chooer->add(operation_kind_t::remove_k, workload.remove_proportion);
-    chooer->add(operation_kind_t::read_k, workload.read_proportion);
-    chooer->add(operation_kind_t::batch_insert_k, workload.batch_insert_proportion);
-    chooer->add(operation_kind_t::batch_read_k, workload.batch_read_proportion);
-    chooer->add(operation_kind_t::bulk_import_k, workload.bulk_import_proportion);
-    chooer->add(operation_kind_t::range_select_k, workload.range_select_proportion);
-    chooer->add(operation_kind_t::scan_k, workload.scan_proportion);
-    chooer->add(operation_kind_t::read_modify_write_k, workload.read_modify_write_proportion);
-    return chooer;
+    operation_chooser_t chooser = std::make_unique<ucsb::operation_chooser_t>();
+    chooser->add(operation_kind_t::insert_k, workload.insert_proportion);
+    chooser->add(operation_kind_t::update_k, workload.update_proportion);
+    chooser->add(operation_kind_t::remove_k, workload.remove_proportion);
+    chooser->add(operation_kind_t::read_k, workload.read_proportion);
+    chooser->add(operation_kind_t::batch_insert_k, workload.batch_insert_proportion);
+    chooser->add(operation_kind_t::batch_read_k, workload.batch_read_proportion);
+    chooser->add(operation_kind_t::bulk_import_k, workload.bulk_import_proportion);
+    chooser->add(operation_kind_t::range_select_k, workload.range_select_proportion);
+    chooser->add(operation_kind_t::scan_k, workload.scan_proportion);
+    chooser->add(operation_kind_t::read_modify_write_k, workload.read_modify_write_proportion);
+    return chooser;
 }
 
 void transaction(bm::State& state, workload_t const& workload, db_t& db) {
