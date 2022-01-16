@@ -1,9 +1,15 @@
 #pragma once
 
+#include <unordered_map>
+
 #include "ucsb/core/types.hpp"
 #include "ucsb/core/operation.hpp"
 
 namespace ucsb {
+
+struct bulk_metadata_t {
+    std::unordered_map<std::string, std::string> properties;
+};
 
 /**
  * @brief A base class for benchmarking key-value stores.
@@ -74,6 +80,15 @@ struct db_t {
      * check them under the hood.
      */
     virtual operation_result_t batch_read(keys_spanc_t keys) const = 0;
+
+    /**
+     * @brief Performs bulk import from external prepared data.
+     * Keys are in strict ascending order
+     */
+    virtual bulk_metadata_t prepare_data_for_bulk_import(keys_spanc_t keys,
+                                                         values_spanc_t values,
+                                                         value_lengths_spanc_t sizes) const = 0;
+    virtual operation_result_t bulk_import(bulk_metadata_t const& metadata) = 0;
 
     /**
      * @brief Performs many reads at once in an ordered fashion,

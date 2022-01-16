@@ -20,6 +20,7 @@ using value_span_t = ucsb::value_span_t;
 using value_spanc_t = ucsb::value_spanc_t;
 using values_spanc_t = ucsb::values_spanc_t;
 using value_lengths_spanc_t = ucsb::value_lengths_spanc_t;
+using bulk_metadata_t = ucsb::bulk_metadata_t;
 using operation_status_t = ucsb::operation_status_t;
 using operation_result_t = ucsb::operation_result_t;
 
@@ -46,6 +47,11 @@ struct wiredtiger_t : public ucsb::db_t {
     operation_result_t read(key_t key, value_span_t value) const override;
     operation_result_t batch_insert(keys_spanc_t keys, values_spanc_t values, value_lengths_spanc_t sizes) override;
     operation_result_t batch_read(keys_spanc_t keys) const override;
+
+    bulk_metadata_t prepare_data_for_bulk_import(keys_spanc_t keys,
+                                                 values_spanc_t values,
+                                                 value_lengths_spanc_t sizes) const override;
+    operation_result_t bulk_import(bulk_metadata_t const& metadata) override;
 
     operation_result_t range_select(key_t key, size_t length, value_span_t single_value) const override;
     operation_result_t scan(value_span_t single_value) const override;
@@ -215,6 +221,19 @@ operation_result_t wiredtiger_t::batch_read(keys_spanc_t keys) const {
         cursor_->reset(cursor_);
     }
     return {keys.size(), operation_status_t::ok_k};
+}
+
+bulk_metadata_t wiredtiger_t::prepare_data_for_bulk_import(keys_spanc_t keys,
+                                                           values_spanc_t values,
+                                                           value_lengths_spanc_t sizes) const {
+    (void)keys;
+    (void)values;
+    (void)sizes;
+    // This DB doesn't support bulk import
+}
+
+operation_result_t wiredtiger_t::bulk_import(bulk_metadata_t const& metadata) {
+    return {0, operation_status_t::not_implemented_k};
 }
 
 operation_result_t wiredtiger_t::range_select(key_t key, size_t length, value_span_t single_value) const {

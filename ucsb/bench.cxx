@@ -206,6 +206,7 @@ inline operation_chooser_t create_operation_chooser(workload_t const& workload) 
     chooer->add(operation_kind_t::read_k, workload.read_proportion);
     chooer->add(operation_kind_t::batch_insert_k, workload.batch_insert_proportion);
     chooer->add(operation_kind_t::batch_read_k, workload.batch_read_proportion);
+    chooer->add(operation_kind_t::bulk_import_k, workload.bulk_import_proportion);
     chooer->add(operation_kind_t::range_select_k, workload.range_select_proportion);
     chooer->add(operation_kind_t::scan_k, workload.scan_proportion);
     chooer->add(operation_kind_t::read_modify_write_k, workload.read_modify_write_proportion);
@@ -249,6 +250,7 @@ void transaction(bm::State& state, workload_t const& workload, db_t& db) {
         case operation_kind_t::read_k: result = transaction.do_read(); break;
         case operation_kind_t::batch_insert_k: result = transaction.do_batch_insert(); break;
         case operation_kind_t::batch_read_k: result = transaction.do_batch_read(); break;
+        case operation_kind_t::bulk_import_k: result = transaction.do_bulk_import(); break;
         case operation_kind_t::range_select_k: result = transaction.do_range_select(); break;
         case operation_kind_t::scan_k: result = transaction.do_scan(); break;
         case operation_kind_t::read_modify_write_k: result = transaction.do_read_modify_write(); break;

@@ -23,7 +23,7 @@ struct transaction_t {
     using acknowledged_key_generator_t = std::unique_ptr<acknowledged_counter_generator_t>;
     using value_length_generator_t = std::unique_ptr<generator_gt<value_length_t>>;
     using length_generator_t = std::unique_ptr<generator_gt<size_t>>;
-    using values_and_sizes_spans_t = std::pair<values_span_t, value_lengths_span_t>;
+    using values_and_sizes_spansc_t = std::pair<values_spanc_t, value_lengths_spanc_t>;
 
     inline transaction_t(workload_t const& workload, db_t& db);
 
@@ -33,6 +33,7 @@ struct transaction_t {
     inline operation_result_t do_read();
     inline operation_result_t do_batch_insert();
     inline operation_result_t do_batch_read();
+    inline operation_result_t do_bulk_import();
     inline operation_result_t do_range_select();
     inline operation_result_t do_scan();
     inline operation_result_t do_read_modify_write();
@@ -42,13 +43,15 @@ struct transaction_t {
     inline value_length_generator_t create_value_length_generator(workload_t const& workload);
     inline length_generator_t create_batch_insert_length_generator(workload_t const& workload);
     inline length_generator_t create_batch_read_length_generator(workload_t const& workload);
+    inline length_generator_t create_bulk_import_length_generator(workload_t const& workload);
     inline length_generator_t create_range_select_length_generator(workload_t const& workload);
 
     inline key_t generate_key();
     inline keys_spanc_t generate_batch_insert_keys();
     inline keys_spanc_t generate_batch_read_keys();
+    inline keys_spanc_t generate_bulk_import_keys();
     inline value_spanc_t generate_value();
-    inline values_and_sizes_spans_t generate_values();
+    inline values_and_sizes_spansc_t generate_values(size_t count);
     inline value_span_t value_buffer();
 
     workload_t workload_;
@@ -66,12 +69,14 @@ struct transaction_t {
 
     length_generator_t batch_insert_length_generator_;
     length_generator_t batch_read_length_generator_;
+    length_generator_t bulk_import_length_generator_;
     length_generator_t range_select_length_generator_;
 };
 
 inline transaction_t::transaction_t(workload_t const& workload, db_t& db) : workload_(workload), db_(&db) {
 
-    if (workload.insert_proportion == 1.0 || workload.batch_insert_proportion == 1.0) // Initialization case
+    if (workload.insert_proportion == 1.0 || workload.batch_insert_proportion == 1.0 ||
+        workload.bulk_import_proportion == 1.0) // Initialization case
         insert_key_sequence_generator = std::make_unique<counter_generator_t>(workload.start_key);
     else {
         acknowledged_key_generator =
@@ -79,15 +84,17 @@ inline transaction_t::transaction_t(workload_t const& workload, db_t& db) : work
         key_generator_ = create_key_generator(workload, *acknowledged_key_generator);
         insert_key_sequence_generator = std::move(acknowledged_key_generator);
     }
-    keys_buffer_ = keys_t(std::max(workload.batch_insert_max_length, workload.batch_read_max_length));
+    size_t elements_max_count = std::max(
+        {workload.batch_insert_max_length, workload.batch_read_max_length, workload.bulk_import_max_length, size_t(1)});
+    keys_buffer_ = keys_t(elements_max_count);
 
     value_length_generator_ = create_value_length_generator(workload);
-    size_t values_count = std::max(workload.batch_insert_max_length, size_t(1));
-    values_buffer_ = values_buffer_t(values_count * workload.value_length);
-    value_sizes_buffer_ = value_lengths_t(values_count, 0);
+    values_buffer_ = values_buffer_t(elements_max_count * workload.value_length);
+    value_sizes_buffer_ = value_lengths_t(elements_max_count, 0);
 
     batch_insert_length_generator_ = create_batch_insert_length_generator(workload);
     batch_read_length_generator_ = create_batch_read_length_generator(workload);
+    bulk_import_length_generator_ = create_bulk_import_length_generator(workload);
     range_select_length_generator_ = create_range_select_length_generator(workload);
 }
 
@@ -119,13 +126,22 @@ inline operation_result_t transaction_t::do_read() {
 
 inline operation_result_t transaction_t::do_batch_insert() {
     keys_spanc_t keys = generate_batch_insert_keys();
-    values_and_sizes_spans_t values_and_sizes = generate_values();
+    values_and_sizes_spansc_t values_and_sizes = generate_values(keys.size());
     return db_->batch_insert(keys, values_and_sizes.first, values_and_sizes.second);
 }
 
 inline operation_result_t transaction_t::do_batch_read() {
     keys_spanc_t keys = generate_batch_read_keys();
     return db_->batch_read(keys);
+}
+
+inline operation_result_t transaction_t::do_bulk_import() {
+    // TODO: Need pause timing
+    keys_spanc_t keys = generate_bulk_import_keys();
+    values_and_sizes_spansc_t values_and_sizes = generate_values(keys.size());
+    auto meta_data = db_->prepare_data_for_bulk_import(keys, values_and_sizes.first, values_and_sizes.second);
+
+    return db_->bulk_import(meta_data);
 }
 
 inline operation_result_t transaction_t::do_range_select() {
@@ -226,6 +242,26 @@ inline transaction_t::length_generator_t transaction_t::create_batch_read_length
     return generator;
 }
 
+inline transaction_t::length_generator_t transaction_t::create_bulk_import_length_generator(
+    workload_t const& workload) {
+
+    length_generator_t generator;
+    switch (workload.bulk_import_length_dist) {
+    case distribution_kind_t::uniform_k:
+        generator = std::make_unique<uniform_generator_gt<size_t>>(workload.bulk_import_min_length,
+                                                                   workload.bulk_import_max_length);
+        break;
+    case distribution_kind_t::zipfian_k:
+        generator =
+            std::make_unique<zipfian_generator_t>(workload.bulk_import_min_length, workload.bulk_import_max_length);
+        break;
+    default:
+        throw exception_t(
+            fmt::format("Unknown range select length distribution: {}", int(workload.bulk_import_length_dist)));
+    }
+    return generator;
+}
+
 inline transaction_t::length_generator_t transaction_t::create_range_select_length_generator(
     workload_t const& workload) {
 
@@ -275,29 +311,36 @@ inline keys_spanc_t transaction_t::generate_batch_read_keys() {
     return keys;
 }
 
-inline value_spanc_t transaction_t::generate_value() {
-    value_length_t length = value_length_generator_->generate();
-    value_sizes_buffer_[0] = length;
-    value_span_t value(values_buffer_.data(), length);
-    for (size_t i = 0; i < value.size(); ++i)
-        value[i] = std::byte(value_generator_.generate());
-    return value;
+inline keys_spanc_t transaction_t::generate_bulk_import_keys() {
+    size_t batch_length = bulk_import_length_generator_->generate();
+    keys_span_t keys(keys_buffer_.data(), batch_length);
+    for (size_t i = 0; i < batch_length; ++i) {
+        key_t key = insert_key_sequence_generator->generate();
+        keys[i] = key;
+        if (acknowledged_key_generator)
+            acknowledged_key_generator->acknowledge(key);
+    }
+
+    return keys;
 }
 
-inline transaction_t::values_and_sizes_spans_t transaction_t::generate_values() {
-    auto aaa = values_buffer_.size();
-    for (size_t i = 0; i < values_buffer_.size(); ++i)
+inline value_spanc_t transaction_t::generate_value() {
+    values_and_sizes_spansc_t value_and_size = generate_values(1);
+    return value_spanc_t {value_and_size.first.data(), value_and_size.second[0]};
+}
+
+inline transaction_t::values_and_sizes_spansc_t transaction_t::generate_values(size_t count) {
+    for (size_t i = 0; i < count * workload_.value_length; ++i)
         values_buffer_[i] = std::byte(value_generator_.generate());
 
     size_t total_length = 0;
-    size_t values_count = std::max(workload_.batch_insert_max_length, size_t(1));
-    for (size_t i = 0; i < values_count; ++i) {
+    for (size_t i = 0; i < count; ++i) {
         value_length_t length = value_length_generator_->generate();
         value_sizes_buffer_[i] = length;
         total_length += length;
     }
-    return std::make_pair(values_span_t(values_buffer_.data(), total_length),
-                          value_lengths_span_t(value_sizes_buffer_.data(), values_count));
+    return std::make_pair(values_spanc_t(values_buffer_.data(), total_length),
+                          value_lengths_spanc_t(value_sizes_buffer_.data(), count));
 }
 
 inline value_span_t transaction_t::value_buffer() {

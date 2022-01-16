@@ -74,9 +74,20 @@
         "batch_insert_length_dist": "uniform"
     },
     {
+        "name": "BulkImport",
+        "records_count": 1000000000,
+        "operations_count": 380,
+        "bulk_import_proportion": 1.0,
+        "key_dist": "zipfian",
+        "value_length": 1024,
+        "bulk_import_min_length": 262144,
+        "bulk_import_max_length": 262144,
+        "bulk_import_length_dist": "uniform"
+    },
+    {
         "name": "Remove",
         "records_count": 1000000000,
-        "operations_count": 150000000,
+        "operations_count": 250000000,
         "remove_proportion": 1.0,
         "key_dist": "zipfian"
     }
