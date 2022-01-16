@@ -193,10 +193,11 @@ bulk_metadata_t unumdb_t::prepare_bulk_import_data(keys_spanc_t keys,
     size_t data_idx = 0;
     size_t data_offset = 0;
     bulk_metadata_t bulk_metadata;
-    for (size_t i = 0; i < keys.size(); i += 130'000) {
-        std::string file_name = fmt::format("udb_building_{}", i / 130'000);
+    size_t const migration_capacity = region_.config_.country.migration_max_cnt;
+    for (size_t i = 0; i < keys.size(); i += migration_capacity) {
+        std::string file_name = fmt::format("udb_building_{}", i / migration_capacity);
 
-        size_t next_data_idx = i + 130'000;
+        size_t next_data_idx = i + migration_capacity;
         if (next_data_idx > keys.size())
             next_data_idx = keys.size();
 
