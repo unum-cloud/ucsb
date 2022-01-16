@@ -167,13 +167,14 @@ workloads_t filter_workloads(workloads_t const& workloads, std::string const& fi
     if (filter.empty())
         return workloads;
 
-    std::vector<std::string> tokens = ucsb::split(filter, ',');
-    std::set<std::string> keys(tokens.begin(), tokens.end());
-
+    // Note: It keeps order as mentioned in filter
     workloads_t filtered_workloads;
-    for (auto const& workload : workloads) {
-        if (keys.contains(workload.name))
-            filtered_workloads.push_back(workload);
+    std::vector<std::string> tokens = ucsb::split(filter, ',');
+    for (auto const& token : tokens) {
+        for (auto const& workload : workloads) {
+            if (workload.name == token)
+                filtered_workloads.push_back(workload);
+        }
     }
 
     return filtered_workloads;
@@ -273,6 +274,9 @@ void transaction(bm::State& state, workload_t const& workload, db_t& db) {
     if (state.thread_index() == 0) {
         cpu_stat.stop();
         mem_stat.stop();
+        bool ok = db.close();
+        assert(ok);
+
         state.SetBytesProcessed(bytes_processed_count);
         state.counters["fails,%"] = bm::Counter(operations_done ? fails * 100.0 / operations_done : 100.0);
         state.counters["operations/s"] = bm::Counter(operations_done - fails, bm::Counter::kIsRate);
@@ -281,8 +285,6 @@ void transaction(bm::State& state, workload_t const& workload, db_t& db) {
         state.counters["mem_max,bytes"] = bm::Counter(mem_stat.rss().max, bm::Counter::kDefaults, bm::Counter::kIs1024);
         state.counters["mem_avg,bytes"] = bm::Counter(mem_stat.rss().avg, bm::Counter::kDefaults, bm::Counter::kIs1024);
         state.counters["disk,bytes"] = bm::Counter(db.size_on_disk(), bm::Counter::kDefaults, bm::Counter::kIs1024);
-        bool ok = db.close();
-        assert(ok);
     }
 }
 
