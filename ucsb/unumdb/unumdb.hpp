@@ -195,7 +195,6 @@ bulk_metadata_t unumdb_t::prepare_bulk_import_data(keys_spanc_t keys,
     bulk_metadata_t bulk_metadata;
     for (size_t i = 0; i < keys.size(); i += 130'000) {
         std::string file_name = fmt::format("udb_building_{}", i / 130'000);
-        bulk_metadata.files.insert(file_name);
 
         size_t next_data_idx = i + 130'000;
         if (next_data_idx > keys.size())
@@ -220,6 +219,7 @@ bulk_metadata_t unumdb_t::prepare_bulk_import_data(keys_spanc_t keys,
                                                                 citizens,
                                                                 citizen_sizes,
                                                                 ds_info_t::sorted_k);
+        bulk_metadata.files.insert({building.schema().file_name.c_str()});
     }
 
     return bulk_metadata;
