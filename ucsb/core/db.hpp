@@ -85,7 +85,7 @@ struct db_t {
      * @brief Performs bulk import from external prepared data.
      * Keys are in strict ascending order
      */
-    virtual bulk_metadata_t prepare_data_for_bulk_import(keys_spanc_t keys,
+    virtual bulk_metadata_t prepare_bulk_import_data(keys_spanc_t keys,
                                                          values_spanc_t values,
                                                          value_lengths_spanc_t sizes) const = 0;
     virtual operation_result_t bulk_import(bulk_metadata_t const& metadata) = 0;

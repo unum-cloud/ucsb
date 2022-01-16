@@ -147,7 +147,7 @@ inline operation_result_t transaction_t::do_bulk_import() {
     timer_.pause();
     keys_spanc_t keys = generate_bulk_import_keys();
     values_and_sizes_spansc_t values_and_sizes = generate_values(keys.size());
-    auto meta_data = db_->prepare_data_for_bulk_import(keys, values_and_sizes.first, values_and_sizes.second);
+    auto meta_data = db_->prepare_bulk_import_data(keys, values_and_sizes.first, values_and_sizes.second);
     timer_.resume();
 
     return db_->bulk_import(meta_data);
