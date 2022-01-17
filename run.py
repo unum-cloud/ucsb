@@ -2,8 +2,8 @@
 import os
 import sys
 import time
-import errno
 import shutil
+import pexpect
 import subprocess
 
 drop_caches = False
@@ -66,22 +66,15 @@ def run(db_name, size, threads_count, workload_names):
     config_path = get_db_config_path(db_name, size)
     workloads_path = get_worklods_path(size)
 
-    process = subprocess.Popen([
-            './build_release/bin/_ucsb_bench',
-            '-db', db_name,
-            '-c', config_path,
-            '-w', workloads_path,
-            '-threads', str(threads_count),
-            '-filter', ','.join(workload_names),
-        ],
-        stdout=subprocess.PIPE)
-
-    # Print output
-    while True:
-        line = process.stdout.readline().decode("utf-8").strip()
-        print(line)
-        if not line:
-            break
+    filter = ','.join(workload_names)
+    child = pexpect.spawn(f'./build_release/bin/_ucsb_bench \
+                            -db {db_name} \
+                            -c {config_path} \
+                            -w {workloads_path} \
+                            -threads {threads_count} \
+                            -filter {filter}'
+                         )
+    child.interact()
 
 if os.geteuid() != 0:
     sys.exit("Run as sudo!")
