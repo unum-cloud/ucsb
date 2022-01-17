@@ -65,10 +65,11 @@ struct unumdb_t : public ucsb::db_t {
         size_t uring_queue_depth = 0;
     };
 
-    bool load_config(db_config_t& db_config);
+    bool load_config();
 
     fs::path config_path_;
     fs::path dir_path_;
+    db_config_t config_;
 
     region_t region_;
     mutable dbuffer_t batch_buffer_;
@@ -80,20 +81,19 @@ void unumdb_t::set_config(fs::path const& config_path, fs::path const& dir_path)
 }
 
 bool unumdb_t::open() {
-    db_config_t db_config;
-    if (!load_config(db_config))
+    if (!load_config())
         return false;
 
-    if (db_config.io_device == string_t("libc"))
+    if (config_.io_device == string_t("libc"))
         init_file_io_by_libc(dir_path_.c_str());
-    else if (db_config.io_device == string_t("pulling"))
-        init_file_io_by_pulling(dir_path_.c_str(), db_config.uring_queue_depth);
-    else if (db_config.io_device == string_t("polling"))
-        init_file_io_by_polling(dir_path_.c_str(), db_config.uring_max_files_count, db_config.uring_queue_depth);
+    else if (config_.io_device == string_t("pulling"))
+        init_file_io_by_pulling(dir_path_.c_str(), config_.uring_queue_depth);
+    else if (config_.io_device == string_t("polling"))
+        init_file_io_by_polling(dir_path_.c_str(), config_.uring_max_files_count, config_.uring_queue_depth);
     else
         return false;
 
-    region_ = region_t("Kovkas", db_config.region_config);
+    region_ = region_t("Kovkas", config_.region_config);
 
     return true;
 }
@@ -192,7 +192,7 @@ bulk_metadata_t unumdb_t::prepare_bulk_import_data(keys_spanc_t keys,
                                                    value_lengths_spanc_t sizes) const {
     size_t data_offset = 0;
     bulk_metadata_t metadata;
-    size_t const migration_capacity = region_.config_.country.migration_max_cnt;
+    size_t const migration_capacity = config_.region_config.country.migration_max_cnt;
     for (size_t i = 0; i < keys.size(); i += migration_capacity) {
         std::string file_name = fmt::format("udb_building_{}", i / migration_capacity);
 
@@ -269,7 +269,7 @@ size_t unumdb_t::size_on_disk() const {
     return ucsb::size_on_disk(dir_path_);
 }
 
-bool unumdb_t::load_config(db_config_t& db_config) {
+bool unumdb_t::load_config() {
     if (!fs::exists(config_path_.c_str()))
         return false;
 
@@ -277,23 +277,22 @@ bool unumdb_t::load_config(db_config_t& db_config) {
     nlohmann::json j_config;
     i_config >> j_config;
 
-    db_config.region_config.country.fixed_citizen_size = 0;
-    db_config.region_config.country.migration_capacity = j_config["migration_capacity"].get<size_t>();
-    db_config.region_config.country.migration_max_cnt = j_config["migration_max_cnt"].get<size_t>();
+    config_.region_config.country.fixed_citizen_size = 0;
+    config_.region_config.country.migration_capacity = j_config["migration_capacity"].get<size_t>();
+    config_.region_config.country.migration_max_cnt = j_config["migration_max_cnt"].get<size_t>();
 
-    db_config.region_config.country.city.fixed_citizen_size = 0;
-    db_config.region_config.country.city.files_size_enlarge_factor =
-        j_config["files_size_enlarge_factor"].get<size_t>();
+    config_.region_config.country.city.fixed_citizen_size = 0;
+    config_.region_config.country.city.files_size_enlarge_factor = j_config["files_size_enlarge_factor"].get<size_t>();
 
-    db_config.region_config.country.city.street.fixed_citizen_size = 0;
-    db_config.region_config.country.city.street.max_files_cnt = j_config["max_files_cnt"].get<size_t>();
-    db_config.region_config.country.city.street.files_count_enlarge_factor =
+    config_.region_config.country.city.street.fixed_citizen_size = 0;
+    config_.region_config.country.city.street.max_files_cnt = j_config["max_files_cnt"].get<size_t>();
+    config_.region_config.country.city.street.files_count_enlarge_factor =
         j_config["files_count_enlarge_factor"].get<size_t>();
-    db_config.region_config.country.city.street.building.fixed_citizen_size = 0;
+    config_.region_config.country.city.street.building.fixed_citizen_size = 0;
 
-    db_config.io_device = j_config["io_device"].get<std::string>().c_str();
-    db_config.uring_max_files_count = j_config["uring_max_files_count"].get<size_t>();
-    db_config.uring_queue_depth = j_config["uring_queue_depth"].get<size_t>();
+    config_.io_device = j_config["io_device"].get<std::string>().c_str();
+    config_.uring_max_files_count = j_config["uring_max_files_count"].get<size_t>();
+    config_.uring_queue_depth = j_config["uring_queue_depth"].get<size_t>();
 
     return true;
 }
