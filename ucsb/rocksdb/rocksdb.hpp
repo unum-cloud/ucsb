@@ -99,7 +99,6 @@ bool rocksdb_t::open() {
 
     options_ = rocksdb::Options();
     cf_descs_.clear();
-    std::vector<rocksdb::ColumnFamilyHandle*> cf_handles;
     rocksdb::Status status =
         rocksdb::LoadOptionsFromFile(config_path_.string(), rocksdb::Env::Default(), &options_, &cf_descs_);
     if (!status.ok())
@@ -108,8 +107,10 @@ bool rocksdb_t::open() {
     // options_.comparator = &key_cmp_;
     if (cf_descs_.empty())
         status = rocksdb::DB::Open(options_, dir_path_.string(), &db_);
-    else
+    else {
+        std::vector<rocksdb::ColumnFamilyHandle*> cf_handles;
         status = rocksdb::DB::Open(options_, dir_path_.string(), cf_descs_, &cf_handles, &db_);
+    }
 
     return status.ok();
 }
