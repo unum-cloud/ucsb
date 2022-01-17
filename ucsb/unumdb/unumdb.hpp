@@ -4,6 +4,7 @@
 #include <fmt/format.h>
 
 #include "diskkv/region.hpp"
+#include "diskkv/validator.hpp"
 
 #include "ucsb/core/types.hpp"
 #include "ucsb/core/db.hpp"
@@ -82,6 +83,10 @@ void unumdb_t::set_config(fs::path const& config_path, fs::path const& dir_path)
 
 bool unumdb_t::open() {
     if (!load_config())
+        return false;
+
+    issues_t issues;
+    if (!validator_t::validate(config_.region_config, issues))
         return false;
 
     if (config_.io_device == string_t("libc"))
