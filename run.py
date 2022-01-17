@@ -87,7 +87,8 @@ if os.geteuid() != 0:
     sys.exit("Run as sudo!")
 
 if cleanup_previous_dbs:
-    shutil.rmtree('./tmp/')
+    if os.path.exists('./tmp/'):
+        shutil.rmtree('./tmp/')
 
 for threads_count in threads:
     for size in sizes:
