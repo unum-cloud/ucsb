@@ -8,6 +8,7 @@ namespace ucsb {
 
 struct bulk_metadata_t {
     std::set<std::string> files;
+    size_t records_count = 0;
 };
 
 /**
@@ -85,8 +86,8 @@ struct db_t {
      * Keys are in strict ascending order
      */
     virtual bulk_metadata_t prepare_bulk_import_data(keys_spanc_t keys,
-                                                         values_spanc_t values,
-                                                         value_lengths_spanc_t sizes) const = 0;
+                                                     values_spanc_t values,
+                                                     value_lengths_spanc_t sizes) const = 0;
     virtual operation_result_t bulk_import(bulk_metadata_t const& metadata) = 0;
 
     /**

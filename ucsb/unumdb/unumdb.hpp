@@ -190,9 +190,8 @@ operation_result_t unumdb_t::batch_read(keys_spanc_t keys) const {
 bulk_metadata_t unumdb_t::prepare_bulk_import_data(keys_spanc_t keys,
                                                    values_spanc_t values,
                                                    value_lengths_spanc_t sizes) const {
-    size_t data_idx = 0;
     size_t data_offset = 0;
-    bulk_metadata_t bulk_metadata;
+    bulk_metadata_t metadata;
     size_t const migration_capacity = region_.config_.country.migration_max_cnt;
     for (size_t i = 0; i < keys.size(); i += migration_capacity) {
         std::string file_name = fmt::format("udb_building_{}", i / migration_capacity);
@@ -220,17 +219,18 @@ bulk_metadata_t unumdb_t::prepare_bulk_import_data(keys_spanc_t keys,
                                                                 citizens,
                                                                 citizen_sizes,
                                                                 ds_info_t::sorted_k);
-        bulk_metadata.files.insert({building.schema().file_name.c_str()});
+        metadata.files.insert({building.schema().file_name.c_str()});
     }
+    metadata.records_count = keys.size();
 
-    return bulk_metadata;
+    return metadata;
 }
 
 operation_result_t unumdb_t::bulk_import(bulk_metadata_t const& metadata) {
     for (auto const& file_path : metadata.files)
         region_.import({file_path.data(), file_path.size()});
 
-    return {metadata.files.size(), operation_status_t::ok_k};
+    return {metadata.records_count, operation_status_t::ok_k};
 }
 
 operation_result_t unumdb_t::range_select(key_t key, size_t length, value_span_t single_value) const {

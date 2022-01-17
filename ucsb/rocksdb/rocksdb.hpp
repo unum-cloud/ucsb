@@ -242,10 +242,10 @@ bulk_metadata_t rocksdb_t::prepare_bulk_import_data(keys_spanc_t keys,
                                                     value_lengths_spanc_t sizes) const {
     size_t data_idx = 0;
     size_t data_offset = 0;
-    bulk_metadata_t bulk_metadata;
+    bulk_metadata_t metadata;
     for (size_t i = 0; true; ++i) {
         std::string sst_file_path = fmt::format("/tmp/rocksdb_tmp_{}.sst", i);
-        bulk_metadata.files.insert(sst_file_path);
+        metadata.files.insert(sst_file_path);
 
         rocksdb::SstFileWriter sst_file_writer(rocksdb::EnvOptions(), options_, options_.comparator);
         rocksdb::Status status = sst_file_writer.Open(sst_file_path);
@@ -273,12 +273,13 @@ bulk_metadata_t rocksdb_t::prepare_bulk_import_data(keys_spanc_t keys,
     }
 
     if (data_idx != keys.size()) {
-        for (auto const& file_path : bulk_metadata.files)
+        for (auto const& file_path : metadata.files)
             fs::remove(file_path);
         return bulk_metadata_t();
     }
+    metadata.records_count = keys.size();
 
-    return bulk_metadata;
+    return metadata;
 }
 
 operation_result_t rocksdb_t::bulk_import(bulk_metadata_t const& metadata) {
@@ -294,7 +295,7 @@ operation_result_t rocksdb_t::bulk_import(bulk_metadata_t const& metadata) {
         }
     }
 
-    return {metadata.files.size(), operation_status_t::ok_k};
+    return {metadata.records_count, operation_status_t::ok_k};
 }
 
 operation_result_t rocksdb_t::range_select(key_t key, size_t length, value_span_t single_value) const {

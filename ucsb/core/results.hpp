@@ -13,7 +13,7 @@ namespace ucsb {
 void marge_results(ucsb::fs::path const& source_file_path, ucsb::fs::path const& destination_file_path) {
 
     if (!ucsb::fs::exists(source_file_path))
-        return false;
+        return;
 
     std::ifstream ifstream(source_file_path);
     ordered_json j_sourace;
