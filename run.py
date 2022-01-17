@@ -59,7 +59,8 @@ def get_worklods_path(size):
 
 
 def drop_system_caches():
-    subprocess.run(['sh', '-c', '/usr/bin/echo', '3', '>', '/proc/sys/vm/drop_caches'])
+    subprocess.run(['sh', '-c', '/usr/bin/echo', '3',
+                   '>', '/proc/sys/vm/drop_caches'])
 
 
 def run(db_name, size, threads_count, workload_names):
@@ -73,8 +74,9 @@ def run(db_name, size, threads_count, workload_names):
                             -w {workloads_path} \
                             -threads {threads_count} \
                             -filter {filter}'
-                         )
+                          )
     child.interact()
+
 
 if os.geteuid() != 0:
     sys.exit("Run as sudo!")
@@ -93,4 +95,3 @@ for threads_count in threads:
                     run(db_name, size, threads_count, [workload_name])
             else:
                 run(db_name, size, threads_count, workload_names)
-
