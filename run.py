@@ -59,8 +59,8 @@ def get_worklods_path(size):
 
 
 def drop_system_caches():
-    subprocess.run(['sh', '-c', '/usr/bin/echo', '3',
-                   '>', '/proc/sys/vm/drop_caches'])
+    with open('/proc/sys/vm/drop_caches', 'w') as stream:
+        stream.write('3\n')
 
 
 def run(db_name, size, threads_count, workload_names):
