@@ -155,16 +155,9 @@ operation_result_t unumdb_t::read(key_t key, value_span_t value) const {
 
 operation_result_t unumdb_t::batch_insert(keys_spanc_t keys, values_spanc_t values, value_lengths_spanc_t sizes) {
 
-    // Warning: Region takes non const argument because it does inplace sorting
-    span_gt<fingerprint_t> fingerprints {
-        const_cast<fingerprint_t*>(reinterpret_cast<fingerprint_t const*>(keys.data())),
-        keys.size()};
-    span_bytes_t citizens {const_cast<byte_t*>(reinterpret_cast<byte_t const*>(values.data())), values.size()};
-    span_gt<citizen_size_t> citizen_sizes {
-        const_cast<citizen_size_t*>(reinterpret_cast<citizen_size_t const*>(sizes.data())),
-        sizes.size()};
-    region_.insert(fingerprints, citizens, citizen_sizes, ds_info_t::sorted_k);
-
+    region_.insert({keys.data(), keys.size()},
+                   {reinterpret_cast<byte_t const*>(values.data()), values.size()},
+                   {sizes.data(), sizes.size()});
     return {keys.size(), operation_status_t::ok_k};
 }
 
@@ -209,21 +202,17 @@ bulk_metadata_t unumdb_t::prepare_bulk_import_data(keys_spanc_t keys,
         for (size_t j = 0; j < next_data_idx; ++j)
             next_data_offset += sizes[j];
 
+        // TODO: Remove const casts later
         span_gt<fingerprint_t> fingerprints {
             const_cast<fingerprint_t*>(reinterpret_cast<fingerprint_t const*>(keys.data() + i)),
             next_data_idx - i};
-        span_bytes_t citizens {const_cast<byte_t*>(reinterpret_cast<byte_t const*>(values.data() + next_data_offset)),
-                               next_data_offset - data_offset};
-        span_gt<citizen_size_t> citizen_sizes {
-            const_cast<citizen_size_t*>(reinterpret_cast<citizen_size_t const*>(sizes.data() + i)),
-            next_data_idx - i};
-
-        auto building = region_t::building_constructor_t::build({file_name.data(), file_name.size()},
-                                                                {},
-                                                                fingerprints,
-                                                                citizens,
-                                                                citizen_sizes,
-                                                                ds_info_t::sorted_k);
+        auto building =
+            region_t::building_constructor_t::build({file_name.data(), file_name.size()},
+                                                    {},
+                                                    fingerprints,
+                                                    {reinterpret_cast<byte_t const*>(values.data()), values.size()},
+                                                    {sizes.data(), sizes.size()},
+                                                    ds_info_t::sorted_k);
         metadata.files.insert({building.schema().file_name.c_str()});
     }
     metadata.records_count = keys.size();
