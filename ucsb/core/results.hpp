@@ -10,6 +10,16 @@ using ordered_json = nlohmann::ordered_json;
 
 namespace ucsb {
 
+std::string parse_workload_name(std::string const& benchmark_name) {
+    std::string name;
+    size_t pos = benchmark_name.find('/');
+    if (pos != std::string::npos)
+        name = benchmark_name.substr(0, pos);
+    else
+        name = benchmark_name;
+    return name;
+}
+
 void marge_results(ucsb::fs::path const& source_file_path, ucsb::fs::path const& destination_file_path) {
 
     if (!ucsb::fs::exists(source_file_path))
@@ -35,9 +45,11 @@ void marge_results(ucsb::fs::path const& source_file_path, ucsb::fs::path const&
         // Update with new
         for (auto it = j_source_benchmarks.begin(); it != j_source_benchmarks.end(); ++it) {
             auto src_name = (*it)["name"].get<std::string>();
+            src_name = parse_workload_name(src_name);
             size_t idx = 0;
             for (; idx < results.size(); ++idx) {
                 auto dest_name = results[idx]["name"].get<std::string>();
+                dest_name = parse_workload_name(dest_name);
                 if (src_name == dest_name) {
                     results[idx] = *it;
                     break;
