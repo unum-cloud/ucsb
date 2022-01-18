@@ -52,7 +52,7 @@ void marge_results(ucsb::fs::path const& source_file_path, ucsb::fs::path const&
         j_destinatino = j_sourace;
 
     std::ofstream ofstream(destination_file_path);
-    ofstream << std::setw(4) << j_destinatino << std::endl;
+    ofstream << std::setw(2) << j_destinatino << std::endl;
 }
 
 } // namespace ucsb
