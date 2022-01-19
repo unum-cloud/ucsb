@@ -10,9 +10,9 @@ cleanup_previous_dbs = False
 
 threads = [
     1,
-    4,
-    8,
-    16,
+    # 4,
+    # 8,
+    # 16,
 ]
 
 db_names = [
