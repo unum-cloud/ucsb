@@ -4,7 +4,6 @@ import sys
 import time
 import shutil
 import pexpect
-import subprocess
 
 drop_caches = False
 cleanup_previous_dbs = False
@@ -79,7 +78,7 @@ def run(db_name, size, threads_count, workload_names):
 
 
 if os.geteuid() != 0:
-    sys.exit("Run as sudo!")
+    sys.exit('Run as sudo!')
 
 if cleanup_previous_dbs:
     if os.path.exists('./tmp/'):
@@ -90,6 +89,7 @@ for threads_count in threads:
         for db_name in db_names:
             if drop_caches:
                 for workload_name in workload_names:
+                    print('Droping caches...')
                     drop_system_caches()
                     time.sleep(8)
                     run(db_name, size, threads_count, [workload_name])
