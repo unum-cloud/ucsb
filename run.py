@@ -4,7 +4,6 @@ import sys
 import time
 import shutil
 import pexpect
-import subprocess
 
 drop_caches = False
 cleanup_previous_dbs = False
