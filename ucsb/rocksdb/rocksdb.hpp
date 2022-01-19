@@ -104,6 +104,10 @@ bool rocksdb_t::open() {
     if (!status.ok())
         return false;
 
+    rocksdb::BlockBasedTableOptions table_options;
+    table_options.block_cache = rocksdb::NewLRUCache(options_.target_file_size_base * 10);
+    options_.table_factory.reset(rocksdb::NewBlockBasedTableFactory(table_options));
+
     // options_.comparator = &key_cmp_;
     if (cf_descs_.empty())
         status = rocksdb::DB::Open(options_, dir_path_.string(), &db_);
