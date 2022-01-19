@@ -13,6 +13,7 @@
 #include <rocksdb/db.h>
 #include <rocksdb/options.h>
 #include <rocksdb/comparator.h>
+#include <rocksdb/filter_policy.h>
 
 #include "ucsb/core/types.hpp"
 #include "ucsb/core/db.hpp"
@@ -106,6 +107,9 @@ bool rocksdb_t::open() {
 
     rocksdb::BlockBasedTableOptions table_options;
     table_options.block_cache = rocksdb::NewLRUCache(options_.target_file_size_base * 10);
+    table_options.cache_index_and_filter_blocks = true;
+    table_options.cache_index_and_filter_blocks_with_high_priority = true;
+    table_options.filter_policy.reset(rocksdb::NewBloomFilterPolicy(10));
     options_.table_factory.reset(rocksdb::NewBlockBasedTableFactory(table_options));
 
     // options_.comparator = &key_cmp_;
