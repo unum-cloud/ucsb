@@ -82,6 +82,7 @@ if os.geteuid() != 0:
 
 if cleanup_previous_dbs:
     if os.path.exists('./tmp/'):
+        print('Cleanup...')
         shutil.rmtree('./tmp/')
 
 for threads_count in threads:
