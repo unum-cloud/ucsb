@@ -58,7 +58,7 @@ def get_worklods_file_path(size):
 
 
 def get_results_dir_path():
-    return './bench/result5'
+    return './bench/results/'
 
 
 def drop_system_caches():
