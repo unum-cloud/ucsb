@@ -49,8 +49,8 @@ struct lmdb_t : public ucsb::db_t {
     operation_result_t batch_read(keys_spanc_t keys) const override;
 
     bulk_metadata_t prepare_bulk_import_data(keys_spanc_t keys,
-                                                 values_spanc_t values,
-                                                 value_lengths_spanc_t sizes) const override;
+                                             values_spanc_t values,
+                                             value_lengths_spanc_t sizes) const override;
     operation_result_t bulk_import(bulk_metadata_t const& metadata) override;
 
     operation_result_t range_select(key_t key, size_t length, value_span_t single_value) const override;
@@ -296,7 +296,7 @@ operation_result_t lmdb_t::batch_read(keys_spanc_t keys) const {
     // mdb_set_compare(txn, &dbi_, compare_keys);
 
     // Note: imitation of batch read!
-    for (auto& key : keys) {
+    for (auto key : keys) {
         key_slice.mv_data = &key;
         key_slice.mv_size = sizeof(key);
         res = mdb_get(txn, dbi_, &key_slice, &val_slice);
@@ -312,8 +312,8 @@ operation_result_t lmdb_t::batch_read(keys_spanc_t keys) const {
 }
 
 bulk_metadata_t lmdb_t::prepare_bulk_import_data(keys_spanc_t keys,
-                                                     values_spanc_t values,
-                                                     value_lengths_spanc_t sizes) const {
+                                                 values_spanc_t values,
+                                                 value_lengths_spanc_t sizes) const {
     (void)keys;
     (void)values;
     (void)sizes;

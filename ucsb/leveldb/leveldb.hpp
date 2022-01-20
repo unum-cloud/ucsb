@@ -55,8 +55,8 @@ struct leveldb_t : public ucsb::db_t {
     operation_result_t batch_read(keys_spanc_t keys) const override;
 
     bulk_metadata_t prepare_bulk_import_data(keys_spanc_t keys,
-                                                 values_spanc_t values,
-                                                 value_lengths_spanc_t sizes) const override;
+                                             values_spanc_t values,
+                                             value_lengths_spanc_t sizes) const override;
     operation_result_t bulk_import(bulk_metadata_t const& metadata) override;
 
     operation_result_t range_select(key_t key, size_t length, value_span_t single_value) const override;
@@ -212,8 +212,8 @@ operation_result_t leveldb_t::batch_read(keys_spanc_t keys) const {
 }
 
 bulk_metadata_t leveldb_t::prepare_bulk_import_data(keys_spanc_t keys,
-                                                        values_spanc_t values,
-                                                        value_lengths_spanc_t sizes) const {
+                                                    values_spanc_t values,
+                                                    value_lengths_spanc_t sizes) const {
     (void)keys;
     (void)values;
     (void)sizes;
