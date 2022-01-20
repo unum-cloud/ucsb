@@ -42,11 +42,12 @@ inline void usage_message(const char* command) {
     fmt::print("-db: Database name\n");
     fmt::print("-c: Database configuration file path\n");
     fmt::print("-w: Workloads file path\n");
+    fmt::print("-r: Results dir path\n");
     fmt::print("-filter: Workload filter (Optional)\n");
     fmt::print("-threads: Threads count (Optional, default: 1)\n");
 }
 
-void parse_args(int argc, char* argv[], settings_t& settings) {
+void parse_and_validate_args(int argc, char* argv[], settings_t& settings) {
     int arg_idx = 1;
     while (arg_idx < argc && ucsb::start_with(argv[arg_idx], "-")) {
         if (strcmp(argv[arg_idx], "-db") == 0) {
@@ -79,6 +80,19 @@ void parse_args(int argc, char* argv[], settings_t& settings) {
             settings.workloads_path = std::string(argv[arg_idx]);
             arg_idx++;
         }
+        else if (strcmp(argv[arg_idx], "-r") == 0) {
+            arg_idx++;
+            if (arg_idx >= argc) {
+                usage_message(argv[0]);
+                fmt::print("Missing argument value for -r\n");
+                exit(1);
+            }
+            std::string path(argv[arg_idx]);
+            if (path.back() != '/')
+                path.push_back('/');
+            settings.results_path = path;
+            arg_idx++;
+        }
         else if (strcmp(argv[arg_idx], "-threads") == 0) {
             arg_idx++;
             if (arg_idx >= argc) {
@@ -108,6 +122,23 @@ void parse_args(int argc, char* argv[], settings_t& settings) {
 
     if (arg_idx == 1 || arg_idx != argc) {
         usage_message(argv[0]);
+        exit(1);
+    }
+
+    if (settings.db_name.empty()) {
+        fmt::print("-db: DB name not specified\n");
+        exit(1);
+    }
+    if (settings.db_config_path.empty()) {
+        fmt::print("-c: DB configuration file path not specified\n");
+        exit(1);
+    }
+    if (settings.workloads_path.empty()) {
+        fmt::print("-w: workloads file path not specified\n");
+        exit(1);
+    }
+    if (settings.results_path.empty()) {
+        fmt::print("-r: results dir path not specified\n");
         exit(1);
     }
 }
@@ -300,9 +331,10 @@ int main(int argc, char** argv) {
 
     // Setup settings
     settings_t settings;
-    parse_args(argc, argv, settings);
+    parse_and_validate_args(argc, argv, settings);
     settings.db_dir_path = fmt::format("./tmp/{}/{}/", settings.db_name, settings.workloads_path.stem().c_str());
-    std::string results_dir_path(fmt::format("./bench/results/cores_{}/{}/", settings.threads_count, settings.db_name));
+    std::string results_dir_path(
+        fmt::format("{}/cores_{}/{}/", settings.results_path.string(), settings.threads_count, settings.db_name));
     std::string results_file_path = fmt::format("{}{}.json", results_dir_path, settings.workloads_path.stem().c_str());
     std::string partial_results_file_path =
         fmt::format("{}{}_partial.json", results_dir_path, settings.workloads_path.stem().c_str());

@@ -46,15 +46,19 @@ workload_names = [
 ]
 
 
-def get_db_config_path(db_name, size):
+def get_db_config_file_path(db_name, size):
     path = f'./bench/configs/{db_name}/{size}.cfg'
     if not os.path.exists(path):
         path = f'./bench/configs/{db_name}/default.cfg'
     return path
 
 
-def get_worklods_path(size):
+def get_worklods_file_path(size):
     return f'./bench/workloads/{size}.json'
+
+
+def get_results_dir_path():
+    return './bench/result5'
 
 
 def drop_system_caches():
@@ -63,14 +67,16 @@ def drop_system_caches():
 
 
 def run(db_name, size, threads_count, workload_names):
-    config_path = get_db_config_path(db_name, size)
-    workloads_path = get_worklods_path(size)
+    config_path = get_db_config_file_path(db_name, size)
+    workloads_path = get_worklods_file_path(size)
+    results_path = get_results_dir_path()
 
     filter = ','.join(workload_names)
     child = pexpect.spawn(f'./build_release/bin/_ucsb_bench \
                             -db {db_name} \
                             -c {config_path} \
                             -w {workloads_path} \
+                            -r {results_path} \
                             -threads {threads_count} \
                             -filter {filter}'
                           )
