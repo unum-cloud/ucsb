@@ -226,10 +226,11 @@ operation_result_t wiredtiger_t::batch_read(keys_spanc_t keys) const {
 bulk_metadata_t wiredtiger_t::prepare_bulk_import_data(keys_spanc_t keys,
                                                        values_spanc_t values,
                                                        value_lengths_spanc_t sizes) const {
+    // This DB doesn't support bulk import
     (void)keys;
     (void)values;
     (void)sizes;
-    // This DB doesn't support bulk import
+    return {};
 }
 
 operation_result_t wiredtiger_t::bulk_import(bulk_metadata_t const& metadata) {

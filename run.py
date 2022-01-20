@@ -5,8 +5,8 @@ import time
 import shutil
 import pexpect
 
-drop_caches = False
 cleanup_previous_dbs = False
+drop_caches = False
 
 threads = [
     1,
@@ -58,7 +58,10 @@ def get_worklods_file_path(size):
 
 
 def get_results_dir_path():
-    return './bench/results/'
+    if drop_caches:
+        return './bench/results/without_caches/'
+    else:
+        return './bench/results/'
 
 
 def drop_system_caches():

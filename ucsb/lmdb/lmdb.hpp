@@ -156,8 +156,10 @@ bool lmdb_t::close() {
 }
 
 void lmdb_t::destroy() {
-    if (!env_ || !dbi_)
+    if (!env_ || !dbi_) {
+        ucsb::remove_dir_contents(dir_path_);
         return;
+    }
 
     MDB_txn* txn = nullptr;
     int res = mdb_txn_begin(env_, nullptr, 0, &txn);
@@ -314,10 +316,11 @@ operation_result_t lmdb_t::batch_read(keys_spanc_t keys) const {
 bulk_metadata_t lmdb_t::prepare_bulk_import_data(keys_spanc_t keys,
                                                  values_spanc_t values,
                                                  value_lengths_spanc_t sizes) const {
+    // This DB doesn't support bulk import
     (void)keys;
     (void)values;
     (void)sizes;
-    // This DB doesn't support bulk import
+    return {};
 }
 
 operation_result_t lmdb_t::bulk_import(bulk_metadata_t const& metadata) {
