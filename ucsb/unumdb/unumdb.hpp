@@ -231,8 +231,8 @@ operation_result_t unumdb_t::range_select(key_t key, size_t length, value_span_t
     countdown_t countdown;
     citizen_span_t citizen {reinterpret_cast<byte_t*>(single_value.data()), single_value.size()};
     size_t selected_records_count = 0;
-    auto it = region_.find(key);
-    for (size_t i = 0; it != region_.end() && i < length; ++i, ++it) {
+    auto it = region_.find<caching_t::ram_k>(key);
+    for (size_t i = 0; it != region_.end<caching_t::ram_k>() && i < length; ++i, ++it) {
         if (!it.is_removed()) {
             countdown.reset(1);
             it.get(citizen, countdown);
