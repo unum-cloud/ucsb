@@ -5,7 +5,7 @@ import time
 import shutil
 import pexpect
 
-cleanup_previous = True
+cleanup_previous = False
 drop_caches = False
 
 threads = [
