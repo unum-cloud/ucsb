@@ -225,7 +225,7 @@ std::vector<workload_t> split_workload_into_threads(workload_t const& workload, 
         workload_t thread_workload = workload;
         thread_workload.records_count = records_count_per_thread;
         thread_workload.operations_count = std::max(size_t(1), operations_count_per_thread);
-        thread_workload.start_key = idx * records_count_per_thread;
+        thread_workload.start_key = workload.start_key + idx * records_count_per_thread;
         workloads.push_back(thread_workload);
     }
 

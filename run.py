@@ -5,7 +5,7 @@ import time
 import shutil
 import pexpect
 
-cleanup_previous_dbs = False
+cleanup_previous = True
 drop_caches = False
 
 threads = [
@@ -89,10 +89,13 @@ def run(db_name, size, threads_count, workload_names):
 if os.geteuid() != 0:
     sys.exit('Run as sudo!')
 
-if cleanup_previous_dbs:
-    if os.path.exists('./tmp/'):
-        print('Cleanup...')
-        shutil.rmtree('./tmp/')
+if cleanup_previous:
+    print('Cleanup...')
+    for size in sizes:
+        for db_name in db_names:
+            db_path = f'./tmp/{db_name}/{size}/'
+            if os.path.exists(db_path):
+                shutil.rmtree(db_path)
 
 for threads_count in threads:
     for size in sizes:
