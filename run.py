@@ -10,6 +10,7 @@ drop_caches = False
 
 threads = [
     1,
+    2,
     # 4,
     # 8,
     # 16,
