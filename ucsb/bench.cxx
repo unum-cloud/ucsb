@@ -23,6 +23,7 @@ using settings_t = ucsb::settings_t;
 using workload_t = ucsb::workload_t;
 using workloads_t = ucsb::workloads_t;
 using db_t = ucsb::db_t;
+using data_accessor_t = ucsb::data_accessor_t;
 using db_kind_t = ucsb::db_kind_t;
 using factory_t = ucsb::factory_t;
 using timer_ref_t = ucsb::timer_ref_t;
@@ -247,16 +248,11 @@ inline operation_chooser_t create_operation_chooser(workload_t const& workload) 
     return chooser;
 }
 
-void bench(bm::State& state, workload_t const& workload, db_t& db) {
-
-    if (state.thread_index() == 0) {
-        bool ok = db.open();
-        assert(ok);
-    }
+void bench(bm::State& state, workload_t const& workload, data_accessor_t& data_accessor) {
 
     auto chooser = create_operation_chooser(workload);
     timer_ref_t timer(state);
-    worker_t worker(workload, db, timer);
+    worker_t worker(workload, data_accessor, timer);
 
     static size_t fails = 0;
     static size_t operations_done = 0;
@@ -311,8 +307,6 @@ void bench(bm::State& state, workload_t const& workload, db_t& db) {
     if (state.thread_index() == 0) {
         cpu_stat.stop();
         mem_stat.stop();
-        bool ok = db.close();
-        assert(ok);
 
         state.SetBytesProcessed(bytes_processed_count);
         state.counters["fails,%"] = bm::Counter(operations_done ? fails * 100.0 / operations_done : 100.0);
@@ -321,9 +315,25 @@ void bench(bm::State& state, workload_t const& workload, db_t& db) {
         state.counters["cpu_avg,%"] = bm::Counter(cpu_stat.percent().avg);
         state.counters["mem_max,bytes"] = bm::Counter(mem_stat.rss().max, bm::Counter::kDefaults, bm::Counter::kIs1024);
         state.counters["mem_avg,bytes"] = bm::Counter(mem_stat.rss().avg, bm::Counter::kDefaults, bm::Counter::kIs1024);
-        state.counters["disk,bytes"] = bm::Counter(db.size_on_disk(), bm::Counter::kDefaults, bm::Counter::kIs1024);
         state.counters["processed,bytes"] =
             bm::Counter(bytes_processed_count, bm::Counter::kDefaults, bm::Counter::kIs1024);
+    }
+}
+
+void regular_bench(bm::State& state, workload_t const& workload, db_t& db) {
+
+    if (state.thread_index() == 0) {
+        bool ok = db.open();
+        assert(ok);
+    }
+
+    data_accessor_t& data_accessor = db;
+    bench(state, workload, data_accessor);
+
+    if (state.thread_index() == 0) {
+        bool ok = db.close();
+        assert(ok);
+        state.counters["disk,bytes"] = bm::Counter(db.size_on_disk(), bm::Counter::kDefaults, bm::Counter::kIs1024);
     }
 }
 
@@ -383,7 +393,7 @@ int main(int argc, char** argv) {
         auto const& first = splited_workloads.front();
         register_benchmark(first.name, first.operations_count, settings.threads_count, [&](bm::State& state) {
             auto const& workload = splited_workloads[state.thread_index()];
-            bench(state, workload, *db);
+            regular_bench(state, workload, *db);
         });
     }
 

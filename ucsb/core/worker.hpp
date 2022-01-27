@@ -5,7 +5,7 @@
 #include <fmt/format.h>
 
 #include "ucsb/core/types.hpp"
-#include "ucsb/core/db.hpp"
+#include "ucsb/core/data_accessor.hpp"
 #include "ucsb/core/workload.hpp"
 #include "ucsb/core/timer.hpp"
 #include "ucsb/core/generators/generator.hpp"
@@ -26,7 +26,7 @@ struct worker_t {
     using length_generator_t = std::unique_ptr<generator_gt<size_t>>;
     using values_and_sizes_spansc_t = std::pair<values_spanc_t, value_lengths_spanc_t>;
 
-    inline worker_t(workload_t const& workload, db_t& db, timer_ref_t timer);
+    inline worker_t(workload_t const& workload, data_accessor_t& data_accessor, timer_ref_t timer);
 
     inline operation_result_t do_insert();
     inline operation_result_t do_update();
@@ -56,7 +56,7 @@ struct worker_t {
     inline value_span_t value_buffer();
 
     workload_t workload_;
-    db_t* db_;
+    data_accessor_t* data_accessor_;
     timer_ref_t timer_;
 
     key_generator_t insert_key_sequence_generator;
@@ -75,8 +75,8 @@ struct worker_t {
     length_generator_t range_select_length_generator_;
 };
 
-inline worker_t::worker_t(workload_t const& workload, db_t& db, timer_ref_t timer)
-    : workload_(workload), db_(&db), timer_(timer) {
+inline worker_t::worker_t(workload_t const& workload, data_accessor_t& data_accessor, timer_ref_t timer)
+    : workload_(workload), data_accessor_(&data_accessor), timer_(timer) {
 
     if (workload.insert_proportion == 1.0 || workload.batch_insert_proportion == 1.0 ||
         workload.bulk_import_proportion == 1.0) // Initialization case
@@ -104,7 +104,7 @@ inline worker_t::worker_t(workload_t const& workload, db_t& db, timer_ref_t time
 inline operation_result_t worker_t::do_insert() {
     key_t key = insert_key_sequence_generator->generate();
     value_spanc_t value = generate_value();
-    auto status = db_->insert(key, value);
+    auto status = data_accessor_->insert(key, value);
     if (acknowledged_key_generator)
         acknowledged_key_generator->acknowledge(key);
     return status;
@@ -113,27 +113,27 @@ inline operation_result_t worker_t::do_insert() {
 inline operation_result_t worker_t::do_update() {
     key_t key = generate_key();
     value_spanc_t value = generate_value();
-    return db_->update(key, value);
+    return data_accessor_->update(key, value);
 }
 
 inline operation_result_t worker_t::do_remove() {
     key_t key = generate_key();
-    return db_->remove(key);
+    return data_accessor_->remove(key);
 }
 
 inline operation_result_t worker_t::do_read() {
     key_t key = generate_key();
     value_span_t value = value_buffer();
-    return db_->read(key, value);
+    return data_accessor_->read(key, value);
 }
 
 inline operation_result_t worker_t::do_read_modify_write() {
     key_t key = generate_key();
     value_span_t read_value = value_buffer();
-    db_->read(key, read_value);
+    data_accessor_->read(key, read_value);
 
     value_spanc_t value = generate_value();
-    return db_->update(key, value);
+    return data_accessor_->update(key, value);
 }
 
 inline operation_result_t worker_t::do_batch_insert() {
@@ -143,12 +143,12 @@ inline operation_result_t worker_t::do_batch_insert() {
     values_and_sizes_spansc_t values_and_sizes = generate_values(keys.size());
     timer_.resume();
 
-    return db_->batch_insert(keys, values_and_sizes.first, values_and_sizes.second);
+    return data_accessor_->batch_insert(keys, values_and_sizes.first, values_and_sizes.second);
 }
 
 inline operation_result_t worker_t::do_batch_read() {
     keys_spanc_t keys = generate_batch_read_keys();
-    return db_->batch_read(keys);
+    return data_accessor_->batch_read(keys);
 }
 
 inline operation_result_t worker_t::do_bulk_import() {
@@ -156,22 +156,22 @@ inline operation_result_t worker_t::do_bulk_import() {
     timer_.pause();
     keys_spanc_t keys = generate_bulk_import_keys();
     values_and_sizes_spansc_t values_and_sizes = generate_values(keys.size());
-    auto metadata = db_->prepare_bulk_import_data(keys, values_and_sizes.first, values_and_sizes.second);
+    auto metadata = data_accessor_->prepare_bulk_import_data(keys, values_and_sizes.first, values_and_sizes.second);
     timer_.resume();
 
-    return db_->bulk_import(metadata);
+    return data_accessor_->bulk_import(metadata);
 }
 
 inline operation_result_t worker_t::do_range_select() {
     key_t key = generate_key();
     size_t length = range_select_length_generator_->generate();
     value_span_t single_value = value_buffer();
-    return db_->range_select(key, length, single_value);
+    return data_accessor_->range_select(key, length, single_value);
 }
 
 inline operation_result_t worker_t::do_scan() {
     value_span_t single_value = value_buffer();
-    return db_->scan(single_value);
+    return data_accessor_->scan(single_value);
 }
 
 inline worker_t::key_generator_t worker_t::create_key_generator(workload_t const& workload,
