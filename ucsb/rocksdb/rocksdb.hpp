@@ -32,6 +32,7 @@ using value_lengths_spanc_t = ucsb::value_lengths_spanc_t;
 using bulk_metadata_t = ucsb::bulk_metadata_t;
 using operation_status_t = ucsb::operation_status_t;
 using operation_result_t = ucsb::operation_result_t;
+using transaction_ptr_t = ucsb::transaction_ptr_t;
 
 /**
  * @brief RocksDB wrapper for the UCSB benchmark.
@@ -64,6 +65,8 @@ struct rocksdb_t : public ucsb::db_t {
     operation_result_t scan(value_span_t single_value) const override;
 
     size_t size_on_disk() const override;
+
+    transaction_ptr_t create_transaction() override;
 
   private:
     fs::path config_path_;
@@ -340,6 +343,10 @@ operation_result_t rocksdb_t::scan(value_span_t single_value) const {
 
 size_t rocksdb_t::size_on_disk() const {
     return ucsb::size_on_disk(dir_path_);
+}
+
+transaction_ptr_t rocksdb_t::create_transaction() {
+    return {};
 }
 
 } // namespace facebook

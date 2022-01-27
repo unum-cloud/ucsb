@@ -25,6 +25,7 @@ using value_lengths_spanc_t = ucsb::value_lengths_spanc_t;
 using bulk_metadata_t = ucsb::bulk_metadata_t;
 using operation_status_t = ucsb::operation_status_t;
 using operation_result_t = ucsb::operation_result_t;
+using transaction_ptr_t = ucsb::transaction_ptr_t;
 
 /**
  * @brief LMDB wrapper for the UCSB benchmark.
@@ -57,6 +58,8 @@ struct lmdb_t : public ucsb::db_t {
     operation_result_t scan(value_span_t single_value) const override;
 
     size_t size_on_disk() const override;
+
+    transaction_ptr_t create_transaction() override;
 
   private:
     struct config_t {
@@ -398,6 +401,10 @@ operation_result_t lmdb_t::scan(value_span_t single_value) const {
 
 size_t lmdb_t::size_on_disk() const {
     return ucsb::size_on_disk(dir_path_);
+}
+
+transaction_ptr_t lmdb_t::create_transaction() {
+    return {};
 }
 
 bool lmdb_t::load_config(fs::path const& config_path, config_t& config) {

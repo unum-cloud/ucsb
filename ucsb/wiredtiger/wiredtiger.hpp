@@ -23,6 +23,7 @@ using value_lengths_spanc_t = ucsb::value_lengths_spanc_t;
 using bulk_metadata_t = ucsb::bulk_metadata_t;
 using operation_status_t = ucsb::operation_status_t;
 using operation_result_t = ucsb::operation_result_t;
+using transaction_ptr_t = ucsb::transaction_ptr_t;
 
 /**
  * @brief WiredTiger wrapper for the UCSB benchmark.
@@ -57,6 +58,8 @@ struct wiredtiger_t : public ucsb::db_t {
     operation_result_t scan(value_span_t single_value) const override;
 
     size_t size_on_disk() const override;
+
+    transaction_ptr_t create_transaction() override;
 
   private:
     fs::path config_path_;
@@ -281,6 +284,10 @@ operation_result_t wiredtiger_t::scan(value_span_t single_value) const {
 
 size_t wiredtiger_t::size_on_disk() const {
     return ucsb::size_on_disk(dir_path_);
+}
+
+transaction_ptr_t wiredtiger_t::create_transaction() {
+    return {};
 }
 
 } // namespace mongodb

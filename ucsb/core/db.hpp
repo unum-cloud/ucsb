@@ -1,10 +1,14 @@
 #pragma once
+#include <memory>
 #include <set>
 
 #include "ucsb/core/types.hpp"
 #include "ucsb/core/data_accessor.hpp"
 
 namespace ucsb {
+
+using transaction_t = data_accessor_t;
+using transaction_ptr_t = std::unique_ptr<transaction_t>;
 
 /**
  * @brief A base class for benchmarking key-value stores.
@@ -44,6 +48,8 @@ struct db_t : public data_accessor_t {
      * @brief Accumulates the size (in bytes) of all the files the engine persisted on disk.
      */
     virtual size_t size_on_disk() const = 0;
+
+    virtual transaction_ptr_t create_transaction() = 0;
 };
 
 } // namespace ucsb

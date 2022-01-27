@@ -23,6 +23,7 @@ using value_lengths_spanc_t = ucsb::value_lengths_spanc_t;
 using bulk_metadata_t = ucsb::bulk_metadata_t;
 using operation_status_t = ucsb::operation_status_t;
 using operation_result_t = ucsb::operation_result_t;
+using transaction_ptr_t = ucsb::transaction_ptr_t;
 
 using fingerprint_t = key_t;
 using region_t = region_gt<key_t, data_source_t::unfixed_size_k>;
@@ -57,6 +58,8 @@ struct unumdb_t : public ucsb::db_t {
     operation_result_t scan(value_span_t single_value) const override;
 
     size_t size_on_disk() const override;
+
+    transaction_ptr_t create_transaction() override;
 
   private:
     struct db_config_t {
@@ -261,6 +264,10 @@ operation_result_t unumdb_t::scan(value_span_t single_value) const {
 
 size_t unumdb_t::size_on_disk() const {
     return ucsb::size_on_disk(dir_path_);
+}
+
+transaction_ptr_t unumdb_t::create_transaction() {
+    return {};
 }
 
 bool unumdb_t::load_config() {
