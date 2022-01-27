@@ -30,7 +30,7 @@ using value_lengths_spanc_t = ucsb::value_lengths_spanc_t;
 using bulk_metadata_t = ucsb::bulk_metadata_t;
 using operation_status_t = ucsb::operation_status_t;
 using operation_result_t = ucsb::operation_result_t;
-using transaction_ptr_t = ucsb::transaction_ptr_t;
+using transaction_t = ucsb::transaction_t;
 
 /**
  * @brief LevelDB wrapper for the UCSB benchmark.
@@ -65,7 +65,7 @@ struct leveldb_t : public ucsb::db_t {
 
     size_t size_on_disk() const override;
 
-    transaction_ptr_t create_transaction() override;
+    std::unique_ptr<transaction_t> create_transaction() override;
 
   private:
     struct config_t {
@@ -263,7 +263,7 @@ size_t leveldb_t::size_on_disk() const {
     return ucsb::size_on_disk(dir_path_);
 }
 
-transaction_ptr_t leveldb_t::create_transaction() {
+std::unique_ptr<transaction_t> leveldb_t::create_transaction() {
     return {};
 }
 

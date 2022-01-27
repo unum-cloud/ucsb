@@ -10,6 +10,8 @@
 #include "ucsb/core/db.hpp"
 #include "ucsb/core/helper.hpp"
 
+#include "unumdb_transaction.hpp"
+
 namespace unum {
 
 namespace fs = ucsb::fs;
@@ -23,7 +25,7 @@ using value_lengths_spanc_t = ucsb::value_lengths_spanc_t;
 using bulk_metadata_t = ucsb::bulk_metadata_t;
 using operation_status_t = ucsb::operation_status_t;
 using operation_result_t = ucsb::operation_result_t;
-using transaction_ptr_t = ucsb::transaction_ptr_t;
+using transaction_t = ucsb::transaction_t;
 
 using fingerprint_t = key_t;
 using region_t = region_gt<key_t, data_source_t::unfixed_size_k>;
@@ -59,10 +61,11 @@ struct unumdb_t : public ucsb::db_t {
 
     size_t size_on_disk() const override;
 
-    transaction_ptr_t create_transaction() override;
+    std::unique_ptr<transaction_t> create_transaction() override;
 
   private:
     struct db_config_t {
+        transaction_config_t transaction_config;
         region_config_t region_config;
         string_t io_device;
         size_t uring_max_files_count = 0;
@@ -266,8 +269,8 @@ size_t unumdb_t::size_on_disk() const {
     return ucsb::size_on_disk(dir_path_);
 }
 
-transaction_ptr_t unumdb_t::create_transaction() {
-    return {};
+std::unique_ptr<transaction_t> unumdb_t::create_transaction() {
+    return std::make_unique<unumdb_transaction_t>(region_.create_transaction(config_.transaction_config));
 }
 
 bool unumdb_t::load_config() {
@@ -277,6 +280,9 @@ bool unumdb_t::load_config() {
     std::ifstream i_config(config_path_);
     nlohmann::json j_config;
     i_config >> j_config;
+
+    config_.transaction_config.migration_capacity = j_config["transaction_migration_capacity"].get<size_t>();
+    config_.transaction_config.migration_max_cnt = j_config["transaction_migration_max_cnt"].get<size_t>();
 
     config_.region_config.country.fixed_citizen_size = 0;
     config_.region_config.country.migration_capacity = j_config["migration_capacity"].get<size_t>();

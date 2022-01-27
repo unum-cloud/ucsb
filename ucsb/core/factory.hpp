@@ -28,6 +28,10 @@ struct factory_t {
 inline std::shared_ptr<db_t> factory_t::create(db_kind_t kind, bool transactional) {
     if (transactional) {
         switch (kind) {
+        case db_kind_t::unumdb_k: {
+            init_file_io_by_libc("./"); // Note: Temporary solution
+            return std::make_shared<unum::unumdb_t>();
+        }
         default: break;
         }
     }

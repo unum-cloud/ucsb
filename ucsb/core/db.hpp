@@ -8,7 +8,6 @@
 namespace ucsb {
 
 using transaction_t = data_accessor_t;
-using transaction_ptr_t = std::unique_ptr<transaction_t>;
 
 /**
  * @brief A base class for benchmarking key-value stores.
@@ -49,7 +48,7 @@ struct db_t : public data_accessor_t {
      */
     virtual size_t size_on_disk() const = 0;
 
-    virtual transaction_ptr_t create_transaction() = 0;
+    virtual std::unique_ptr<transaction_t> create_transaction() = 0;
 };
 
 } // namespace ucsb
