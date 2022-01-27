@@ -324,21 +324,33 @@ void bench(bm::State& state, workload_t const& workload, data_accessor_t& data_a
     }
 }
 
-void bench(bm::State& state, workload_t const& workload, db_t& db, bool transactional) {
+void regular_bench(bm::State& state, workload_t const& workload, db_t& db) {
 
     if (state.thread_index() == 0) {
         bool ok = db.open();
         assert(ok);
     }
 
-    if (transactional) {
-        auto transaction = db.create_transaction();
-        if (!transaction)
-            throw exception_t("Failed to create DB transaction");
-        bench(state, workload, *transaction);
+    bench(state, workload, db);
+
+    if (state.thread_index() == 0) {
+        bool ok = db.close();
+        assert(ok);
+        state.counters["disk,bytes"] = bm::Counter(db.size_on_disk(), bm::Counter::kDefaults, bm::Counter::kIs1024);
     }
-    else
-        bench(state, workload, db);
+}
+
+void transactional_bench(bm::State& state, workload_t const& workload, db_t& db) {
+
+    if (state.thread_index() == 0) {
+        bool ok = db.open();
+        assert(ok);
+    }
+
+    auto transaction = db.create_transaction();
+    if (!transaction)
+        throw exception_t("Failed to create DB transaction");
+    bench(state, workload, *transaction);
 
     if (state.thread_index() == 0) {
         bool ok = db.close();
@@ -403,7 +415,10 @@ int main(int argc, char** argv) {
         auto const& first = splited_workloads.front();
         register_benchmark(first.name, first.operations_count, settings.threads_count, [&](bm::State& state) {
             auto const& workload = splited_workloads[state.thread_index()];
-            bench(state, workload, *db, settings.transactional);
+            if (settings.transactional)
+                transactional_bench(state, workload, *db);
+            else
+                regular_bench(state, workload, *db);
         });
     }
 
