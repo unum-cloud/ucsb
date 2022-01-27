@@ -10,7 +10,7 @@
 #include "ucsb/core/stat.hpp"
 #include "ucsb/core/db.hpp"
 #include "ucsb/core/workload.hpp"
-#include "ucsb/core/transaction.hpp"
+#include "ucsb/core/worker.hpp"
 #include "ucsb/core/factory.hpp"
 #include "ucsb/core/operation.hpp"
 #include "ucsb/core/exception.hpp"
@@ -26,7 +26,7 @@ using db_t = ucsb::db_t;
 using db_kind_t = ucsb::db_kind_t;
 using factory_t = ucsb::factory_t;
 using timer_ref_t = ucsb::timer_ref_t;
-using transaction_t = ucsb::transaction_t;
+using worker_t = ucsb::worker_t;
 using operation_kind_t = ucsb::operation_kind_t;
 using operation_status_t = ucsb::operation_status_t;
 using operation_result_t = ucsb::operation_result_t;
@@ -247,7 +247,7 @@ inline operation_chooser_t create_operation_chooser(workload_t const& workload) 
     return chooser;
 }
 
-void transaction(bm::State& state, workload_t const& workload, db_t& db) {
+void bench(bm::State& state, workload_t const& workload, db_t& db) {
 
     if (state.thread_index() == 0) {
         bool ok = db.open();
@@ -256,7 +256,7 @@ void transaction(bm::State& state, workload_t const& workload, db_t& db) {
 
     auto chooser = create_operation_chooser(workload);
     timer_ref_t timer(state);
-    transaction_t transaction(workload, db, timer);
+    worker_t worker(workload, db, timer);
 
     static size_t fails = 0;
     static size_t operations_done = 0;
@@ -279,16 +279,16 @@ void transaction(bm::State& state, workload_t const& workload, db_t& db) {
         operation_result_t result;
         auto operation = chooser->choose();
         switch (operation) {
-        case operation_kind_t::insert_k: result = transaction.do_insert(); break;
-        case operation_kind_t::update_k: result = transaction.do_update(); break;
-        case operation_kind_t::remove_k: result = transaction.do_remove(); break;
-        case operation_kind_t::read_k: result = transaction.do_read(); break;
-        case operation_kind_t::read_modify_write_k: result = transaction.do_read_modify_write(); break;
-        case operation_kind_t::batch_insert_k: result = transaction.do_batch_insert(); break;
-        case operation_kind_t::batch_read_k: result = transaction.do_batch_read(); break;
-        case operation_kind_t::bulk_import_k: result = transaction.do_bulk_import(); break;
-        case operation_kind_t::range_select_k: result = transaction.do_range_select(); break;
-        case operation_kind_t::scan_k: result = transaction.do_scan(); break;
+        case operation_kind_t::insert_k: result = worker.do_insert(); break;
+        case operation_kind_t::update_k: result = worker.do_update(); break;
+        case operation_kind_t::remove_k: result = worker.do_remove(); break;
+        case operation_kind_t::read_k: result = worker.do_read(); break;
+        case operation_kind_t::read_modify_write_k: result = worker.do_read_modify_write(); break;
+        case operation_kind_t::batch_insert_k: result = worker.do_batch_insert(); break;
+        case operation_kind_t::batch_read_k: result = worker.do_batch_read(); break;
+        case operation_kind_t::bulk_import_k: result = worker.do_bulk_import(); break;
+        case operation_kind_t::range_select_k: result = worker.do_range_select(); break;
+        case operation_kind_t::scan_k: result = worker.do_scan(); break;
         default: throw exception_t("Unknown operation"); break;
         }
 
@@ -383,7 +383,7 @@ int main(int argc, char** argv) {
         auto const& first = splited_workloads.front();
         register_benchmark(first.name, first.operations_count, settings.threads_count, [&](bm::State& state) {
             auto const& workload = splited_workloads[state.thread_index()];
-            transaction(state, workload, *db);
+            bench(state, workload, *db);
         });
     }
 
