@@ -7,10 +7,11 @@ import pexpect
 
 cleanup_previous = False
 drop_caches = False
+transactional = False
 
 threads = [
     1,
-    2,
+    # 2,
     # 4,
     # 8,
     # 16,
@@ -60,9 +61,15 @@ def get_worklods_file_path(size):
 
 def get_results_dir_path():
     if drop_caches:
-        return './bench/results/without_caches/'
+        if transactional:
+            return './bench/results/without_caches/transactional/'
+        else:
+            return './bench/results/without_caches/'
     else:
-        return './bench/results/'
+        if transactional:
+            return './bench/results/transactional/'
+        else:
+            return './bench/results/'
 
 
 def drop_system_caches():
@@ -75,9 +82,11 @@ def run(db_name, size, threads_count, workload_names):
     workloads_path = get_worklods_file_path(size)
     results_path = get_results_dir_path()
 
+    transactional_flag = '-t' if transactional else ''
     filter = ','.join(workload_names)
     child = pexpect.spawn(f'./build_release/bin/_ucsb_bench \
                             -db {db_name} \
+                            {transactional_flag}\
                             -c {config_path} \
                             -w {workloads_path} \
                             -r {results_path} \

@@ -61,6 +61,10 @@ void parse_and_validate_args(int argc, char* argv[], settings_t& settings) {
             settings.db_name = std::string(argv[arg_idx]);
             arg_idx++;
         }
+        if (strcmp(argv[arg_idx], "-t") == 0) {
+            settings.transactional = true;
+            arg_idx++;
+        }
         else if (strcmp(argv[arg_idx], "-c") == 0) {
             arg_idx++;
             if (arg_idx >= argc) {
@@ -380,7 +384,7 @@ int main(int argc, char** argv) {
 
     // Setup DB
     db_kind_t kind = ucsb::parse_db(settings.db_name);
-    std::shared_ptr<db_t> db = factory_t {}.create(kind);
+    std::shared_ptr<db_t> db = factory_t {}.create(kind, settings.transactional);
     if (!db) {
         fmt::print("Failed to create DB: {}\n", settings.db_name);
         return 1;
