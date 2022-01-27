@@ -112,7 +112,7 @@ for threads_count in threads:
         for db_name in db_names:
             if drop_caches:
                 for workload_name in workload_names:
-                    print('Droping caches...')
+                    print('Dropping caches...')
                     drop_system_caches()
                     time.sleep(8)
                     run(db_name, size, threads_count, [workload_name])
