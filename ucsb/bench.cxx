@@ -303,7 +303,7 @@ void transaction(bm::State& state, workload_t const& workload, db_t& db) {
             current_iteration == workload.operations_count) {
             float percent = 100.f * current_iteration / workload.operations_count;
             last_printed_iteration = current_iteration;
-            fmt::print("{}: {:.2f}%\r", workload.name, percent);
+            fmt::print("{}: {:>6.2f}%\r", workload.name, percent);
             fflush(stdout);
         }
     }
