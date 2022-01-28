@@ -1,5 +1,7 @@
 #pragma once
 
+#ifdef build_transaction_m
+
 #include <memory>
 #include <vector>
 #include <fmt/format.h>
@@ -10,7 +12,7 @@
 #include "ucsb/core/data_accessor.hpp"
 #include "ucsb/core/helper.hpp"
 
-namespace unum {
+namespace facebook {
 
 namespace fs = ucsb::fs;
 
@@ -186,4 +188,6 @@ operation_result_t rocksdb_transaction_t::scan(value_span_t single_value) const 
     return {scanned_records_count, operation_status_t::ok_k};
 }
 
-} // namespace unum
+} // namespace facebook
+
+#endif

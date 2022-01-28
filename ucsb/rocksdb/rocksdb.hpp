@@ -1,5 +1,11 @@
 #pragma once
 
+/**
+ * @brief Warning: We added this macro to have two different builds: regular and transactional
+ * Bacause RocksDB has had a linker error
+ */
+// #define build_transaction_m
+
 #include <iostream>
 #include <cstring>
 #include <string>
@@ -10,7 +16,9 @@
 #include <rocksdb/cache.h>
 #include <rocksdb/write_batch.h>
 #include <rocksdb/utilities/options_util.h>
+#ifdef build_transaction_m
 #include <rocksdb/utilities/transaction_db.h>
+#endif
 #include <rocksdb/db.h>
 #include <rocksdb/options.h>
 #include <rocksdb/comparator.h>
@@ -49,7 +57,14 @@ enum class db_mode_t {
 template <db_mode_t mode_ak>
 struct rocksdb_gt : public ucsb::db_t {
   public:
-    inline rocksdb_gt() : db_(nullptr), transaction_db_(nullptr) {}
+    inline rocksdb_gt()
+        : db_(nullptr)
+#ifdef build_transaction_m
+          ,
+          transaction_db_(nullptr)
+#endif
+    {
+    }
     inline ~rocksdb_gt() { close(); }
 
     void set_config(fs::path const& config_path, fs::path const& dir_path) override;
@@ -97,11 +112,15 @@ struct rocksdb_gt : public ucsb::db_t {
     };
 
     rocksdb::Options options_;
+#ifdef build_transaction_m
     rocksdb::TransactionDBOptions transaction_options_;
+#endif
     std::vector<rocksdb::ColumnFamilyDescriptor> cf_descs_;
 
     rocksdb::DB* db_;
+#ifdef build_transaction_m
     rocksdb::TransactionDB* transaction_db_;
+#endif
     key_comparator_t key_cmp_;
 };
 
@@ -140,6 +159,7 @@ bool rocksdb_gt<mode_ak>::open() {
         }
     }
     else {
+#ifdef build_transaction_m
         if (cf_descs_.empty())
             status = rocksdb::TransactionDB::Open(options_, transaction_options_, dir_path_.string(), &transaction_db_);
         else {
@@ -152,6 +172,9 @@ bool rocksdb_gt<mode_ak>::open() {
                                                   &transaction_db_);
         }
         db_ = transaction_db_;
+#else
+        return false;
+#endif
     }
 
     return status.ok();
@@ -161,7 +184,9 @@ template <db_mode_t mode_ak>
 bool rocksdb_gt<mode_ak>::close() {
     delete db_;
     db_ = nullptr;
+#ifdef build_transaction_m
     transaction_db_ = nullptr;
+#endif
     return true;
 }
 
@@ -400,10 +425,14 @@ size_t rocksdb_gt<mode_ak>::size_on_disk() const {
 template <db_mode_t mode_ak>
 std::unique_ptr<transaction_t> rocksdb_gt<mode_ak>::create_transaction() {
 
+#ifdef build_transaction_m
     rocksdb::WriteOptions write_options;
     std::unique_ptr<rocksdb::Transaction> raw_transaction;
     raw_transaction.reset(transaction_db_->BeginTransaction(write_options));
     return std::make_unique<rocksdb_transaction_t>(std::move(raw_transaction));
+#else
+    return {};
+#endif
 }
 
 } // namespace facebook
