@@ -31,7 +31,7 @@ struct rocksdb_transaction_t : public ucsb::transaction_t {
   public:
     inline rocksdb_transaction_t(std::unique_ptr<rocksdb::Transaction>&& transaction)
         : transaction_(std::forward<std::unique_ptr<rocksdb::Transaction>&&>(transaction)) {}
-    inline ~rocksdb_transaction_t() = default;
+    inline ~rocksdb_transaction_t();
 
     operation_result_t insert(key_t key, value_spanc_t value) override;
     operation_result_t update(key_t key, value_spanc_t value) override;
@@ -54,6 +54,11 @@ struct rocksdb_transaction_t : public ucsb::transaction_t {
     mutable dbuffer_t batch_buffer_;
 };
 
+inline rocksdb_transaction_t::~rocksdb_transaction_t() {
+    auto status = transaction_->Commit();
+    assert(status.ok());
+}
+
 operation_result_t rocksdb_transaction_t::insert(key_t key, value_spanc_t value) {
     rocksdb::Slice slice {reinterpret_cast<char const*>(&key), sizeof(key)};
     std::string data(reinterpret_cast<char const*>(value.data()), value.size());
@@ -61,6 +66,8 @@ operation_result_t rocksdb_transaction_t::insert(key_t key, value_spanc_t value)
     if (!status.ok()) {
         assert(status.IsTryAgain());
         status = transaction_->Commit();
+        assert(status.ok());
+        status = transaction_->Put(slice, data);
         assert(status.ok());
     }
     return {1, operation_status_t::ok_k};
@@ -82,6 +89,8 @@ operation_result_t rocksdb_transaction_t::update(key_t key, value_spanc_t value)
         assert(status.IsTryAgain());
         status = transaction_->Commit();
         assert(status.ok());
+        status = transaction_->Put(slice, data);
+        assert(status.ok());
     }
     return {1, operation_status_t::ok_k};
 }
@@ -92,6 +101,8 @@ operation_result_t rocksdb_transaction_t::remove(key_t key) {
     if (!status.ok()) {
         assert(status.IsTryAgain());
         status = transaction_->Commit();
+        assert(status.ok());
+        status = transaction_->Delete(slice);
         assert(status.ok());
     }
 

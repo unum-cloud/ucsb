@@ -37,7 +37,7 @@ struct unumdb_transaction_t : public ucsb::transaction_t {
   public:
     inline unumdb_transaction_t(std::unique_ptr<region_transaction_t>&& transaction)
         : transaction_(std::forward<std::unique_ptr<region_transaction_t>&&>(transaction)) {}
-    inline ~unumdb_transaction_t() = default;
+    inline ~unumdb_transaction_t();
 
     operation_result_t insert(key_t key, value_spanc_t value) override;
     operation_result_t update(key_t key, value_spanc_t value) override;
@@ -60,12 +60,19 @@ struct unumdb_transaction_t : public ucsb::transaction_t {
     mutable dbuffer_t batch_buffer_;
 };
 
+inline unumdb_transaction_t::~unumdb_transaction_t() {
+    auto status = transaction_->commit();
+    assert(status == status_t::ok_k);
+}
+
 operation_result_t unumdb_transaction_t::insert(key_t key, value_spanc_t value) {
     citizen_view_t citizen {reinterpret_cast<byte_t const*>(value.data()), value.size()};
     auto status = transaction_->insert(key, citizen);
     if (status != status_t::ok_k) {
         assert(status == status_t::not_enough_ram_k);
         status = transaction_->commit();
+        assert(status == status_t::ok_k);
+        status = transaction_->insert(key, citizen);
         assert(status == status_t::ok_k);
     }
     return {1, operation_status_t::ok_k};
@@ -84,6 +91,8 @@ operation_result_t unumdb_transaction_t::update(key_t key, value_spanc_t value) 
         assert(status == status_t::not_enough_ram_k);
         status = transaction_->commit();
         assert(status == status_t::ok_k);
+        status = transaction_->insert(key, citizen);
+        assert(status == status_t::ok_k);
     }
     return {1, operation_status_t::ok_k};
 }
@@ -93,6 +102,8 @@ operation_result_t unumdb_transaction_t::remove(key_t key) {
     if (status != status_t::ok_k) {
         assert(status == status_t::not_enough_ram_k);
         status = transaction_->commit();
+        assert(status == status_t::ok_k);
+        status = transaction_->remove(key);
         assert(status == status_t::ok_k);
     }
     return {1, operation_status_t::ok_k};
