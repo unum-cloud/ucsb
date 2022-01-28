@@ -355,9 +355,9 @@ void bench(
     synchronizer.sync();
     if (state.thread_index() == 0) {
         db.flush();
+        state.counters["disk,bytes"] = bm::Counter(db.size_on_disk(), bm::Counter::kDefaults, bm::Counter::kIs1024);
         bool ok = db.close();
         assert(ok);
-        state.counters["disk,bytes"] = bm::Counter(db.size_on_disk(), bm::Counter::kDefaults, bm::Counter::kIs1024);
     }
 }
 
