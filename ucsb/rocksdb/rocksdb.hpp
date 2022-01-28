@@ -73,6 +73,7 @@ struct rocksdb_gt : public ucsb::db_t {
     operation_result_t range_select(key_t key, size_t length, value_span_t single_value) const override;
     operation_result_t scan(value_span_t single_value) const override;
 
+    void flush() override;
     size_t size_on_disk() const override;
 
     std::unique_ptr<transaction_t> create_transaction() override;
@@ -384,6 +385,11 @@ operation_result_t rocksdb_gt<mode_ak>::scan(value_span_t single_value) const {
     }
     delete db_iter;
     return {scanned_records_count, operation_status_t::ok_k};
+}
+
+template <db_mode_t mode_ak>
+void rocksdb_gt<mode_ak>::flush() {
+    db_->Flush(rocksdb::FlushOptions());
 }
 
 template <db_mode_t mode_ak>

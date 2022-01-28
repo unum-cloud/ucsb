@@ -43,6 +43,8 @@ struct db_t : public data_accessor_t {
      */
     virtual void destroy() = 0;
 
+    virtual void flush() = 0;
+
     /**
      * @brief Accumulates the size (in bytes) of all the files the engine persisted on disk.
      */

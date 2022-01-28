@@ -354,6 +354,7 @@ void bench(
 
     synchronizer.sync();
     if (state.thread_index() == 0) {
+        db.flush();
         bool ok = db.close();
         assert(ok);
         state.counters["disk,bytes"] = bm::Counter(db.size_on_disk(), bm::Counter::kDefaults, bm::Counter::kIs1024);
@@ -405,7 +406,10 @@ int main(int argc, char** argv) {
     db_kind_t kind = ucsb::parse_db(settings.db_name);
     std::shared_ptr<db_t> db = factory_t {}.create(kind, settings.transactional);
     if (!db) {
-        fmt::print("Failed to create DB: {}\n", settings.db_name);
+        if (settings.transactional)
+            fmt::print("Failed to create transactional DB: {}\n", settings.db_name);
+        else
+            fmt::print("Failed to create DB: {}\n", settings.db_name);
         return 1;
     }
     db->set_config(settings.db_config_path, settings.db_dir_path);
