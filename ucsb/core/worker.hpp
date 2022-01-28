@@ -5,7 +5,7 @@
 #include <fmt/format.h>
 
 #include "ucsb/core/types.hpp"
-#include "ucsb/core/db.hpp"
+#include "ucsb/core/data_accessor.hpp"
 #include "ucsb/core/workload.hpp"
 #include "ucsb/core/timer.hpp"
 #include "ucsb/core/generators/generator.hpp"
@@ -19,14 +19,14 @@
 
 namespace ucsb {
 
-struct transaction_t {
+struct worker_t {
     using key_generator_t = std::unique_ptr<generator_gt<key_t>>;
     using acknowledged_key_generator_t = std::unique_ptr<acknowledged_counter_generator_t>;
     using value_length_generator_t = std::unique_ptr<generator_gt<value_length_t>>;
     using length_generator_t = std::unique_ptr<generator_gt<size_t>>;
     using values_and_sizes_spansc_t = std::pair<values_spanc_t, value_lengths_spanc_t>;
 
-    inline transaction_t(workload_t const& workload, db_t& db, timer_ref_t timer);
+    inline worker_t(workload_t const& workload, data_accessor_t& data_accessor, timer_ref_t timer);
 
     inline operation_result_t do_insert();
     inline operation_result_t do_update();
@@ -56,7 +56,7 @@ struct transaction_t {
     inline value_span_t value_buffer();
 
     workload_t workload_;
-    db_t* db_;
+    data_accessor_t* data_accessor_;
     timer_ref_t timer_;
 
     key_generator_t insert_key_sequence_generator;
@@ -75,8 +75,8 @@ struct transaction_t {
     length_generator_t range_select_length_generator_;
 };
 
-inline transaction_t::transaction_t(workload_t const& workload, db_t& db, timer_ref_t timer)
-    : workload_(workload), db_(&db), timer_(timer) {
+inline worker_t::worker_t(workload_t const& workload, data_accessor_t& data_accessor, timer_ref_t timer)
+    : workload_(workload), data_accessor_(&data_accessor), timer_(timer) {
 
     if (workload.insert_proportion == 1.0 || workload.batch_insert_proportion == 1.0 ||
         workload.bulk_import_proportion == 1.0) // Initialization case
@@ -101,81 +101,81 @@ inline transaction_t::transaction_t(workload_t const& workload, db_t& db, timer_
     range_select_length_generator_ = create_range_select_length_generator(workload);
 }
 
-inline operation_result_t transaction_t::do_insert() {
+inline operation_result_t worker_t::do_insert() {
     key_t key = insert_key_sequence_generator->generate();
     value_spanc_t value = generate_value();
-    auto status = db_->insert(key, value);
+    auto status = data_accessor_->insert(key, value);
     if (acknowledged_key_generator)
         acknowledged_key_generator->acknowledge(key);
     return status;
 }
 
-inline operation_result_t transaction_t::do_update() {
+inline operation_result_t worker_t::do_update() {
     key_t key = generate_key();
     value_spanc_t value = generate_value();
-    return db_->update(key, value);
+    return data_accessor_->update(key, value);
 }
 
-inline operation_result_t transaction_t::do_remove() {
+inline operation_result_t worker_t::do_remove() {
     key_t key = generate_key();
-    return db_->remove(key);
+    return data_accessor_->remove(key);
 }
 
-inline operation_result_t transaction_t::do_read() {
+inline operation_result_t worker_t::do_read() {
     key_t key = generate_key();
     value_span_t value = value_buffer();
-    return db_->read(key, value);
+    return data_accessor_->read(key, value);
 }
 
-inline operation_result_t transaction_t::do_read_modify_write() {
+inline operation_result_t worker_t::do_read_modify_write() {
     key_t key = generate_key();
     value_span_t read_value = value_buffer();
-    db_->read(key, read_value);
+    data_accessor_->read(key, read_value);
 
     value_spanc_t value = generate_value();
-    return db_->update(key, value);
+    return data_accessor_->update(key, value);
 }
 
-inline operation_result_t transaction_t::do_batch_insert() {
+inline operation_result_t worker_t::do_batch_insert() {
     // Note: Pause benchmark timer to do data preparation, to measure batch insert time only
     timer_.pause();
     keys_spanc_t keys = generate_batch_insert_keys();
     values_and_sizes_spansc_t values_and_sizes = generate_values(keys.size());
     timer_.resume();
 
-    return db_->batch_insert(keys, values_and_sizes.first, values_and_sizes.second);
+    return data_accessor_->batch_insert(keys, values_and_sizes.first, values_and_sizes.second);
 }
 
-inline operation_result_t transaction_t::do_batch_read() {
+inline operation_result_t worker_t::do_batch_read() {
     keys_spanc_t keys = generate_batch_read_keys();
-    return db_->batch_read(keys);
+    return data_accessor_->batch_read(keys);
 }
 
-inline operation_result_t transaction_t::do_bulk_import() {
+inline operation_result_t worker_t::do_bulk_import() {
     // Note: Pause benchmark timer to do data preparation, to measure bulk import time only
     timer_.pause();
     keys_spanc_t keys = generate_bulk_import_keys();
     values_and_sizes_spansc_t values_and_sizes = generate_values(keys.size());
-    auto metadata = db_->prepare_bulk_import_data(keys, values_and_sizes.first, values_and_sizes.second);
+    auto metadata = data_accessor_->prepare_bulk_import_data(keys, values_and_sizes.first, values_and_sizes.second);
     timer_.resume();
 
-    return db_->bulk_import(metadata);
+    return data_accessor_->bulk_import(metadata);
 }
 
-inline operation_result_t transaction_t::do_range_select() {
+inline operation_result_t worker_t::do_range_select() {
     key_t key = generate_key();
     size_t length = range_select_length_generator_->generate();
     value_span_t single_value = value_buffer();
-    return db_->range_select(key, length, single_value);
+    return data_accessor_->range_select(key, length, single_value);
 }
 
-inline operation_result_t transaction_t::do_scan() {
+inline operation_result_t worker_t::do_scan() {
     value_span_t single_value = value_buffer();
-    return db_->scan(single_value);
+    return data_accessor_->scan(single_value);
 }
 
-inline transaction_t::key_generator_t transaction_t::create_key_generator(workload_t const& workload,
-                                                                          counter_generator_t& counter_generator) {
+inline worker_t::key_generator_t worker_t::create_key_generator(workload_t const& workload,
+                                                                counter_generator_t& counter_generator) {
     key_generator_t generator;
     switch (workload.key_dist) {
     case distribution_kind_t::uniform_k:
@@ -197,8 +197,7 @@ inline transaction_t::key_generator_t transaction_t::create_key_generator(worklo
     return generator;
 }
 
-inline transaction_t::value_length_generator_t transaction_t::create_value_length_generator(
-    workload_t const& workload) {
+inline worker_t::value_length_generator_t worker_t::create_value_length_generator(workload_t const& workload) {
 
     value_length_generator_t generator;
     switch (workload.value_length_dist) {
@@ -213,8 +212,7 @@ inline transaction_t::value_length_generator_t transaction_t::create_value_lengt
     return generator;
 }
 
-inline transaction_t::length_generator_t transaction_t::create_batch_insert_length_generator(
-    workload_t const& workload) {
+inline worker_t::length_generator_t worker_t::create_batch_insert_length_generator(workload_t const& workload) {
 
     length_generator_t generator;
     switch (workload.batch_insert_length_dist) {
@@ -233,7 +231,7 @@ inline transaction_t::length_generator_t transaction_t::create_batch_insert_leng
     return generator;
 }
 
-inline transaction_t::length_generator_t transaction_t::create_batch_read_length_generator(workload_t const& workload) {
+inline worker_t::length_generator_t worker_t::create_batch_read_length_generator(workload_t const& workload) {
     length_generator_t generator;
     switch (workload.batch_read_length_dist) {
     case distribution_kind_t::uniform_k:
@@ -251,8 +249,7 @@ inline transaction_t::length_generator_t transaction_t::create_batch_read_length
     return generator;
 }
 
-inline transaction_t::length_generator_t transaction_t::create_bulk_import_length_generator(
-    workload_t const& workload) {
+inline worker_t::length_generator_t worker_t::create_bulk_import_length_generator(workload_t const& workload) {
 
     length_generator_t generator;
     switch (workload.bulk_import_length_dist) {
@@ -271,8 +268,7 @@ inline transaction_t::length_generator_t transaction_t::create_bulk_import_lengt
     return generator;
 }
 
-inline transaction_t::length_generator_t transaction_t::create_range_select_length_generator(
-    workload_t const& workload) {
+inline worker_t::length_generator_t worker_t::create_range_select_length_generator(workload_t const& workload) {
 
     length_generator_t generator;
     switch (workload.range_select_length_dist) {
@@ -291,7 +287,7 @@ inline transaction_t::length_generator_t transaction_t::create_range_select_leng
     return generator;
 }
 
-inline key_t transaction_t::generate_key() {
+inline key_t worker_t::generate_key() {
     key_t key = 0;
     do {
         key = key_generator_->generate();
@@ -299,7 +295,7 @@ inline key_t transaction_t::generate_key() {
     return key;
 }
 
-inline keys_spanc_t transaction_t::generate_batch_insert_keys() {
+inline keys_spanc_t worker_t::generate_batch_insert_keys() {
     size_t batch_length = batch_insert_length_generator_->generate();
     keys_span_t keys(keys_buffer_.data(), batch_length);
     for (size_t i = 0; i < batch_length; ++i) {
@@ -312,7 +308,7 @@ inline keys_spanc_t transaction_t::generate_batch_insert_keys() {
     return keys;
 }
 
-inline keys_spanc_t transaction_t::generate_batch_read_keys() {
+inline keys_spanc_t worker_t::generate_batch_read_keys() {
     size_t batch_length = batch_read_length_generator_->generate();
     keys_span_t keys(keys_buffer_.data(), batch_length);
     for (size_t i = 0; i < batch_length; ++i)
@@ -320,7 +316,7 @@ inline keys_spanc_t transaction_t::generate_batch_read_keys() {
     return keys;
 }
 
-inline keys_spanc_t transaction_t::generate_bulk_import_keys() {
+inline keys_spanc_t worker_t::generate_bulk_import_keys() {
     size_t bulk_length = bulk_import_length_generator_->generate();
     keys_span_t keys(keys_buffer_.data(), bulk_length);
     for (size_t i = 0; i < bulk_length; ++i) {
@@ -333,12 +329,12 @@ inline keys_spanc_t transaction_t::generate_bulk_import_keys() {
     return keys;
 }
 
-inline value_spanc_t transaction_t::generate_value() {
+inline value_spanc_t worker_t::generate_value() {
     values_and_sizes_spansc_t value_and_size = generate_values(1);
     return value_spanc_t {value_and_size.first.data(), value_and_size.second[0]};
 }
 
-inline transaction_t::values_and_sizes_spansc_t transaction_t::generate_values(size_t count) {
+inline worker_t::values_and_sizes_spansc_t worker_t::generate_values(size_t count) {
     for (size_t i = 0; i < count * workload_.value_length; ++i)
         values_buffer_[i] = std::byte(value_generator_.generate());
 
@@ -352,7 +348,7 @@ inline transaction_t::values_and_sizes_spansc_t transaction_t::generate_values(s
                           value_lengths_spanc_t(value_sizes_buffer_.data(), count));
 }
 
-inline value_span_t transaction_t::value_buffer() {
+inline value_span_t worker_t::value_buffer() {
     return value_span_t(values_buffer_.data(), workload_.value_length);
 }
 
