@@ -16,6 +16,7 @@
 #include "ucsb/core/exception.hpp"
 #include "ucsb/core/format.hpp"
 #include "ucsb/core/results.hpp"
+#include "ucsb/core/threads_synchronizer.hpp"
 
 namespace bm = benchmark;
 
@@ -36,6 +37,7 @@ using cpu_stat_t = ucsb::cpu_stat_t;
 using mem_stat_t = ucsb::mem_stat_t;
 using exception_t = ucsb::exception_t;
 using printable_bytes_t = ucsb::printable_bytes_t;
+using threads_synchronizer_t = ucsb::threads_synchronizer_t;
 
 inline void usage_message(const char* command) {
     fmt::print("Usage: {} [options]\n", command);
@@ -324,34 +326,25 @@ void bench(bm::State& state, workload_t const& workload, data_accessor_t& data_a
     }
 }
 
-void regular_bench(bm::State& state, workload_t const& workload, db_t& db) {
+void bench(
+    bm::State& state, workload_t const& workload, db_t& db, bool transactional, threads_synchronizer_t& synchronizer) {
 
     if (state.thread_index() == 0) {
         bool ok = db.open();
         assert(ok);
     }
+    synchronizer.sync();
 
-    bench(state, workload, db);
-
-    if (state.thread_index() == 0) {
-        bool ok = db.close();
-        assert(ok);
-        state.counters["disk,bytes"] = bm::Counter(db.size_on_disk(), bm::Counter::kDefaults, bm::Counter::kIs1024);
+    if (transactional) {
+        auto transaction = db.create_transaction();
+        if (!transaction)
+            throw exception_t("Failed to create DB transaction");
+        bench(state, workload, *transaction);
     }
-}
+    else
+        bench(state, workload, db);
 
-void transactional_bench(bm::State& state, workload_t const& workload, db_t& db) {
-
-    if (state.thread_index() == 0) {
-        bool ok = db.open();
-        assert(ok);
-    }
-
-    auto transaction = db.create_transaction();
-    if (!transaction)
-        throw exception_t("Failed to create DB transaction");
-    bench(state, workload, *transaction);
-
+    synchronizer.sync();
     if (state.thread_index() == 0) {
         bool ok = db.close();
         assert(ok);
@@ -409,16 +402,15 @@ int main(int argc, char** argv) {
     }
     db->set_config(settings.db_config_path, settings.db_dir_path);
 
+    threads_synchronizer_t synchronizer(settings.threads_count);
+
     // Register benchmarks
     register_section(section_name(settings, workloads));
     for (auto const& splited_workloads : threads_workloads) {
         auto const& first = splited_workloads.front();
         register_benchmark(first.name, first.operations_count, settings.threads_count, [&](bm::State& state) {
             auto const& workload = splited_workloads[state.thread_index()];
-            if (settings.transactional)
-                transactional_bench(state, workload, *db);
-            else
-                regular_bench(state, workload, *db);
+            bench(state, workload, *db, settings.transactional, synchronizer);
         });
     }
 
