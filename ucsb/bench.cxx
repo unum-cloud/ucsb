@@ -162,11 +162,19 @@ inline void register_section(std::string const& name) {
 }
 
 inline std::string section_name(settings_t const& settings, workloads_t const& workloads) {
-    return workloads.empty()
-               ? settings.db_name
-               : fmt::format("{} ({})",
-                             settings.db_name,
-                             printable_bytes_t {workloads[0].db_records_count * workloads[0].value_length});
+    std::string name = settings.db_name;
+    if (workloads.empty()) {
+        if (settings.transactional)
+            name = fmt::format("{} (transactional)", settings.db_name);
+    }
+    else {
+        size_t db_size = workloads[0].db_records_count * workloads[0].value_length;
+        if (settings.transactional)
+            name = fmt::format("{} (transactional, {})", settings.db_name, printable_bytes_t {db_size});
+        else
+            name = fmt::format("{} ({})", settings.db_name, printable_bytes_t {db_size});
+    }
+    return name;
 }
 
 template <typename func_at>
