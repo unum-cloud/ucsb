@@ -200,9 +200,9 @@ void rocksdb_gt<mode_ak>::destroy() {
 template <db_mode_t mode_ak>
 operation_result_t rocksdb_gt<mode_ak>::insert(key_t key, value_spanc_t value) {
     rocksdb::Slice slice {reinterpret_cast<char const*>(&key), sizeof(key)};
-    std::string data(reinterpret_cast<char const*>(value.data()), value.size());
+    rocksdb::Slice data_slice {reinterpret_cast<char const*>(value.data()), value.size()};
     rocksdb::WriteOptions wopt;
-    rocksdb::Status status = db_->Put(wopt, slice, data);
+    rocksdb::Status status = db_->Put(wopt, slice, data_slice);
     if (!status.ok())
         return {0, operation_status_t::error_k};
     return {1, operation_status_t::ok_k};
@@ -219,9 +219,9 @@ operation_result_t rocksdb_gt<mode_ak>::update(key_t key, value_spanc_t value) {
     else if (!status.ok())
         return {0, operation_status_t::error_k};
 
-    data = std::string(reinterpret_cast<char const*>(value.data()), value.size());
+    rocksdb::Slice data_slice {reinterpret_cast<char const*>(value.data()), value.size()};
     rocksdb::WriteOptions wopt;
-    status = db_->Put(wopt, slice, data);
+    status = db_->Put(wopt, slice, data_slice);
     if (!status.ok())
         return {0, operation_status_t::error_k};
     return {1, operation_status_t::ok_k};
@@ -275,8 +275,8 @@ operation_result_t rocksdb_gt<mode_ak>::batch_insert(keys_spanc_t keys,
             key = __builtin_bswap64(key);
 
         rocksdb::Slice slice {reinterpret_cast<char const*>(&key), sizeof(key)};
-        std::string data(reinterpret_cast<char const*>(values.data() + offset), sizes[idx]);
-        status = sst_file_writer.Add(slice, data);
+        rocksdb::Slice data_slice {reinterpret_cast<char const*>(values.data() + offset), sizes[idx]};
+        status = sst_file_writer.Add(slice, data_slice);
         if (!status.ok())
             break;
         offset += sizes[idx];
@@ -340,8 +340,8 @@ bulk_metadata_t rocksdb_gt<mode_ak>::prepare_bulk_import_data(keys_spanc_t keys,
                 key = __builtin_bswap64(key);
 
             rocksdb::Slice slice {reinterpret_cast<char const*>(&key), sizeof(key)};
-            std::string data(reinterpret_cast<char const*>(values.data() + data_offset), sizes[data_idx]);
-            status = sst_file_writer.Add(slice, data);
+            rocksdb::Slice data_slice {reinterpret_cast<char const*>(values.data() + data_offset), sizes[data_idx]};
+            status = sst_file_writer.Add(slice, data_slice);
             if (status.ok())
                 data_offset += sizes[data_idx];
             else

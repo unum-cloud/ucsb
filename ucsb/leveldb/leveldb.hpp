@@ -151,9 +151,9 @@ void leveldb_t::destroy() {
 
 operation_result_t leveldb_t::insert(key_t key, value_spanc_t value) {
     leveldb::Slice slice {reinterpret_cast<char const*>(&key), sizeof(key)};
-    std::string data(reinterpret_cast<char const*>(value.data()), value.size());
+    leveldb::Slice data_slice {reinterpret_cast<char const*>(value.data()), value.size()};
     leveldb::WriteOptions wopt;
-    leveldb::Status status = db_->Put(wopt, slice, data);
+    leveldb::Status status = db_->Put(wopt, slice, data_slice);
     if (!status.ok())
         return {0, operation_status_t::error_k};
     return {1, operation_status_t::ok_k};
@@ -169,9 +169,9 @@ operation_result_t leveldb_t::update(key_t key, value_spanc_t value) {
     else if (!status.ok())
         return {0, operation_status_t::error_k};
 
-    data = std::string(reinterpret_cast<char const*>(value.data()), value.size());
+    leveldb::Slice data_slice {reinterpret_cast<char const*>(value.data()), value.size()};
     leveldb::WriteOptions wopt;
-    status = db_->Put(wopt, slice, data);
+    status = db_->Put(wopt, slice, data_slice);
     if (!status.ok())
         return {0, operation_status_t::error_k};
     return {1, operation_status_t::ok_k};
