@@ -23,6 +23,7 @@ db_names = [
     'leveldb',
     'wiredtiger',
     'lmdb',
+    'mongodb'
 ]
 
 sizes = [
@@ -106,6 +107,9 @@ if cleanup_previous:
             db_path = f'./tmp/{db_name}/{size}/'
             if os.path.exists(db_path):
                 shutil.rmtree(db_path)
+            if db_name == 'mongodb':  # Until database path will be tmp/
+                os.system(
+                    '''mongo mongodb --eval "printjson(db.dropDatabase())" >/dev/null''')
 
 for threads_count in threads:
     for size in sizes:

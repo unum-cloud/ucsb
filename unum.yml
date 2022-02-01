@@ -12,6 +12,8 @@ conan:
   - rocksdb/6.20.3
   - leveldb/1.23
   - lmdb/0.9.29
+  - snappy/1.1.9
+  - mongo-cxx-driver/3.6.6
 
 packages:
   pkg-config:
