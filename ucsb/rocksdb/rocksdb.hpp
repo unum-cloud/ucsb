@@ -1,5 +1,11 @@
 #pragma once
 
+/**
+ * @brief Warning: We added this macro to have two different builds: regular and transactional
+ * Bacause RocksDB has had a linker error
+ */
+// #define build_transaction_m
+
 #include <iostream>
 #include <cstring>
 #include <string>
@@ -10,6 +16,9 @@
 #include <rocksdb/cache.h>
 #include <rocksdb/write_batch.h>
 #include <rocksdb/utilities/options_util.h>
+#ifdef build_transaction_m
+#include <rocksdb/utilities/transaction_db.h>
+#endif
 #include <rocksdb/db.h>
 #include <rocksdb/options.h>
 #include <rocksdb/comparator.h>
@@ -18,6 +27,8 @@
 #include "ucsb/core/types.hpp"
 #include "ucsb/core/db.hpp"
 #include "ucsb/core/helper.hpp"
+
+#include "rocksdb_transaction.hpp"
 
 namespace facebook {
 
@@ -32,15 +43,29 @@ using value_lengths_spanc_t = ucsb::value_lengths_spanc_t;
 using bulk_metadata_t = ucsb::bulk_metadata_t;
 using operation_status_t = ucsb::operation_status_t;
 using operation_result_t = ucsb::operation_result_t;
+using transaction_t = ucsb::transaction_t;
+
+enum class db_mode_t {
+    regular_k,
+    transactional_k,
+};
 
 /**
  * @brief RocksDB wrapper for the UCSB benchmark.
  * https://github.com/facebook/rocksdb
  */
-struct rocksdb_t : public ucsb::db_t {
+template <db_mode_t mode_ak>
+struct rocksdb_gt : public ucsb::db_t {
   public:
-    inline rocksdb_t() : db_(nullptr) {}
-    inline ~rocksdb_t() { close(); }
+    inline rocksdb_gt()
+        : db_(nullptr)
+#ifdef build_transaction_m
+          ,
+          transaction_db_(nullptr)
+#endif
+    {
+    }
+    inline ~rocksdb_gt() { close(); }
 
     void set_config(fs::path const& config_path, fs::path const& dir_path) override;
     bool open() override;
@@ -63,7 +88,10 @@ struct rocksdb_t : public ucsb::db_t {
     operation_result_t range_select(key_t key, size_t length, value_span_t single_value) const override;
     operation_result_t scan(value_span_t single_value) const override;
 
+    void flush() override;
     size_t size_on_disk() const override;
+
+    std::unique_ptr<transaction_t> create_transaction() override;
 
   private:
     fs::path config_path_;
@@ -84,17 +112,26 @@ struct rocksdb_t : public ucsb::db_t {
     };
 
     rocksdb::Options options_;
+#ifdef build_transaction_m
+    rocksdb::TransactionDBOptions transaction_options_;
+#endif
     std::vector<rocksdb::ColumnFamilyDescriptor> cf_descs_;
+
     rocksdb::DB* db_;
+#ifdef build_transaction_m
+    rocksdb::TransactionDB* transaction_db_;
+#endif
     key_comparator_t key_cmp_;
 };
 
-void rocksdb_t::set_config(fs::path const& config_path, fs::path const& dir_path) {
+template <db_mode_t mode_ak>
+void rocksdb_gt<mode_ak>::set_config(fs::path const& config_path, fs::path const& dir_path) {
     config_path_ = config_path;
     dir_path_ = dir_path;
 }
 
-bool rocksdb_t::open() {
+template <db_mode_t mode_ak>
+bool rocksdb_gt<mode_ak>::open() {
     if (db_)
         return true;
 
@@ -111,41 +148,68 @@ bool rocksdb_t::open() {
     table_options.cache_index_and_filter_blocks_with_high_priority = true;
     table_options.filter_policy.reset(rocksdb::NewBloomFilterPolicy(10));
     options_.table_factory.reset(rocksdb::NewBlockBasedTableFactory(table_options));
-
     // options_.comparator = &key_cmp_;
-    if (cf_descs_.empty())
-        status = rocksdb::DB::Open(options_, dir_path_.string(), &db_);
+
+    if constexpr (mode_ak == db_mode_t::regular_k) {
+        if (cf_descs_.empty())
+            status = rocksdb::DB::Open(options_, dir_path_.string(), &db_);
+        else {
+            std::vector<rocksdb::ColumnFamilyHandle*> cf_handles;
+            status = rocksdb::DB::Open(options_, dir_path_.string(), cf_descs_, &cf_handles, &db_);
+        }
+    }
     else {
-        std::vector<rocksdb::ColumnFamilyHandle*> cf_handles;
-        status = rocksdb::DB::Open(options_, dir_path_.string(), cf_descs_, &cf_handles, &db_);
+#ifdef build_transaction_m
+        if (cf_descs_.empty())
+            status = rocksdb::TransactionDB::Open(options_, transaction_options_, dir_path_.string(), &transaction_db_);
+        else {
+            std::vector<rocksdb::ColumnFamilyHandle*> cf_handles;
+            status = rocksdb::TransactionDB::Open(options_,
+                                                  transaction_options_,
+                                                  dir_path_.string(),
+                                                  cf_descs_,
+                                                  &cf_handles,
+                                                  &transaction_db_);
+        }
+        db_ = transaction_db_;
+#else
+        return false;
+#endif
     }
 
     return status.ok();
 }
 
-bool rocksdb_t::close() {
+template <db_mode_t mode_ak>
+bool rocksdb_gt<mode_ak>::close() {
     delete db_;
     db_ = nullptr;
+#ifdef build_transaction_m
+    transaction_db_ = nullptr;
+#endif
     return true;
 }
 
-void rocksdb_t::destroy() {
+template <db_mode_t mode_ak>
+void rocksdb_gt<mode_ak>::destroy() {
     bool ok = close();
     assert(ok);
     rocksdb::DestroyDB(dir_path_.string(), options_, cf_descs_);
 }
 
-operation_result_t rocksdb_t::insert(key_t key, value_spanc_t value) {
+template <db_mode_t mode_ak>
+operation_result_t rocksdb_gt<mode_ak>::insert(key_t key, value_spanc_t value) {
     rocksdb::Slice slice {reinterpret_cast<char const*>(&key), sizeof(key)};
-    std::string data(reinterpret_cast<char const*>(value.data()), value.size());
+    rocksdb::Slice data_slice {reinterpret_cast<char const*>(value.data()), value.size()};
     rocksdb::WriteOptions wopt;
-    rocksdb::Status status = db_->Put(wopt, slice, data);
+    rocksdb::Status status = db_->Put(wopt, slice, data_slice);
     if (!status.ok())
         return {0, operation_status_t::error_k};
     return {1, operation_status_t::ok_k};
 }
 
-operation_result_t rocksdb_t::update(key_t key, value_spanc_t value) {
+template <db_mode_t mode_ak>
+operation_result_t rocksdb_gt<mode_ak>::update(key_t key, value_spanc_t value) {
 
     std::string data;
     rocksdb::Slice slice {reinterpret_cast<char const*>(&key), sizeof(key)};
@@ -155,15 +219,16 @@ operation_result_t rocksdb_t::update(key_t key, value_spanc_t value) {
     else if (!status.ok())
         return {0, operation_status_t::error_k};
 
-    data = std::string(reinterpret_cast<char const*>(value.data()), value.size());
+    rocksdb::Slice data_slice {reinterpret_cast<char const*>(value.data()), value.size()};
     rocksdb::WriteOptions wopt;
-    status = db_->Put(wopt, slice, data);
+    status = db_->Put(wopt, slice, data_slice);
     if (!status.ok())
         return {0, operation_status_t::error_k};
     return {1, operation_status_t::ok_k};
 }
 
-operation_result_t rocksdb_t::remove(key_t key) {
+template <db_mode_t mode_ak>
+operation_result_t rocksdb_gt<mode_ak>::remove(key_t key) {
     rocksdb::WriteOptions wopt;
     rocksdb::Slice slice {reinterpret_cast<char const*>(&key), sizeof(key)};
     rocksdb::Status status = db_->Delete(wopt, slice);
@@ -173,7 +238,8 @@ operation_result_t rocksdb_t::remove(key_t key) {
     return {1, operation_status_t::ok_k};
 }
 
-operation_result_t rocksdb_t::read(key_t key, value_span_t value) const {
+template <db_mode_t mode_ak>
+operation_result_t rocksdb_gt<mode_ak>::read(key_t key, value_span_t value) const {
     std::string data;
     rocksdb::Slice slice {reinterpret_cast<char const*>(&key), sizeof(key)};
     rocksdb::Status status = db_->Get(rocksdb::ReadOptions(), slice, &data);
@@ -186,7 +252,10 @@ operation_result_t rocksdb_t::read(key_t key, value_span_t value) const {
     return {1, operation_status_t::ok_k};
 }
 
-operation_result_t rocksdb_t::batch_insert(keys_spanc_t keys, values_spanc_t values, value_lengths_spanc_t sizes) {
+template <db_mode_t mode_ak>
+operation_result_t rocksdb_gt<mode_ak>::batch_insert(keys_spanc_t keys,
+                                                     values_spanc_t values,
+                                                     value_lengths_spanc_t sizes) {
 
     std::string sst_file_path("/tmp/rocksdb_tmp.sst");
     rocksdb::SstFileWriter sst_file_writer(rocksdb::EnvOptions(), options_, options_.comparator);
@@ -206,8 +275,8 @@ operation_result_t rocksdb_t::batch_insert(keys_spanc_t keys, values_spanc_t val
             key = __builtin_bswap64(key);
 
         rocksdb::Slice slice {reinterpret_cast<char const*>(&key), sizeof(key)};
-        std::string data(reinterpret_cast<char const*>(values.data() + offset), sizes[idx]);
-        status = sst_file_writer.Add(slice, data);
+        rocksdb::Slice data_slice {reinterpret_cast<char const*>(values.data() + offset), sizes[idx]};
+        status = sst_file_writer.Add(slice, data_slice);
         if (!status.ok())
             break;
         offset += sizes[idx];
@@ -230,7 +299,8 @@ operation_result_t rocksdb_t::batch_insert(keys_spanc_t keys, values_spanc_t val
     return {idx, operation_status_t::ok_k};
 }
 
-operation_result_t rocksdb_t::batch_read(keys_spanc_t keys) const {
+template <db_mode_t mode_ak>
+operation_result_t rocksdb_gt<mode_ak>::batch_read(keys_spanc_t keys) const {
 
     std::vector<rocksdb::Slice> slices;
     slices.reserve(keys.size());
@@ -246,9 +316,10 @@ operation_result_t rocksdb_t::batch_read(keys_spanc_t keys) const {
     return {keys.size(), operation_status_t::ok_k};
 }
 
-bulk_metadata_t rocksdb_t::prepare_bulk_import_data(keys_spanc_t keys,
-                                                    values_spanc_t values,
-                                                    value_lengths_spanc_t sizes) const {
+template <db_mode_t mode_ak>
+bulk_metadata_t rocksdb_gt<mode_ak>::prepare_bulk_import_data(keys_spanc_t keys,
+                                                              values_spanc_t values,
+                                                              value_lengths_spanc_t sizes) const {
     size_t data_idx = 0;
     size_t data_offset = 0;
     bulk_metadata_t metadata;
@@ -269,8 +340,8 @@ bulk_metadata_t rocksdb_t::prepare_bulk_import_data(keys_spanc_t keys,
                 key = __builtin_bswap64(key);
 
             rocksdb::Slice slice {reinterpret_cast<char const*>(&key), sizeof(key)};
-            std::string data(reinterpret_cast<char const*>(values.data() + data_offset), sizes[data_idx]);
-            status = sst_file_writer.Add(slice, data);
+            rocksdb::Slice data_slice {reinterpret_cast<char const*>(values.data() + data_offset), sizes[data_idx]};
+            status = sst_file_writer.Add(slice, data_slice);
             if (status.ok())
                 data_offset += sizes[data_idx];
             else
@@ -291,7 +362,8 @@ bulk_metadata_t rocksdb_t::prepare_bulk_import_data(keys_spanc_t keys,
     return metadata;
 }
 
-operation_result_t rocksdb_t::bulk_import(bulk_metadata_t const& metadata) {
+template <db_mode_t mode_ak>
+operation_result_t rocksdb_gt<mode_ak>::bulk_import(bulk_metadata_t const& metadata) {
 
     rocksdb::IngestExternalFileOptions ingest_options;
     ingest_options.move_files = true;
@@ -307,7 +379,8 @@ operation_result_t rocksdb_t::bulk_import(bulk_metadata_t const& metadata) {
     return {metadata.records_count, operation_status_t::ok_k};
 }
 
-operation_result_t rocksdb_t::range_select(key_t key, size_t length, value_span_t single_value) const {
+template <db_mode_t mode_ak>
+operation_result_t rocksdb_gt<mode_ak>::range_select(key_t key, size_t length, value_span_t single_value) const {
 
     rocksdb::Iterator* db_iter = db_->NewIterator(rocksdb::ReadOptions());
     rocksdb::Slice slice {reinterpret_cast<char const*>(&key), sizeof(key)};
@@ -323,7 +396,8 @@ operation_result_t rocksdb_t::range_select(key_t key, size_t length, value_span_
     return {selected_records_count, operation_status_t::ok_k};
 }
 
-operation_result_t rocksdb_t::scan(value_span_t single_value) const {
+template <db_mode_t mode_ak>
+operation_result_t rocksdb_gt<mode_ak>::scan(value_span_t single_value) const {
 
     size_t scanned_records_count = 0;
     rocksdb::Iterator* db_iter = db_->NewIterator(rocksdb::ReadOptions());
@@ -338,8 +412,27 @@ operation_result_t rocksdb_t::scan(value_span_t single_value) const {
     return {scanned_records_count, operation_status_t::ok_k};
 }
 
-size_t rocksdb_t::size_on_disk() const {
+template <db_mode_t mode_ak>
+void rocksdb_gt<mode_ak>::flush() {
+    db_->Flush(rocksdb::FlushOptions());
+}
+
+template <db_mode_t mode_ak>
+size_t rocksdb_gt<mode_ak>::size_on_disk() const {
     return ucsb::size_on_disk(dir_path_);
+}
+
+template <db_mode_t mode_ak>
+std::unique_ptr<transaction_t> rocksdb_gt<mode_ak>::create_transaction() {
+
+#ifdef build_transaction_m
+    rocksdb::WriteOptions write_options;
+    std::unique_ptr<rocksdb::Transaction> raw_transaction;
+    raw_transaction.reset(transaction_db_->BeginTransaction(write_options));
+    return std::make_unique<rocksdb_transaction_t>(std::move(raw_transaction));
+#else
+    return {};
+#endif
 }
 
 } // namespace facebook

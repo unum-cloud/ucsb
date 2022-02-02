@@ -30,6 +30,7 @@ using value_lengths_spanc_t = ucsb::value_lengths_spanc_t;
 using bulk_metadata_t = ucsb::bulk_metadata_t;
 using operation_status_t = ucsb::operation_status_t;
 using operation_result_t = ucsb::operation_result_t;
+using transaction_t = ucsb::transaction_t;
 
 /**
  * @brief LevelDB wrapper for the UCSB benchmark.
@@ -62,7 +63,10 @@ struct leveldb_t : public ucsb::db_t {
     operation_result_t range_select(key_t key, size_t length, value_span_t single_value) const override;
     operation_result_t scan(value_span_t single_value) const override;
 
+    void flush() override;
     size_t size_on_disk() const override;
+
+    std::unique_ptr<transaction_t> create_transaction() override;
 
   private:
     struct config_t {
@@ -147,9 +151,9 @@ void leveldb_t::destroy() {
 
 operation_result_t leveldb_t::insert(key_t key, value_spanc_t value) {
     leveldb::Slice slice {reinterpret_cast<char const*>(&key), sizeof(key)};
-    std::string data(reinterpret_cast<char const*>(value.data()), value.size());
+    leveldb::Slice data_slice {reinterpret_cast<char const*>(value.data()), value.size()};
     leveldb::WriteOptions wopt;
-    leveldb::Status status = db_->Put(wopt, slice, data);
+    leveldb::Status status = db_->Put(wopt, slice, data_slice);
     if (!status.ok())
         return {0, operation_status_t::error_k};
     return {1, operation_status_t::ok_k};
@@ -165,9 +169,9 @@ operation_result_t leveldb_t::update(key_t key, value_spanc_t value) {
     else if (!status.ok())
         return {0, operation_status_t::error_k};
 
-    data = std::string(reinterpret_cast<char const*>(value.data()), value.size());
+    leveldb::Slice data_slice {reinterpret_cast<char const*>(value.data()), value.size()};
     leveldb::WriteOptions wopt;
-    status = db_->Put(wopt, slice, data);
+    status = db_->Put(wopt, slice, data_slice);
     if (!status.ok())
         return {0, operation_status_t::error_k};
     return {1, operation_status_t::ok_k};
@@ -256,8 +260,16 @@ operation_result_t leveldb_t::scan(value_span_t single_value) const {
     return {scanned_records_count, operation_status_t::ok_k};
 }
 
+void leveldb_t::flush() {
+    // Nothing to do
+}
+
 size_t leveldb_t::size_on_disk() const {
     return ucsb::size_on_disk(dir_path_);
+}
+
+std::unique_ptr<transaction_t> leveldb_t::create_transaction() {
+    return {};
 }
 
 bool leveldb_t::load_config(fs::path const& config_path, config_t& config) {

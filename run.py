@@ -5,11 +5,13 @@ import time
 import shutil
 import pexpect
 
-cleanup_previous_dbs = False
+cleanup_previous = False
 drop_caches = False
+transactional = False
 
 threads = [
     1,
+    # 2,
     # 4,
     # 8,
     # 16,
@@ -21,6 +23,7 @@ db_names = [
     'leveldb',
     'wiredtiger',
     'lmdb',
+    'mongodb'
 ]
 
 sizes = [
@@ -59,9 +62,15 @@ def get_worklods_file_path(size):
 
 def get_results_dir_path():
     if drop_caches:
-        return './bench/results/without_caches/'
+        if transactional:
+            return './bench/results/without_caches/transactional/'
+        else:
+            return './bench/results/without_caches/'
     else:
-        return './bench/results/'
+        if transactional:
+            return './bench/results/transactional/'
+        else:
+            return './bench/results/'
 
 
 def drop_system_caches():
@@ -74,9 +83,11 @@ def run(db_name, size, threads_count, workload_names):
     workloads_path = get_worklods_file_path(size)
     results_path = get_results_dir_path()
 
+    transactional_flag = '-t' if transactional else ''
     filter = ','.join(workload_names)
     child = pexpect.spawn(f'./build_release/bin/_ucsb_bench \
                             -db {db_name} \
+                            {transactional_flag}\
                             -c {config_path} \
                             -w {workloads_path} \
                             -r {results_path} \
@@ -89,17 +100,23 @@ def run(db_name, size, threads_count, workload_names):
 if os.geteuid() != 0:
     sys.exit('Run as sudo!')
 
-if cleanup_previous_dbs:
-    if os.path.exists('./tmp/'):
-        print('Cleanup...')
-        shutil.rmtree('./tmp/')
+if cleanup_previous:
+    print('Cleanup...')
+    for size in sizes:
+        for db_name in db_names:
+            db_path = f'./tmp/{db_name}/{size}/'
+            if os.path.exists(db_path):
+                shutil.rmtree(db_path)
+            if db_name == 'mongodb':  # Until database path will be tmp/
+                os.system(
+                    '''mongo mongodb --eval "printjson(db.dropDatabase())" >/dev/null''')
 
 for threads_count in threads:
     for size in sizes:
         for db_name in db_names:
             if drop_caches:
                 for workload_name in workload_names:
-                    print('Droping caches...')
+                    print('Dropping caches...')
                     drop_system_caches()
                     time.sleep(8)
                     run(db_name, size, threads_count, [workload_name])

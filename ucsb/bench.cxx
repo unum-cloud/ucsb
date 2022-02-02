@@ -10,12 +10,13 @@
 #include "ucsb/core/stat.hpp"
 #include "ucsb/core/db.hpp"
 #include "ucsb/core/workload.hpp"
-#include "ucsb/core/transaction.hpp"
+#include "ucsb/core/worker.hpp"
 #include "ucsb/core/factory.hpp"
 #include "ucsb/core/operation.hpp"
 #include "ucsb/core/exception.hpp"
 #include "ucsb/core/format.hpp"
 #include "ucsb/core/results.hpp"
+#include "ucsb/core/threads_synchronizer.hpp"
 
 namespace bm = benchmark;
 
@@ -23,10 +24,11 @@ using settings_t = ucsb::settings_t;
 using workload_t = ucsb::workload_t;
 using workloads_t = ucsb::workloads_t;
 using db_t = ucsb::db_t;
+using data_accessor_t = ucsb::data_accessor_t;
 using db_kind_t = ucsb::db_kind_t;
 using factory_t = ucsb::factory_t;
 using timer_ref_t = ucsb::timer_ref_t;
-using transaction_t = ucsb::transaction_t;
+using worker_t = ucsb::worker_t;
 using operation_kind_t = ucsb::operation_kind_t;
 using operation_status_t = ucsb::operation_status_t;
 using operation_result_t = ucsb::operation_result_t;
@@ -35,6 +37,7 @@ using cpu_stat_t = ucsb::cpu_stat_t;
 using mem_stat_t = ucsb::mem_stat_t;
 using exception_t = ucsb::exception_t;
 using printable_bytes_t = ucsb::printable_bytes_t;
+using threads_synchronizer_t = ucsb::threads_synchronizer_t;
 
 inline void usage_message(const char* command) {
     fmt::print("Usage: {} [options]\n", command);
@@ -58,6 +61,10 @@ void parse_and_validate_args(int argc, char* argv[], settings_t& settings) {
                 exit(1);
             }
             settings.db_name = std::string(argv[arg_idx]);
+            arg_idx++;
+        }
+        if (strcmp(argv[arg_idx], "-t") == 0) {
+            settings.transactional = true;
             arg_idx++;
         }
         else if (strcmp(argv[arg_idx], "-c") == 0) {
@@ -155,11 +162,19 @@ inline void register_section(std::string const& name) {
 }
 
 inline std::string section_name(settings_t const& settings, workloads_t const& workloads) {
-    return workloads.empty()
-               ? settings.db_name
-               : fmt::format("{} ({})",
-                             settings.db_name,
-                             printable_bytes_t {workloads[0].db_records_count * workloads[0].value_length});
+    std::string name = settings.db_name;
+    if (workloads.empty()) {
+        if (settings.transactional)
+            name = fmt::format("{} (transactional)", settings.db_name);
+    }
+    else {
+        size_t db_size = workloads[0].db_records_count * workloads[0].value_length;
+        if (settings.transactional)
+            name = fmt::format("{} (transactional, {})", settings.db_name, printable_bytes_t {db_size});
+        else
+            name = fmt::format("{} ({})", settings.db_name, printable_bytes_t {db_size});
+    }
+    return name;
 }
 
 template <typename func_at>
@@ -225,7 +240,7 @@ std::vector<workload_t> split_workload_into_threads(workload_t const& workload, 
         workload_t thread_workload = workload;
         thread_workload.records_count = records_count_per_thread;
         thread_workload.operations_count = std::max(size_t(1), operations_count_per_thread);
-        thread_workload.start_key = idx * records_count_per_thread;
+        thread_workload.start_key = workload.start_key + idx * records_count_per_thread;
         workloads.push_back(thread_workload);
     }
 
@@ -247,16 +262,11 @@ inline operation_chooser_t create_operation_chooser(workload_t const& workload) 
     return chooser;
 }
 
-void transaction(bm::State& state, workload_t const& workload, db_t& db) {
-
-    if (state.thread_index() == 0) {
-        bool ok = db.open();
-        assert(ok);
-    }
+void bench(bm::State& state, workload_t const& workload, data_accessor_t& data_accessor) {
 
     auto chooser = create_operation_chooser(workload);
     timer_ref_t timer(state);
-    transaction_t transaction(workload, db, timer);
+    worker_t worker(workload, data_accessor, timer);
 
     static size_t fails = 0;
     static size_t operations_done = 0;
@@ -279,16 +289,16 @@ void transaction(bm::State& state, workload_t const& workload, db_t& db) {
         operation_result_t result;
         auto operation = chooser->choose();
         switch (operation) {
-        case operation_kind_t::insert_k: result = transaction.do_insert(); break;
-        case operation_kind_t::update_k: result = transaction.do_update(); break;
-        case operation_kind_t::remove_k: result = transaction.do_remove(); break;
-        case operation_kind_t::read_k: result = transaction.do_read(); break;
-        case operation_kind_t::read_modify_write_k: result = transaction.do_read_modify_write(); break;
-        case operation_kind_t::batch_insert_k: result = transaction.do_batch_insert(); break;
-        case operation_kind_t::batch_read_k: result = transaction.do_batch_read(); break;
-        case operation_kind_t::bulk_import_k: result = transaction.do_bulk_import(); break;
-        case operation_kind_t::range_select_k: result = transaction.do_range_select(); break;
-        case operation_kind_t::scan_k: result = transaction.do_scan(); break;
+        case operation_kind_t::insert_k: result = worker.do_insert(); break;
+        case operation_kind_t::update_k: result = worker.do_update(); break;
+        case operation_kind_t::remove_k: result = worker.do_remove(); break;
+        case operation_kind_t::read_k: result = worker.do_read(); break;
+        case operation_kind_t::read_modify_write_k: result = worker.do_read_modify_write(); break;
+        case operation_kind_t::batch_insert_k: result = worker.do_batch_insert(); break;
+        case operation_kind_t::batch_read_k: result = worker.do_batch_read(); break;
+        case operation_kind_t::bulk_import_k: result = worker.do_bulk_import(); break;
+        case operation_kind_t::range_select_k: result = worker.do_range_select(); break;
+        case operation_kind_t::scan_k: result = worker.do_scan(); break;
         default: throw exception_t("Unknown operation"); break;
         }
 
@@ -303,7 +313,7 @@ void transaction(bm::State& state, workload_t const& workload, db_t& db) {
             current_iteration == workload.operations_count) {
             float percent = 100.f * current_iteration / workload.operations_count;
             last_printed_iteration = current_iteration;
-            fmt::print("{}: {:.2f}%\r", workload.name, percent);
+            fmt::print("{}: {:>6.2f}%\r", workload.name, percent);
             fflush(stdout);
         }
     }
@@ -311,8 +321,6 @@ void transaction(bm::State& state, workload_t const& workload, db_t& db) {
     if (state.thread_index() == 0) {
         cpu_stat.stop();
         mem_stat.stop();
-        bool ok = db.close();
-        assert(ok);
 
         state.SetBytesProcessed(bytes_processed_count);
         state.counters["fails,%"] = bm::Counter(operations_done ? fails * 100.0 / operations_done : 100.0);
@@ -321,9 +329,35 @@ void transaction(bm::State& state, workload_t const& workload, db_t& db) {
         state.counters["cpu_avg,%"] = bm::Counter(cpu_stat.percent().avg);
         state.counters["mem_max,bytes"] = bm::Counter(mem_stat.rss().max, bm::Counter::kDefaults, bm::Counter::kIs1024);
         state.counters["mem_avg,bytes"] = bm::Counter(mem_stat.rss().avg, bm::Counter::kDefaults, bm::Counter::kIs1024);
-        state.counters["disk,bytes"] = bm::Counter(db.size_on_disk(), bm::Counter::kDefaults, bm::Counter::kIs1024);
         state.counters["processed,bytes"] =
             bm::Counter(bytes_processed_count, bm::Counter::kDefaults, bm::Counter::kIs1024);
+    }
+}
+
+void bench(
+    bm::State& state, workload_t const& workload, db_t& db, bool transactional, threads_synchronizer_t& synchronizer) {
+
+    if (state.thread_index() == 0) {
+        bool ok = db.open();
+        assert(ok);
+    }
+    synchronizer.sync();
+
+    if (transactional) {
+        auto transaction = db.create_transaction();
+        if (!transaction)
+            throw exception_t("Failed to create DB transaction");
+        bench(state, workload, *transaction);
+    }
+    else
+        bench(state, workload, db);
+
+    synchronizer.sync();
+    if (state.thread_index() == 0) {
+        db.flush();
+        state.counters["disk,bytes"] = bm::Counter(db.size_on_disk(), bm::Counter::kDefaults, bm::Counter::kIs1024);
+        bool ok = db.close();
+        assert(ok);
     }
 }
 
@@ -370,12 +404,17 @@ int main(int argc, char** argv) {
 
     // Setup DB
     db_kind_t kind = ucsb::parse_db(settings.db_name);
-    std::shared_ptr<db_t> db = factory_t {}.create(kind);
+    std::shared_ptr<db_t> db = factory_t {}.create(kind, settings.transactional);
     if (!db) {
-        fmt::print("Failed to create DB: {}\n", settings.db_name);
+        if (settings.transactional)
+            fmt::print("Failed to create transactional DB: {}\n", settings.db_name);
+        else
+            fmt::print("Failed to create DB: {}\n", settings.db_name);
         return 1;
     }
     db->set_config(settings.db_config_path, settings.db_dir_path);
+
+    threads_synchronizer_t synchronizer(settings.threads_count);
 
     // Register benchmarks
     register_section(section_name(settings, workloads));
@@ -383,7 +422,7 @@ int main(int argc, char** argv) {
         auto const& first = splited_workloads.front();
         register_benchmark(first.name, first.operations_count, settings.threads_count, [&](bm::State& state) {
             auto const& workload = splited_workloads[state.thread_index()];
-            transaction(state, workload, *db);
+            bench(state, workload, *db, settings.transactional, synchronizer);
         });
     }
 

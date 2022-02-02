@@ -8,6 +8,7 @@ namespace ucsb {
 
 struct settings_t {
     std::string db_name;
+    bool transactional = false;
 
     fs::path db_config_path;
     fs::path db_dir_path;
