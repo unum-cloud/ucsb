@@ -66,7 +66,6 @@ struct unumdb_t : public ucsb::db_t {
 
   private:
     struct db_config_t {
-        transaction_config_t transaction_config;
         region_config_t region_config;
         string_t io_device;
         size_t uring_max_files_count = 0;
@@ -275,7 +274,7 @@ size_t unumdb_t::size_on_disk() const {
 }
 
 std::unique_ptr<transaction_t> unumdb_t::create_transaction() {
-    return std::make_unique<unumdb_transaction_t>(region_.create_transaction(config_.transaction_config));
+    return std::make_unique<unumdb_transaction_t>(region_.create_transaction());
 }
 
 bool unumdb_t::load_config() {
@@ -286,8 +285,8 @@ bool unumdb_t::load_config() {
     nlohmann::json j_config;
     i_config >> j_config;
 
-    config_.transaction_config.migration_capacity = j_config["transaction_migration_capacity"].get<size_t>();
-    config_.transaction_config.migration_max_cnt = j_config["transaction_migration_max_cnt"].get<size_t>();
+    config_.region_config.default_transaction.migration_capacity = j_config["transaction_migration_capacity"].get<size_t>();
+    config_.region_config.default_transaction.migration_max_cnt = j_config["transaction_migration_max_cnt"].get<size_t>();
 
     config_.region_config.country.fixed_citizen_size = 0;
     config_.region_config.country.migration_capacity = j_config["migration_capacity"].get<size_t>();
