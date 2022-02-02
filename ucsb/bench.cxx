@@ -43,6 +43,7 @@ inline void usage_message(const char* command) {
     fmt::print("Usage: {} [options]\n", command);
     fmt::print("Options:\n");
     fmt::print("-db: Database name\n");
+    fmt::print("-t: transactional\n");
     fmt::print("-c: Database configuration file path\n");
     fmt::print("-w: Workloads file path\n");
     fmt::print("-r: Results dir path\n");
