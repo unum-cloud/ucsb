@@ -63,13 +63,13 @@ inline rocksdb_transaction_t::~rocksdb_transaction_t() {
 
 operation_result_t rocksdb_transaction_t::insert(key_t key, value_spanc_t value) {
     rocksdb::Slice slice {reinterpret_cast<char const*>(&key), sizeof(key)};
-    std::string data(reinterpret_cast<char const*>(value.data()), value.size());
+    rocksdb::Slice data_slice {reinterpret_cast<char const*>(value.data()), value.size()};
     rocksdb::Status status = transaction_->Put(slice, data);
     if (!status.ok()) {
         assert(status.IsTryAgain());
         status = transaction_->Commit();
         assert(status.ok());
-        status = transaction_->Put(slice, data);
+        status = transaction_->Put(slice, data_slice);
         assert(status.ok());
     }
     return {1, operation_status_t::ok_k};
@@ -85,13 +85,13 @@ operation_result_t rocksdb_transaction_t::update(key_t key, value_spanc_t value)
     else if (!status.ok())
         return {0, operation_status_t::error_k};
 
-    data = std::string(reinterpret_cast<char const*>(value.data()), value.size());
-    status = transaction_->Put(slice, data);
+    rocksdb::Slice data_slice {reinterpret_cast<char const*>(value.data()), value.size()};
+    status = transaction_->Put(slice, data_slice);
     if (!status.ok()) {
         assert(status.IsTryAgain());
         status = transaction_->Commit();
         assert(status.ok());
-        status = transaction_->Put(slice, data);
+        status = transaction_->Put(slice, data_slice);
         assert(status.ok());
     }
     return {1, operation_status_t::ok_k};
