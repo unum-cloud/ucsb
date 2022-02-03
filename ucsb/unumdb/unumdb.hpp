@@ -212,6 +212,7 @@ bulk_metadata_t unumdb_t::prepare_bulk_import_data(keys_spanc_t keys,
         span_gt<fingerprint_t> fingerprints {
             const_cast<fingerprint_t*>(reinterpret_cast<fingerprint_t const*>(keys.data() + i)),
             next_data_idx - i};
+#ifdef DEV_BUILD
         auto building =
             region_t::building_constructor_t::build({file_name.data(), file_name.size()},
                                                     {},
@@ -219,6 +220,14 @@ bulk_metadata_t unumdb_t::prepare_bulk_import_data(keys_spanc_t keys,
                                                     {reinterpret_cast<byte_t const*>(values.data()), values.size()},
                                                     {sizes.data(), sizes.size()},
                                                     ds_info_t::sorted_k);
+#else
+    auto building =
+            region_t::building_constructor_t::build({},
+                                                    fingerprints,
+                                                    {reinterpret_cast<byte_t const*>(values.data()), values.size()},
+                                                    {sizes.data(), sizes.size()},
+                                                    ds_info_t::sorted_k);
+#endif
         metadata.files.insert({building.schema().file_name.c_str()});
     }
     metadata.records_count = keys.size();
