@@ -6,8 +6,7 @@ unum:
 
 conan:
   - fmt/8.0.1
-  - gtest/1.10.0
-  - benchmark/1.5.2
+  - benchmark/1.6.0
   - nlohmann_json/3.10.4
   - rocksdb/6.20.3
   - leveldb/1.23
