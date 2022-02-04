@@ -152,14 +152,10 @@ void parse_and_validate_args(int argc, char* argv[], settings_t& settings) {
 }
 
 inline void register_section(std::string const& name) {
-    bm::RegisterBenchmark(name.c_str(),
-                          [=](bm::State& s) {
-                              for (auto _ : s)
-                                  ;
-                          })
-        ->Iterations(1)
-        ->Unit(bm::kMicrosecond)
-        ->UseRealTime();
+    bm::RegisterBenchmark(name.c_str(), [=](bm::State& s) {
+        for (auto _ : s)
+            ;
+    });
 }
 
 inline std::string section_name(settings_t const& settings, workloads_t const& workloads) {
