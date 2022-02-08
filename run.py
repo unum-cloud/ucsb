@@ -1,9 +1,8 @@
-
 import os
 import sys
 import time
-import shutil
 import pexpect
+import subprocess
 
 cleanup_previous = False
 drop_caches = False
@@ -47,6 +46,11 @@ workload_names = [
     'BulkImport',
     'Remove',
 ]
+
+
+def launch_db(db_name, size):
+    subprocess.Popen(["sudo", "mongod", "--dbpath",
+                     f"/home/davit/Code/UCSB/tmp/{db_name}/{size}"], shell=False, stdout=subprocess.DEVNULL)
 
 
 def get_db_config_file_path(db_name, size):
@@ -106,14 +110,14 @@ if cleanup_previous:
         for db_name in db_names:
             db_path = f'./tmp/{db_name}/{size}/'
             if os.path.exists(db_path):
-                shutil.rmtree(db_path)
-            if db_name == 'mongodb':  # Until database path will be tmp/
-                os.system(
-                    '''mongo mongodb --eval "printjson(db.dropDatabase())" >/dev/null''')
+                subprocess.run(
+                    f"rm -rf ./tmp/{db_name}/{size}/*", shell=True)
+                time.sleep(2)
 
 for threads_count in threads:
     for size in sizes:
         for db_name in db_names:
+            launch_db(db_name, size)
             if drop_caches:
                 for workload_name in workload_names:
                     print('Dropping caches...')
