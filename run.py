@@ -48,12 +48,13 @@ workload_names = [
 ]
 
 
-def launch_db(db_name, size):
-    subprocess.Popen(
-        ["mongo", "--eval", "db.getSiblingDB('admin').shutdownServer()"], stdout=subprocess.DEVNULL)
-    time.sleep(2)
-    subprocess.Popen(["sudo", "mongod", "--dbpath",
-                      f"/home/davit/Code/UCSB/tmp/{db_name}/{size}"], stdout=subprocess.DEVNULL)
+def launch_db(db_name, config_path):
+    if db_name == "mongodb":
+        subprocess.Popen(
+            ["mongo", "--eval", "db.getSiblingDB('admin').shutdownServer()"], stdout=subprocess.DEVNULL)
+        time.sleep(2)
+        subprocess.Popen(["sudo", "mongod", "--config",
+                         config_path], stdout=subprocess.DEVNULL)
 
 
 def get_db_config_file_path(db_name, size):
@@ -90,6 +91,8 @@ def run(db_name, size, threads_count, workload_names):
     workloads_path = get_worklods_file_path(size)
     results_path = get_results_dir_path()
 
+    launch_db(db_name, config_path)
+
     transactional_flag = '-t' if transactional else ''
     filter = ','.join(workload_names)
     child = pexpect.spawn(f'./build_release/bin/_ucsb_bench \
@@ -120,7 +123,6 @@ if cleanup_previous:
 for threads_count in threads:
     for size in sizes:
         for db_name in db_names:
-            launch_db(db_name, size)
             if drop_caches:
                 for workload_name in workload_names:
                     print('Dropping caches...')
