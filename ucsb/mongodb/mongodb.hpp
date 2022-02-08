@@ -68,9 +68,14 @@ struct mongodb_t : public ucsb::db_t {
 
   private:
     mongocxx::pool pool_;
+    fs::path dir_path_;
+    std::string coll_name;
 };
 
-void mongodb_t::set_config(fs::path const& config_path, fs::path const& dir_path) {};
+void mongodb_t::set_config(fs::path const& config_path, fs::path const& dir_path) {
+    dir_path_ = dir_path;
+    coll_name = dir_path.parent_path().filename();
+};
 
 bool mongodb_t::open() {
     return true;
@@ -82,13 +87,13 @@ bool mongodb_t::close() {
 
 void mongodb_t::destroy() {
     auto client = pool_.acquire();
-    mongocxx::collection coll = mongocxx::collection((*client)["mongodb"]["test"]);
+    mongocxx::collection coll = mongocxx::collection((*client)["mongodb"][coll_name]);
     coll.drop();
 };
 
 operation_result_t mongodb_t::insert(key_t key, value_spanc_t value) {
     auto client = pool_.acquire();
-    mongocxx::collection coll = mongocxx::collection((*client)["mongodb"]["test"]);
+    mongocxx::collection coll = mongocxx::collection((*client)["mongodb"][coll_name]);
     bsoncxx::stdx::string_view val(reinterpret_cast<const char*>(value.data()), value.size());
     coll.insert_one(make_document(kvp("_id", int(key)), kvp("key", val)));
     return {1, operation_status_t::ok_k};
@@ -96,7 +101,7 @@ operation_result_t mongodb_t::insert(key_t key, value_spanc_t value) {
 
 operation_result_t mongodb_t::update(key_t key, value_spanc_t value) {
     auto client = pool_.acquire();
-    mongocxx::collection coll = mongocxx::collection((*client)["mongodb"]["test"]);
+    mongocxx::collection coll = mongocxx::collection((*client)["mongodb"][coll_name]);
     bsoncxx::stdx::string_view val(reinterpret_cast<const char*>(value.data()), value.size());
     if (coll.replace_one(make_document(kvp("_id", int(key))), make_document(kvp("_id", int(key)), kvp("key", val)))
             ->modified_count())
@@ -106,7 +111,7 @@ operation_result_t mongodb_t::update(key_t key, value_spanc_t value) {
 
 operation_result_t mongodb_t::remove(key_t key) {
     auto client = pool_.acquire();
-    mongocxx::collection coll = mongocxx::collection((*client)["mongodb"]["test"]);
+    mongocxx::collection coll = mongocxx::collection((*client)["mongodb"][coll_name]);
     if (coll.delete_one(make_document(kvp("_id", int(key))))->deleted_count())
         return {1, operation_status_t::ok_k};
     return {1, operation_status_t::not_found_k};
@@ -114,7 +119,7 @@ operation_result_t mongodb_t::remove(key_t key) {
 
 operation_result_t mongodb_t::read(key_t key, value_span_t value) const {
     auto client = pool_.acquire();
-    mongocxx::collection coll = mongocxx::collection((*client)["mongodb"]["test"]);
+    mongocxx::collection coll = mongocxx::collection((*client)["mongodb"][coll_name]);
     bsoncxx::stdx::optional<bsoncxx::document::value> doc = coll.find_one(make_document(kvp("_id", int(key))));
     if (!doc)
         return {1, operation_status_t::not_found_k};
@@ -125,7 +130,7 @@ operation_result_t mongodb_t::read(key_t key, value_span_t value) const {
 
 operation_result_t mongodb_t::batch_insert(keys_spanc_t keys, values_spanc_t values, value_lengths_spanc_t sizes) {
     auto client = pool_.acquire();
-    mongocxx::collection coll = mongocxx::collection((*client)["mongodb"]["test"]);
+    mongocxx::collection coll = mongocxx::collection((*client)["mongodb"][coll_name]);
     std::vector<bsoncxx::document::value> cont;
     size_t data_offset = 0;
     for (size_t index = 0; index < keys.size(); ++index) {
@@ -152,7 +157,7 @@ bulk_metadata_t mongodb_t::prepare_bulk_import_data(keys_spanc_t keys,
                                                     value_lengths_spanc_t sizes) const {
     bulk_metadata_t metadata;
     auto client = pool_.acquire();
-    mongocxx::collection coll = mongocxx::collection((*client)["mongodb"]["test"]);
+    mongocxx::collection coll = mongocxx::collection((*client)["mongodb"][coll_name]);
     mongocxx::bulk_write* bulk = new mongocxx::bulk_write(coll.create_bulk_write());
     metadata.records_count = keys.size();
     size_t data_offset = 0;
@@ -184,7 +189,7 @@ operation_result_t mongodb_t::range_select(key_t key, size_t length, value_span_
 
 operation_result_t mongodb_t::scan(value_span_t single_value) const {
     auto client = pool_.acquire();
-    mongocxx::collection coll = mongocxx::collection((*client)["mongodb"]["test"]);
+    mongocxx::collection coll = mongocxx::collection((*client)["mongodb"][coll_name]);
     size_t scanned_records_count = 0;
     for (auto&& doc : coll.find({})) {
         std::string_view data = bsoncxx::to_json(doc);
@@ -199,7 +204,7 @@ void mongodb_t::flush() {
 }
 
 size_t mongodb_t::size_on_disk() const {
-    return 0; // Must be changed
+    return ucsb::size_on_disk(dir_path_);
 }
 
 std::unique_ptr<transaction_t> mongodb_t::create_transaction() {

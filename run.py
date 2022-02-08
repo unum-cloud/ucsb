@@ -9,29 +9,29 @@ drop_caches = False
 transactional = False
 
 threads = [
-    1,
+    # 1,
     # 2,
     # 4,
     # 8,
-    # 16,
+    16,
 ]
 
 db_names = [
-    'unumdb',
-    'rocksdb',
-    'leveldb',
-    'wiredtiger',
-    'lmdb',
+    # 'unumdb',
+    # 'rocksdb',
+    # 'leveldb',
+    # 'wiredtiger',
+    # 'lmdb',
     'mongodb'
 ]
 
 sizes = [
     '100MB',
-    '1GB',
-    '10GB',
-    '100GB',
-    '250GB',
-    '1TB',
+    # '1GB',
+    # '10GB',
+    # '100GB',
+    # '250GB',
+    # '1TB',
 ]
 
 workload_names = [
@@ -49,8 +49,11 @@ workload_names = [
 
 
 def launch_db(db_name, size):
+    subprocess.Popen(
+        ["mongo", "--eval", "db.getSiblingDB('admin').shutdownServer()"], stdout=subprocess.DEVNULL)
+    time.sleep(2)
     subprocess.Popen(["sudo", "mongod", "--dbpath",
-                     f"/home/davit/Code/UCSB/tmp/{db_name}/{size}"], shell=False, stdout=subprocess.DEVNULL)
+                      f"/home/davit/Code/UCSB/tmp/{db_name}/{size}"], stdout=subprocess.DEVNULL)
 
 
 def get_db_config_file_path(db_name, size):
