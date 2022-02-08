@@ -243,15 +243,19 @@ operation_result_t unumdb_t::bulk_import(bulk_metadata_t const& metadata) {
 }
 
 operation_result_t unumdb_t::range_select(key_t key, size_t length, value_span_t single_value) const {
-    countdown_t countdown;
+    countdown_t countdown(0);
+    notifier_t read_notifier(countdown);
     citizen_span_t citizen {reinterpret_cast<byte_t*>(single_value.data()), single_value.size()};
     size_t selected_records_count = 0;
     auto it = region_.find(key);
     for (size_t i = 0; it != region_.end() && i < length; ++i, ++it) {
         if (!it.is_removed()) {
-            countdown.reset(1);
+            if(!read_notifier.test(256 - 1)) {
+                read_notifier.countdown().wait();
+                throw_m(!read_notifier.has_failed(), "Faild: read");
+            }
+            read_notifier.add_one();
             it.get(citizen, countdown);
-            countdown.wait();
             ++selected_records_count;
         }
     }
