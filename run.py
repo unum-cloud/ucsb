@@ -9,29 +9,29 @@ drop_caches = False
 transactional = False
 
 threads = [
-    # 1,
+    1,
     # 2,
     # 4,
     # 8,
-    16,
+    # 16,
 ]
 
 db_names = [
-    # 'unumdb',
-    # 'rocksdb',
-    # 'leveldb',
-    # 'wiredtiger',
-    # 'lmdb',
+    'unumdb',
+    'rocksdb',
+    'leveldb',
+    'wiredtiger',
+    'lmdb',
     'mongodb'
 ]
 
 sizes = [
     '100MB',
-    # '1GB',
-    # '10GB',
-    # '100GB',
-    # '250GB',
-    # '1TB',
+    '1GB',
+    '10GB',
+    '100GB',
+    '250GB',
+    '1TB',
 ]
 
 workload_names = [
