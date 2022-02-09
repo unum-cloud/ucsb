@@ -174,7 +174,7 @@ operation_result_t unumdb_transaction_t::range_select(key_t key, size_t length, 
     citizen_span_t citizen {reinterpret_cast<byte_t*>(single_value.data()), single_value.size()};
     size_t selected_records_count = 0;
 
-    transaction_->lock_commit();
+    transaction_->lock_commit_shared();
     auto it = transaction_->find(key);
     for (size_t i = 0; it != transaction_->end() && i < length; ++i, ++it) {
         if (!it.is_removed()) {
@@ -184,7 +184,7 @@ operation_result_t unumdb_transaction_t::range_select(key_t key, size_t length, 
             ++selected_records_count;
         }
     }
-    transaction_->unlock_commit();
+    transaction_->unlock_commit_shared();
 
     return {selected_records_count, operation_status_t::ok_k};
 }
@@ -194,7 +194,7 @@ operation_result_t unumdb_transaction_t::scan(value_span_t single_value) const {
     citizen_span_t citizen {reinterpret_cast<byte_t*>(single_value.data()), single_value.size()};
     size_t scanned_records_count = 0;
 
-    transaction_->lock_commit();
+    transaction_->lock_commit_shared();
     auto it = transaction_->begin<caching_t::ram_k>();
     for (; it != transaction_->end<caching_t::ram_k>(); ++it) {
         if (!it.is_removed()) {
@@ -204,7 +204,7 @@ operation_result_t unumdb_transaction_t::scan(value_span_t single_value) const {
             ++scanned_records_count;
         }
     }
-    transaction_->unlock_commit();
+    transaction_->unlock_commit_shared();
 
     return {scanned_records_count, operation_status_t::ok_k};
 }
