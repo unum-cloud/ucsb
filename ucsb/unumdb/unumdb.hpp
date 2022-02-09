@@ -221,7 +221,7 @@ bulk_metadata_t unumdb_t::prepare_bulk_import_data(keys_spanc_t keys,
                                                     {sizes.data(), sizes.size()},
                                                     ds_info_t::sorted_k);
 #else
-    auto building =
+        auto building =
             region_t::building_constructor_t::build({},
                                                     fingerprints,
                                                     {reinterpret_cast<byte_t const*>(values.data()), values.size()},
@@ -250,7 +250,7 @@ operation_result_t unumdb_t::range_select(key_t key, size_t length, value_span_t
     auto it = region_.find(key);
     for (size_t i = 0; it != region_.end() && i < length; ++i, ++it) {
         if (!it.is_removed()) {
-            if(!read_notifier.test(256 - 1)) {
+            if (!read_notifier.test(config_.uring_queue_depth - 1)) {
                 read_notifier.countdown().wait();
                 throw_m(!read_notifier.has_failed(), "Faild: read");
             }
@@ -298,8 +298,10 @@ bool unumdb_t::load_config() {
     nlohmann::json j_config;
     i_config >> j_config;
 
-    config_.region_config.default_transaction.migration_capacity = j_config["transaction_migration_capacity"].get<size_t>();
-    config_.region_config.default_transaction.migration_max_cnt = j_config["transaction_migration_max_cnt"].get<size_t>();
+    config_.region_config.default_transaction.migration_capacity =
+        j_config["transaction_migration_capacity"].get<size_t>();
+    config_.region_config.default_transaction.migration_max_cnt =
+        j_config["transaction_migration_max_cnt"].get<size_t>();
 
     config_.region_config.country.fixed_citizen_size = 0;
     config_.region_config.country.migration_capacity = j_config["migration_capacity"].get<size_t>();
