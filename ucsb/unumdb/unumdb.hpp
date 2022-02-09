@@ -245,20 +245,26 @@ operation_result_t unumdb_t::bulk_import(bulk_metadata_t const& metadata) {
 operation_result_t unumdb_t::range_select(key_t key, size_t length, value_span_t single_value) const {
     countdown_t countdown(0);
     notifier_t read_notifier(countdown);
-    citizen_span_t citizen {reinterpret_cast<byte_t*>(single_value.data()), single_value.size()};
+    if (length * single_value.size() > batch_buffer_.size())
+        batch_buffer_ = dbuffer_t(length * single_value.size());
+
     size_t selected_records_count = 0;
+    size_t tasks_cnt = std::min(length, config_.uring_queue_depth);
+    size_t task_idx = 0;
     auto it = region_.find(key);
-    for (size_t i = 0; it != region_.end() && i < length; ++i, ++it) {
+    for (size_t i = 0; it != region_.end() && i < length; ++task_idx, ++i, ++it) {
+        if ((task_idx == tasks_cnt) | (read_notifier.has_failed())) {
+            selected_records_count += size_t(countdown.wait()) * tasks_cnt;
+            tasks_cnt = std::min(length - i, config_.uring_queue_depth);
+            task_idx = 0;
+        }
         if (!it.is_removed()) {
-            if (!read_notifier.test(config_.uring_queue_depth - 1)) {
-                read_notifier.countdown().wait();
-                throw_m(!read_notifier.has_failed(), "Faild: read");
-            }
+            citizen_span_t citizen {batch_buffer_.data() + task_idx * single_value.size(), single_value.size()};
             read_notifier.add_one();
             it.get(citizen, countdown);
-            ++selected_records_count;
         }
     }
+    selected_records_count += size_t(countdown.wait()) * tasks_cnt;
     return {selected_records_count, operation_status_t::ok_k};
 }
 
@@ -287,7 +293,7 @@ size_t unumdb_t::size_on_disk() const {
 }
 
 std::unique_ptr<transaction_t> unumdb_t::create_transaction() {
-    return std::make_unique<unumdb_transaction_t>(region_.create_transaction());
+    return std::make_unique<unumdb_transaction_t>(region_.create_transaction(), config_.uring_queue_depth);
 }
 
 bool unumdb_t::load_config() {

@@ -35,8 +35,9 @@ using find_purpose_t = region_transaction_t::find_purpose_t;
  */
 struct unumdb_transaction_t : public ucsb::transaction_t {
   public:
-    inline unumdb_transaction_t(std::unique_ptr<region_transaction_t>&& transaction)
-        : transaction_(std::forward<std::unique_ptr<region_transaction_t>&&>(transaction)) {}
+    inline unumdb_transaction_t(std::unique_ptr<region_transaction_t>&& transaction, size_t uring_queue_depth)
+        : transaction_(std::forward<std::unique_ptr<region_transaction_t>&&>(transaction)),
+          uring_queue_depth_(uring_queue_depth) {}
     inline ~unumdb_transaction_t();
 
     operation_result_t insert(key_t key, value_spanc_t value) override;
@@ -56,6 +57,7 @@ struct unumdb_transaction_t : public ucsb::transaction_t {
     operation_result_t scan(value_span_t single_value) const override;
 
   private:
+    size_t uring_queue_depth_;
     std::unique_ptr<region_transaction_t> transaction_;
     mutable dbuffer_t batch_buffer_;
 };
@@ -170,22 +172,30 @@ operation_result_t unumdb_transaction_t::bulk_import(bulk_metadata_t const& meta
 }
 
 operation_result_t unumdb_transaction_t::range_select(key_t key, size_t length, value_span_t single_value) const {
-    countdown_t countdown;
-    citizen_span_t citizen {reinterpret_cast<byte_t*>(single_value.data()), single_value.size()};
-    size_t selected_records_count = 0;
+    countdown_t countdown(0);
+    notifier_t read_notifier(countdown);
+    if (length * single_value.size() > batch_buffer_.size())
+        batch_buffer_ = dbuffer_t(length * single_value.size());
 
+    size_t selected_records_count = 0;
+    size_t tasks_cnt = std::min(length, uring_queue_depth_);
+    size_t task_idx = 0;
     transaction_->lock_commit_shared();
     auto it = transaction_->find(key);
-    for (size_t i = 0; it != transaction_->end() && i < length; ++i, ++it) {
+    for (size_t i = 0; it != transaction_->end() && i < length; ++task_idx, ++i, ++it) {
+        if ((task_idx == tasks_cnt) | (read_notifier.has_failed())) {
+            selected_records_count += size_t(countdown.wait()) * tasks_cnt;
+            tasks_cnt = std::min(length - i, uring_queue_depth_);
+            task_idx = 0;
+        }
         if (!it.is_removed()) {
-            countdown.reset(1);
+            citizen_span_t citizen {batch_buffer_.data() + task_idx * single_value.size(), single_value.size()};
+            read_notifier.add_one();
             it.get(citizen, countdown);
-            countdown.wait();
-            ++selected_records_count;
         }
     }
     transaction_->unlock_commit_shared();
-
+    selected_records_count += size_t(countdown.wait()) * tasks_cnt;
     return {selected_records_count, operation_status_t::ok_k};
 }
 
