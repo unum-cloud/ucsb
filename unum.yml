@@ -17,3 +17,6 @@ conan:
 packages:
   pkg-config:
     - wiredtiger
+
+build:
+  - cpu-isa: lzcnt
