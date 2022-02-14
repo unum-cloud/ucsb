@@ -327,7 +327,7 @@ void bench(bm::State& state, workload_t const& workload, data_accessor_t& data_a
         state.counters["mem_max,bytes"] = bm::Counter(mem_stat.rss().max, bm::Counter::kDefaults, bm::Counter::kIs1024);
         state.counters["mem_avg,bytes"] = bm::Counter(mem_stat.rss().avg, bm::Counter::kDefaults, bm::Counter::kIs1024);
         state.counters["processed,bytes"] =
-            bm::Counter(bytes_processed_count, bm::Counter::kDefaults, bm::Counter::kIs1024);
+            bm::Counter(bytes_processed_count, bm::Counter::kIsRate, bm::Counter::kIs1024);
     }
 }
 
