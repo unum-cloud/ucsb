@@ -60,8 +60,10 @@ def get_db_config_file_path(db_name, size):
 def get_worklods_file_path(size):
     return f'./bench/workloads/{size}.json'
 
+
 def get_db_path(db_name, size):
     return f'./tmp/{db_name}/{size}/'
+
 
 def get_results_dir_path():
     if drop_caches:
