@@ -3,6 +3,7 @@ import sys
 import time
 import shutil
 import pexpect
+import pathlib
 import subprocess
 
 cleanup_previous = False
@@ -119,13 +120,13 @@ if cleanup_previous:
             if os.path.exists(db_path):
                 shutil.rmtree(db_path)
 
-os.makedirs(get_results_dir_path())
+pathlib.Path(get_results_dir_path()).mkdir(parents=True, exist_ok=True)
 
 for threads_count in threads:
     for size in sizes:
         for db_name in db_names:
             db_path = get_db_path(db_name, size)
-            os.makedirs(db_path)
+            pathlib.Path(db_path).mkdir(parents=True, exist_ok=True)
             config_path = get_db_config_file_path(db_name, size)
             launch_db(db_name, config_path)
 
