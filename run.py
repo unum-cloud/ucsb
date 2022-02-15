@@ -1,10 +1,11 @@
 import os
 import sys
 import time
+import shutil
 import pexpect
 import subprocess
 
-cleanup_previous = False
+cleanup_previous = True
 drop_caches = False
 transactional = False
 
@@ -48,15 +49,6 @@ workload_names = [
 ]
 
 
-def launch_db(db_name, config_path):
-    if db_name == "mongodb":
-        subprocess.Popen(
-            ["mongo", "--eval", "db.getSiblingDB('admin').shutdownServer()"], stdout=subprocess.DEVNULL)
-        time.sleep(2)
-        subprocess.Popen(["sudo", "mongod", "--config",
-                         config_path], stdout=subprocess.DEVNULL)
-
-
 def get_db_config_file_path(db_name, size):
     path = f'./bench/configs/{db_name}/{size}.cfg'
     if not os.path.exists(path):
@@ -86,12 +78,19 @@ def drop_system_caches():
         stream.write('3\n')
 
 
+def launch_db(db_name, config_path):
+    if db_name == "mongodb":
+        subprocess.Popen(
+            ["mongo", "--eval", "db.getSiblingDB('admin').shutdownServer()"], stdout=subprocess.DEVNULL)
+        time.sleep(2)
+        subprocess.Popen(["sudo", "mongod", "--config",
+                         config_path], stdout=subprocess.DEVNULL)
+
+
 def run(db_name, size, threads_count, workload_names):
     config_path = get_db_config_file_path(db_name, size)
     workloads_path = get_worklods_file_path(size)
     results_path = get_results_dir_path()
-
-    launch_db(db_name, config_path)
 
     transactional_flag = '-t' if transactional else ''
     filter = ','.join(workload_names)
@@ -116,13 +115,14 @@ if cleanup_previous:
         for db_name in db_names:
             db_path = f'./tmp/{db_name}/{size}/'
             if os.path.exists(db_path):
-                subprocess.run(
-                    f"rm -rf ./tmp/{db_name}/{size}/*", shell=True)
-                time.sleep(2)
+                shutil.rmtree(db_path)
 
 for threads_count in threads:
     for size in sizes:
         for db_name in db_names:
+            config_path = get_db_config_file_path(db_name, size)
+            launch_db(db_name, config_path)
+
             if drop_caches:
                 for workload_name in workload_names:
                     print('Dropping caches...')
