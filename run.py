@@ -5,7 +5,7 @@ import shutil
 import pexpect
 import subprocess
 
-cleanup_previous = True
+cleanup_previous = False
 drop_caches = False
 transactional = False
 
