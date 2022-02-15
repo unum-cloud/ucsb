@@ -59,6 +59,8 @@ def get_db_config_file_path(db_name, size):
 def get_worklods_file_path(size):
     return f'./bench/workloads/{size}.json'
 
+def get_db_path(db_name, size):
+    return f'./tmp/{db_name}/{size}/'
 
 def get_results_dir_path():
     if drop_caches:
@@ -113,13 +115,17 @@ if cleanup_previous:
     print('Cleanup...')
     for size in sizes:
         for db_name in db_names:
-            db_path = f'./tmp/{db_name}/{size}/'
+            db_path = get_db_path(db_name, size)
             if os.path.exists(db_path):
                 shutil.rmtree(db_path)
+
+os.makedirs(get_results_dir_path())
 
 for threads_count in threads:
     for size in sizes:
         for db_name in db_names:
+            db_path = get_db_path(db_name, size)
+            os.makedirs(db_path)
             config_path = get_db_config_file_path(db_name, size)
             launch_db(db_name, config_path)
 
