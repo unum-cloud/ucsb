@@ -64,7 +64,7 @@ inline rocksdb_transaction_t::~rocksdb_transaction_t() {
 operation_result_t rocksdb_transaction_t::insert(key_t key, value_spanc_t value) {
     rocksdb::Slice slice {reinterpret_cast<char const*>(&key), sizeof(key)};
     rocksdb::Slice data_slice {reinterpret_cast<char const*>(value.data()), value.size()};
-    rocksdb::Status status = transaction_->Put(slice, data);
+    rocksdb::Status status = transaction_->Put(slice, data_slice);
     if (!status.ok()) {
         assert(status.IsTryAgain());
         status = transaction_->Commit();
