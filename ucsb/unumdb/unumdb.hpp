@@ -251,6 +251,7 @@ operation_result_t unumdb_t::range_select(key_t key, size_t length, value_span_t
     size_t selected_records_count = 0;
     size_t tasks_cnt = std::min(length, config_.uring_queue_depth);
     size_t task_idx = 0;
+    region_.lock_shared();
     auto it = region_.find(key);
     for (size_t i = 0; it != region_.end() && i < length; ++task_idx, ++i, ++it) {
         if ((task_idx == tasks_cnt) | (read_notifier.has_failed())) {
@@ -264,6 +265,7 @@ operation_result_t unumdb_t::range_select(key_t key, size_t length, value_span_t
             it.get(citizen, countdown);
         }
     }
+    region_.unlock_shared();
     selected_records_count += size_t(countdown.wait()) * tasks_cnt;
     return {selected_records_count, operation_status_t::ok_k};
 }
@@ -272,6 +274,7 @@ operation_result_t unumdb_t::scan(value_span_t single_value) const {
     countdown_t countdown;
     citizen_span_t citizen {reinterpret_cast<byte_t*>(single_value.data()), single_value.size()};
     size_t scanned_records_count = 0;
+    region_.lock_shared();
     auto it = region_.begin<caching_t::ram_k>();
     for (; it != region_.end<caching_t::ram_k>(); ++it) {
         if (!it.is_removed()) {
@@ -281,6 +284,7 @@ operation_result_t unumdb_t::scan(value_span_t single_value) const {
             ++scanned_records_count;
         }
     }
+    region_.unlock_shared();
     return {scanned_records_count, operation_status_t::ok_k};
 }
 
