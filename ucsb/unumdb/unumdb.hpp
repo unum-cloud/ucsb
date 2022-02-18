@@ -313,7 +313,7 @@ bool unumdb_t::load_config() {
     config_.region_config.default_transaction.migration_max_cnt =
         j_config["transaction_migration_max_cnt"].get<size_t>();
 
-    config_.region_config.country.fixed_citizen_size = j_config["fixed_citizen_size"].get<size_t>();
+    config_.region_config.country.fixed_citizen_size = 0;
     config_.region_config.country.unfixed_citizen_max_size = j_config["unfixed_citizen_max_size"].get<size_t>();
     config_.region_config.country.migration_capacity = j_config["migration_capacity"].get<size_t>();
     config_.region_config.country.migration_max_cnt = j_config["migration_max_cnt"].get<size_t>();
