@@ -301,7 +301,7 @@ std::unique_ptr<transaction_t> unumdb_t::create_transaction() {
 }
 
 bool unumdb_t::load_config() {
-    if (!fs::exists(config_path_.c_str()))
+    if (!fs::exists(config_path_))
         return false;
 
     std::ifstream i_config(config_path_);
