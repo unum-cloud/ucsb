@@ -97,6 +97,10 @@ struct rocksdb_gt : public ucsb::db_t {
     fs::path config_path_;
     fs::path dir_path_;
 
+#ifdef build_transaction_m
+    bool load_transaction_options(rocksdb::TransactionDBOptions& transaction_options);
+#endif
+
     struct key_comparator_t final : public rocksdb::Comparator {
         int Compare(rocksdb::Slice const& left, rocksdb::Slice const& right) const override {
             assert(left.size() == sizeof(key_t));
@@ -141,6 +145,10 @@ bool rocksdb_gt<mode_ak>::open() {
         rocksdb::LoadOptionsFromFile(config_path_.string(), rocksdb::Env::Default(), &options_, &cf_descs_);
     if (!status.ok())
         return false;
+#ifdef build_transaction_m
+    if (!load_transaction_options(transaction_options_))
+        return false;
+#endif
 
     rocksdb::BlockBasedTableOptions table_options;
     table_options.block_cache = rocksdb::NewLRUCache(options_.target_file_size_base * 10);
@@ -429,10 +437,33 @@ std::unique_ptr<transaction_t> rocksdb_gt<mode_ak>::create_transaction() {
     rocksdb::WriteOptions write_options;
     std::unique_ptr<rocksdb::Transaction> raw_transaction;
     raw_transaction.reset(transaction_db_->BeginTransaction(write_options));
+    auto id = size_t(raw_transaction.get());
+    raw_transaction->SetName(std::to_string(id));
     return std::make_unique<rocksdb_transaction_t>(std::move(raw_transaction));
 #else
     return {};
 #endif
 }
+
+#ifdef build_transaction_m
+template <db_mode_t mode_ak>
+bool rocksdb_gt<mode_ak>::load_transaction_options(rocksdb::TransactionDBOptions& transaction_options) {
+    if (!fs::exists(config_path_))
+        return false;
+
+    fs::path transaction_config_path = config_path_.parent_path();
+    transaction_config_path += "/transaction.cfg";
+    std::ifstream i_config(transaction_config_path);
+    nlohmann::json j_config;
+    i_config >> j_config;
+
+    transaction_options.default_write_batch_flush_threshold =
+        j_config["default_write_batch_flush_threshold"].get<int64_t>();
+    if (transaction_options.default_write_batch_flush_threshold > 0)
+        transaction_options_.write_policy = rocksdb::TxnDBWritePolicy::WRITE_UNPREPARED;
+
+    return true;
+}
+#endif
 
 } // namespace facebook
