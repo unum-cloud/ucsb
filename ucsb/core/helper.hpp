@@ -40,7 +40,7 @@ size_t size_on_disk(fs::path const& path) {
     return total_size;
 }
 
-void remove_dir_contents(fs::path const& dir_path) {
+void clear_directory(fs::path const& dir_path) {
     for (auto const& entry : fs::directory_iterator(dir_path))
         fs::remove_all(entry.path());
 }

@@ -161,7 +161,7 @@ bool lmdb_t::close() {
 
 void lmdb_t::destroy() {
     if (!env_ || !dbi_) {
-        ucsb::remove_dir_contents(dir_path_);
+        ucsb::clear_directory(dir_path_);
         return;
     }
 
@@ -176,7 +176,7 @@ void lmdb_t::destroy() {
     bool ok = close();
     assert(ok);
 
-    ucsb::remove_dir_contents(dir_path_);
+    ucsb::clear_directory(dir_path_);
 }
 
 operation_result_t lmdb_t::insert(key_t key, value_spanc_t value) {

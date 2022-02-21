@@ -11,12 +11,12 @@
 #include "ucsb/core/db.hpp"
 #include "ucsb/core/workload.hpp"
 #include "ucsb/core/worker.hpp"
-#include "ucsb/core/factory.hpp"
+#include "ucsb/core/db_brand.hpp"
 #include "ucsb/core/operation.hpp"
 #include "ucsb/core/exception.hpp"
-#include "ucsb/core/format.hpp"
+#include "ucsb/core/printable.hpp"
 #include "ucsb/core/results.hpp"
-#include "ucsb/core/threads_synchronizer.hpp"
+#include "ucsb/core/threads_fence.hpp"
 
 namespace bm = benchmark;
 
@@ -25,7 +25,7 @@ using workload_t = ucsb::workload_t;
 using workloads_t = ucsb::workloads_t;
 using db_t = ucsb::db_t;
 using data_accessor_t = ucsb::data_accessor_t;
-using db_kind_t = ucsb::db_kind_t;
+using db_brand_t = ucsb::db_brand_t;
 using factory_t = ucsb::factory_t;
 using timer_ref_t = ucsb::timer_ref_t;
 using worker_t = ucsb::worker_t;
@@ -37,7 +37,7 @@ using cpu_stat_t = ucsb::cpu_stat_t;
 using mem_stat_t = ucsb::mem_stat_t;
 using exception_t = ucsb::exception_t;
 using printable_bytes_t = ucsb::printable_bytes_t;
-using threads_synchronizer_t = ucsb::threads_synchronizer_t;
+using threads_fence_t = ucsb::threads_fence_t;
 
 inline void usage_message(const char* command) {
     fmt::print("Usage: {} [options]\n", command);
@@ -55,41 +55,41 @@ void parse_and_validate_args(int argc, char* argv[], settings_t& settings) {
     int arg_idx = 1;
     while (arg_idx < argc && ucsb::start_with(argv[arg_idx], "-")) {
         if (strcmp(argv[arg_idx], "-db") == 0) {
-            arg_idx++;
+            ++arg_idx;
             if (arg_idx >= argc) {
                 usage_message(argv[0]);
                 fmt::print("Missing argument value for -db\n");
                 exit(1);
             }
             settings.db_name = std::string(argv[arg_idx]);
-            arg_idx++;
+            ++arg_idx;
         }
         if (strcmp(argv[arg_idx], "-t") == 0) {
             settings.transactional = true;
-            arg_idx++;
+            ++arg_idx;
         }
         else if (strcmp(argv[arg_idx], "-c") == 0) {
-            arg_idx++;
+            ++arg_idx;
             if (arg_idx >= argc) {
                 usage_message(argv[0]);
                 fmt::print("Missing argument value for -c\n");
                 exit(1);
             }
             settings.db_config_path = std::string(argv[arg_idx]);
-            arg_idx++;
+            ++arg_idx;
         }
         else if (strcmp(argv[arg_idx], "-w") == 0) {
-            arg_idx++;
+            ++arg_idx;
             if (arg_idx >= argc) {
                 usage_message(argv[0]);
                 fmt::print("Missing argument value for -w\n");
                 exit(1);
             }
             settings.workloads_path = std::string(argv[arg_idx]);
-            arg_idx++;
+            ++arg_idx;
         }
         else if (strcmp(argv[arg_idx], "-r") == 0) {
-            arg_idx++;
+            ++arg_idx;
             if (arg_idx >= argc) {
                 usage_message(argv[0]);
                 fmt::print("Missing argument value for -r\n");
@@ -99,27 +99,27 @@ void parse_and_validate_args(int argc, char* argv[], settings_t& settings) {
             if (path.back() != '/')
                 path.push_back('/');
             settings.results_path = path;
-            arg_idx++;
+            ++arg_idx;
         }
         else if (strcmp(argv[arg_idx], "-threads") == 0) {
-            arg_idx++;
+            ++arg_idx;
             if (arg_idx >= argc) {
                 usage_message(argv[0]);
                 fmt::print("Missing argument value for -threads\n");
                 exit(1);
             }
             settings.threads_count = std::stoi(argv[arg_idx]);
-            arg_idx++;
+            ++arg_idx;
         }
         else if (strcmp(argv[arg_idx], "-filter") == 0) {
-            arg_idx++;
+            ++arg_idx;
             if (arg_idx >= argc) {
                 usage_message(argv[0]);
                 fmt::print("Missing argument value for -filter\n");
                 exit(1);
             }
             settings.workload_filter = std::string(argv[arg_idx]);
-            arg_idx++;
+            ++arg_idx;
         }
         else {
             usage_message(argv[0]);
@@ -331,14 +331,13 @@ void bench(bm::State& state, workload_t const& workload, data_accessor_t& data_a
     }
 }
 
-void bench(
-    bm::State& state, workload_t const& workload, db_t& db, bool transactional, threads_synchronizer_t& synchronizer) {
+void bench(bm::State& state, workload_t const& workload, db_t& db, bool transactional, threads_fence_t& fence) {
 
     if (state.thread_index() == 0) {
         bool ok = db.open();
         assert(ok);
     }
-    synchronizer.sync();
+    fence.sync();
 
     if (transactional) {
         auto transaction = db.create_transaction();
@@ -349,7 +348,7 @@ void bench(
     else
         bench(state, workload, db);
 
-    synchronizer.sync();
+    fence.sync();
     if (state.thread_index() == 0) {
         db.flush();
         state.counters["disk,bytes"] = bm::Counter(db.size_on_disk(), bm::Counter::kDefaults, bm::Counter::kIs1024);
@@ -400,8 +399,8 @@ int main(int argc, char** argv) {
     ucsb::fs::create_directories(settings.results_path.parent_path());
 
     // Setup DB
-    db_kind_t kind = ucsb::parse_db(settings.db_name);
-    std::shared_ptr<db_t> db = factory_t {}.create(kind, settings.transactional);
+    db_brand_t kind = ucsb::parse_db_brand(settings.db_name);
+    std::shared_ptr<db_t> db = ucsb::make_db(kind, settings.transactional);
     if (!db) {
         if (settings.transactional)
             fmt::print("Failed to create transactional DB: {}\n", settings.db_name);
@@ -411,7 +410,7 @@ int main(int argc, char** argv) {
     }
     db->set_config(settings.db_config_path, settings.db_dir_path);
 
-    threads_synchronizer_t synchronizer(settings.threads_count);
+    threads_fence_t fence(settings.threads_count);
 
     // Register benchmarks
     register_section(section_name(settings, workloads));
@@ -419,7 +418,7 @@ int main(int argc, char** argv) {
         auto const& first = splited_workloads.front();
         register_benchmark(first.name, first.operations_count, settings.threads_count, [&](bm::State& state) {
             auto const& workload = splited_workloads[state.thread_index()];
-            bench(state, workload, *db, settings.transactional, synchronizer);
+            bench(state, workload, *db, settings.transactional, fence);
         });
     }
 

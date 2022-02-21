@@ -170,12 +170,13 @@ struct mem_stat_t {
         rss = rss * page_size;
     }
 
+    std::thread thread_;
+
     stat_t vm_;
     stat_t rss_;
 
     size_t request_delay_;
     size_t requests_count_;
-    std::thread thread_;
     bool time_to_die_;
 };
 
