@@ -264,23 +264,29 @@ void bench(bm::State& state, workload_t const& workload, data_accessor_t& data_a
     timer_ref_t timer(state);
     worker_t worker(workload, data_accessor, timer);
 
-    static size_t fails = 0;
-    static size_t operations_done = 0;
+    // Stats
+    static size_t fails_count = 0;
+    static size_t done_operations_count = 0;
     static size_t bytes_processed_count = 0;
     cpu_stat_t cpu_stat;
     mem_stat_t mem_stat;
 
+    // Progress
+    static size_t done_iterations_count = 0;
+    size_t last_printed_iterations_count = 0;
+    size_t const iterations_total_count = state.threads() * workload.operations_count;
+    size_t const printable_iterations_distance = iterations_total_count / 10;
+
     if (state.thread_index() == 0) {
-        fails = 0;
-        operations_done = 0;
+        fails_count = 0;
+        done_operations_count = 0;
         bytes_processed_count = 0;
+        done_iterations_count = 0;
+        last_printed_iterations_count = 0;
         cpu_stat.start();
         mem_stat.start();
     }
 
-    size_t current_iteration = 0;
-    size_t last_printed_iteration = 0;
-    size_t const printable_iterations_distance = workload.operations_count / 10;
     for (auto _ : state) {
         operation_result_t result;
         auto operation = chooser->choose();
@@ -299,16 +305,17 @@ void bench(bm::State& state, workload_t const& workload, data_accessor_t& data_a
         }
 
         bool success = result.status == operation_status_t::ok_k;
-        ucsb::add_atomic(operations_done, result.entries_touched);
-        ucsb::add_atomic(fails, size_t(!success) * result.entries_touched);
+        ucsb::add_atomic(done_operations_count, result.entries_touched);
+        ucsb::add_atomic(fails_count, size_t(!success) * result.entries_touched);
         ucsb::add_atomic(bytes_processed_count, size_t(success) * workload.value_length * result.entries_touched);
 
         // Print progress
-        ++current_iteration;
-        if (current_iteration - last_printed_iteration > printable_iterations_distance || current_iteration == 1 ||
-            current_iteration == workload.operations_count) {
-            float percent = 100.f * current_iteration / workload.operations_count;
-            last_printed_iteration = current_iteration;
+        ucsb::add_atomic(done_iterations_count, size_t(1));
+        if (done_iterations_count - last_printed_iterations_count > printable_iterations_distance ||
+            done_iterations_count <= state.threads() || done_iterations_count == iterations_total_count) {
+
+            last_printed_iterations_count = done_iterations_count;
+            float percent = 100.f * done_iterations_count / iterations_total_count;
             fmt::print("{}: {:>6.2f}%\r", workload.name, percent);
             fflush(stdout);
         }
@@ -319,8 +326,9 @@ void bench(bm::State& state, workload_t const& workload, data_accessor_t& data_a
         mem_stat.stop();
 
         state.SetBytesProcessed(bytes_processed_count);
-        state.counters["fails,%"] = bm::Counter(operations_done ? fails * 100.0 / operations_done : 100.0);
-        state.counters["operations/s"] = bm::Counter(operations_done - fails, bm::Counter::kIsRate);
+        state.counters["fails,%"] =
+            bm::Counter(done_operations_count ? fails_count * 100.0 / done_operations_count : 100.0);
+        state.counters["operations/s"] = bm::Counter(done_operations_count - fails_count, bm::Counter::kIsRate);
         state.counters["cpu_max,%"] = bm::Counter(cpu_stat.percent().max);
         state.counters["cpu_avg,%"] = bm::Counter(cpu_stat.percent().avg);
         state.counters["mem_max,bytes"] = bm::Counter(mem_stat.rss().max, bm::Counter::kDefaults, bm::Counter::kIs1024);
