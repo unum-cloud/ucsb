@@ -26,7 +26,6 @@ using workloads_t = ucsb::workloads_t;
 using db_t = ucsb::db_t;
 using data_accessor_t = ucsb::data_accessor_t;
 using db_brand_t = ucsb::db_brand_t;
-using factory_t = ucsb::factory_t;
 using timer_ref_t = ucsb::timer_ref_t;
 using worker_t = ucsb::worker_t;
 using operation_kind_t = ucsb::operation_kind_t;

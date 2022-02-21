@@ -8,6 +8,7 @@
 
 #include <iostream>
 #include <cstring>
+#include <memory>
 #include <string>
 #include <vector>
 #include <fmt/format.h>
@@ -121,7 +122,7 @@ struct rocksdb_gt : public ucsb::db_t {
 #endif
     std::vector<rocksdb::ColumnFamilyDescriptor> cf_descs_;
 
-    rocksdb::DB* db_;
+    std::unique_ptr<rocksdb::DB> db_;
 #ifdef build_transaction_m
     rocksdb::TransactionDB* transaction_db_;
 #endif
@@ -158,12 +159,13 @@ bool rocksdb_gt<mode_ak>::open() {
     options_.table_factory.reset(rocksdb::NewBlockBasedTableFactory(table_options));
     // options_.comparator = &key_cmp_;
 
+    rocksdb::DB* db_raw = nullptr;
     if constexpr (mode_ak == db_mode_t::regular_k) {
         if (cf_descs_.empty())
-            status = rocksdb::DB::Open(options_, dir_path_.string(), &db_);
+            status = rocksdb::DB::Open(options_, dir_path_.string(), &db_raw);
         else {
             std::vector<rocksdb::ColumnFamilyHandle*> cf_handles;
-            status = rocksdb::DB::Open(options_, dir_path_.string(), cf_descs_, &cf_handles, &db_);
+            status = rocksdb::DB::Open(options_, dir_path_.string(), cf_descs_, &cf_handles, &db_raw);
         }
     }
     else {
@@ -184,14 +186,14 @@ bool rocksdb_gt<mode_ak>::open() {
         return false;
 #endif
     }
+    db_.reset(db_raw);
 
     return status.ok();
 }
 
 template <db_mode_t mode_ak>
 bool rocksdb_gt<mode_ak>::close() {
-    delete db_;
-    db_ = nullptr;
+    db_.reset(nullptr);
 #ifdef build_transaction_m
     transaction_db_ = nullptr;
 #endif

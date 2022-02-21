@@ -7,6 +7,7 @@
 #include <limits>
 #include <chrono>
 #include <thread>
+#include <atomic>
 
 namespace ucsb {
 
@@ -23,7 +24,7 @@ struct cpu_stat_t {
     };
 
     inline void start() {
-        if (!time_to_die_)
+        if (!time_to_die_.load(std::memory_order_relaxed))
             return;
 
         percent_.min = std::numeric_limits<float>::max();
@@ -31,17 +32,17 @@ struct cpu_stat_t {
         percent_.avg = 0;
 
         requests_count_ = 0;
-        time_to_die_ = false;
+        time_to_die_.store(false);
         thread_ = std::thread(&cpu_stat_t::request_cpu_usage, this);
     }
     inline void stop() {
-        if (time_to_die_)
+        if (time_to_die_.load(std::memory_order_relaxed))
             return;
 
         // Wait to calculate one more times for  to get more accuracy
         std::this_thread::sleep_for(std::chrono::milliseconds(request_delay_ + 1));
 
-        time_to_die_ = true;
+        time_to_die_.store(true);
         thread_.join();
     }
 
@@ -60,7 +61,7 @@ struct cpu_stat_t {
         clock_t last_proc_user = 0;
         clock_t last_proc_sys = 0;
 
-        while (!time_to_die_) {
+        while (!time_to_die_.load(std::memory_order_relaxed)) {
             tms time_sample;
             clock_t cpu = times(&time_sample);
             clock_t proc_user = time_sample.tms_utime;
@@ -89,7 +90,7 @@ struct cpu_stat_t {
     size_t request_delay_;
     size_t requests_count_;
     std::thread thread_;
-    bool time_to_die_;
+    std::atomic_bool time_to_die_;
 };
 
 struct mem_stat_t {
@@ -105,7 +106,7 @@ struct mem_stat_t {
     };
 
     inline void start() {
-        if (!time_to_die_)
+        if (!time_to_die_.load(std::memory_order_relaxed))
             return;
 
         vm_.min = std::numeric_limits<size_t>::max();
@@ -117,14 +118,14 @@ struct mem_stat_t {
         rss_.avg = 0;
 
         requests_count_ = 0;
-        time_to_die_ = false;
+        time_to_die_.store(false);
         thread_ = std::thread(&mem_stat_t::request_mem_usage, this);
     }
     inline void stop() {
-        if (time_to_die_)
+        if (time_to_die_.load(std::memory_order_relaxed))
             return;
 
-        time_to_die_ = true;
+        time_to_die_.store(true);
         thread_.join();
     }
 
@@ -143,7 +144,7 @@ struct mem_stat_t {
     }
 
     inline void request_mem_usage() {
-        while (!time_to_die_) {
+        while (!time_to_die_.load(std::memory_order_relaxed)) {
             size_t vm = 0, rss = 0;
             mem_usage(vm, rss);
             ++requests_count_;
@@ -177,7 +178,7 @@ struct mem_stat_t {
 
     size_t request_delay_;
     size_t requests_count_;
-    bool time_to_die_;
+    std::atomic_bool time_to_die_;
 };
 
 } // namespace ucsb
