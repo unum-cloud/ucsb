@@ -265,8 +265,8 @@ operation_result_t unumdb_t::range_select(key_t key, size_t length, value_span_t
             it.get(citizen, countdown);
         }
     }
-    region_.unlock_shared();
     selected_records_count += size_t(countdown.wait()) * tasks_cnt;
+    region_.unlock_shared();
     return {selected_records_count, operation_status_t::ok_k};
 }
 

@@ -194,8 +194,8 @@ operation_result_t unumdb_transaction_t::range_select(key_t key, size_t length, 
             it.get(citizen, countdown);
         }
     }
-    transaction_->unlock_commit_shared();
     selected_records_count += size_t(countdown.wait()) * tasks_cnt;
+    transaction_->unlock_commit_shared();
     return {selected_records_count, operation_status_t::ok_k};
 }
 
