@@ -1,13 +1,22 @@
 [
     {
-        "name": "BulkImport",
-        "records_count": 26000000,
-        "operations_count": 400,
-        "bulk_import_proportion": 1.0,
-        "key_dist": "zipfian",
+        "name": "BatchInsert",
+        "records_count": 250000000,
+        "operations_count": 64,
+        "batch_insert_proportion": 1.0,
         "value_length": 1024,
-        "bulk_import_min_length": 65000,
-        "bulk_import_max_length": 65000,
+        "batch_insert_min_length": 4096,
+        "batch_insert_max_length": 4096,
+        "batch_insert_length_dist": "uniform"
+    },
+    {
+        "name": "BulkImport",
+        "records_count": 250000000,
+        "operations_count": 32,
+        "bulk_import_proportion": 1.0,
+        "value_length": 1024,
+        "bulk_import_min_length": 8192,
+        "bulk_import_max_length": 8192,
         "bulk_import_length_dist": "uniform"
     }
 ]

@@ -184,9 +184,9 @@ inline worker_t::key_generator_t worker_t::create_key_generator(workload_t const
         break;
     case distribution_kind_t::zipfian_k: {
         size_t new_keys = (size_t)(workload.operations_count * workload.insert_proportion * 2);
-        generator = std::make_unique<scrambled_zipfian_generator_t>(workload.start_key,
-                                                                    workload.start_key + workload.db_records_count +
-                                                                        new_keys - 1);
+        generator =
+            std::make_unique<scrambled_zipfian_generator_t>(workload.start_key,
+                                                            workload.start_key + workload.records_count + new_keys - 1);
         break;
     }
     case distribution_kind_t::skewed_latest_k:

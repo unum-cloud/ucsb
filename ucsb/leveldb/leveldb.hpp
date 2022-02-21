@@ -78,6 +78,8 @@ struct leveldb_t : public ucsb::db_t {
         size_t filter_bits = -1;
     };
 
+    inline bool load_config(config_t& config);
+
     struct key_comparator_t final /*: public leveldb::Comparator*/ {
         int Compare(leveldb::Slice const& left, leveldb::Slice const& right) const /*override*/ {
             assert(left.size() == sizeof(key_t));
@@ -91,8 +93,6 @@ struct leveldb_t : public ucsb::db_t {
         void FindShortestSeparator(std::string*, const leveldb::Slice&) const {}
         void FindShortSuccessor(std::string*) const {}
     };
-
-    inline bool load_config(fs::path const& config_path, config_t& config);
 
     fs::path config_path_;
     fs::path dir_path_;
@@ -112,7 +112,7 @@ bool leveldb_t::open() {
         return true;
 
     config_t config;
-    if (!load_config(config_path_, config))
+    if (!load_config(config))
         return false;
 
     options_ = leveldb::Options();
@@ -272,11 +272,11 @@ std::unique_ptr<transaction_t> leveldb_t::create_transaction() {
     return {};
 }
 
-bool leveldb_t::load_config(fs::path const& config_path, config_t& config) {
-    if (!fs::exists(config_path.c_str()))
+bool leveldb_t::load_config(config_t& config) {
+    if (!fs::exists(config_path_))
         return false;
 
-    std::ifstream i_config(config_path);
+    std::ifstream i_config(config_path_);
     nlohmann::json j_config;
     i_config >> j_config;
 
