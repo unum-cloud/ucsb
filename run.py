@@ -16,6 +16,8 @@ threads = [
     # 4,
     # 8,
     # 16,
+    # 32,
+    # 64,
 ]
 
 db_names = [
@@ -128,6 +130,11 @@ for threads_count in threads:
     for size in sizes:
         for db_name in db_names:
             db_path = get_db_path(db_name, size)
+            # Cleanup old DB
+            if len(threads) > 1 and cleanup_previous:
+                if os.path.exists(db_path):
+                    shutil.rmtree(db_path)
+            # Prepare DB enviroment
             pathlib.Path(db_path).mkdir(parents=True, exist_ok=True)
             config_path = get_db_config_file_path(db_name, size)
             launch_db(db_name, config_path)

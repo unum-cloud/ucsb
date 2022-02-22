@@ -11,12 +11,12 @@
 #include "ucsb/core/db.hpp"
 #include "ucsb/core/workload.hpp"
 #include "ucsb/core/worker.hpp"
-#include "ucsb/core/factory.hpp"
+#include "ucsb/core/db_brand.hpp"
 #include "ucsb/core/operation.hpp"
 #include "ucsb/core/exception.hpp"
-#include "ucsb/core/format.hpp"
+#include "ucsb/core/printable.hpp"
 #include "ucsb/core/results.hpp"
-#include "ucsb/core/threads_synchronizer.hpp"
+#include "ucsb/core/threads_fence.hpp"
 
 namespace bm = benchmark;
 
@@ -25,8 +25,7 @@ using workload_t = ucsb::workload_t;
 using workloads_t = ucsb::workloads_t;
 using db_t = ucsb::db_t;
 using data_accessor_t = ucsb::data_accessor_t;
-using db_kind_t = ucsb::db_kind_t;
-using factory_t = ucsb::factory_t;
+using db_brand_t = ucsb::db_brand_t;
 using timer_ref_t = ucsb::timer_ref_t;
 using worker_t = ucsb::worker_t;
 using operation_kind_t = ucsb::operation_kind_t;
@@ -37,7 +36,7 @@ using cpu_stat_t = ucsb::cpu_stat_t;
 using mem_stat_t = ucsb::mem_stat_t;
 using exception_t = ucsb::exception_t;
 using printable_bytes_t = ucsb::printable_bytes_t;
-using threads_synchronizer_t = ucsb::threads_synchronizer_t;
+using threads_fence_t = ucsb::threads_fence_t;
 
 inline void usage_message(const char* command) {
     fmt::print("Usage: {} [options]\n", command);
@@ -55,41 +54,41 @@ void parse_and_validate_args(int argc, char* argv[], settings_t& settings) {
     int arg_idx = 1;
     while (arg_idx < argc && ucsb::start_with(argv[arg_idx], "-")) {
         if (strcmp(argv[arg_idx], "-db") == 0) {
-            arg_idx++;
+            ++arg_idx;
             if (arg_idx >= argc) {
                 usage_message(argv[0]);
                 fmt::print("Missing argument value for -db\n");
                 exit(1);
             }
             settings.db_name = std::string(argv[arg_idx]);
-            arg_idx++;
+            ++arg_idx;
         }
         if (strcmp(argv[arg_idx], "-t") == 0) {
             settings.transactional = true;
-            arg_idx++;
+            ++arg_idx;
         }
         else if (strcmp(argv[arg_idx], "-c") == 0) {
-            arg_idx++;
+            ++arg_idx;
             if (arg_idx >= argc) {
                 usage_message(argv[0]);
                 fmt::print("Missing argument value for -c\n");
                 exit(1);
             }
             settings.db_config_path = std::string(argv[arg_idx]);
-            arg_idx++;
+            ++arg_idx;
         }
         else if (strcmp(argv[arg_idx], "-w") == 0) {
-            arg_idx++;
+            ++arg_idx;
             if (arg_idx >= argc) {
                 usage_message(argv[0]);
                 fmt::print("Missing argument value for -w\n");
                 exit(1);
             }
             settings.workloads_path = std::string(argv[arg_idx]);
-            arg_idx++;
+            ++arg_idx;
         }
         else if (strcmp(argv[arg_idx], "-r") == 0) {
-            arg_idx++;
+            ++arg_idx;
             if (arg_idx >= argc) {
                 usage_message(argv[0]);
                 fmt::print("Missing argument value for -r\n");
@@ -99,27 +98,27 @@ void parse_and_validate_args(int argc, char* argv[], settings_t& settings) {
             if (path.back() != '/')
                 path.push_back('/');
             settings.results_path = path;
-            arg_idx++;
+            ++arg_idx;
         }
         else if (strcmp(argv[arg_idx], "-threads") == 0) {
-            arg_idx++;
+            ++arg_idx;
             if (arg_idx >= argc) {
                 usage_message(argv[0]);
                 fmt::print("Missing argument value for -threads\n");
                 exit(1);
             }
             settings.threads_count = std::stoi(argv[arg_idx]);
-            arg_idx++;
+            ++arg_idx;
         }
         else if (strcmp(argv[arg_idx], "-filter") == 0) {
-            arg_idx++;
+            ++arg_idx;
             if (arg_idx >= argc) {
                 usage_message(argv[0]);
                 fmt::print("Missing argument value for -filter\n");
                 exit(1);
             }
             settings.workload_filter = std::string(argv[arg_idx]);
-            arg_idx++;
+            ++arg_idx;
         }
         else {
             usage_message(argv[0]);
@@ -265,23 +264,29 @@ void bench(bm::State& state, workload_t const& workload, data_accessor_t& data_a
     timer_ref_t timer(state);
     worker_t worker(workload, data_accessor, timer);
 
-    static size_t fails = 0;
-    static size_t operations_done = 0;
+    // Stats
+    static size_t fails_count = 0;
+    static size_t done_operations_count = 0;
     static size_t bytes_processed_count = 0;
     cpu_stat_t cpu_stat;
     mem_stat_t mem_stat;
 
+    // Progress
+    static size_t done_iterations_count = 0;
+    size_t last_printed_iterations_count = 0;
+    size_t const iterations_total_count = state.threads() * workload.operations_count;
+    size_t const printable_iterations_distance = iterations_total_count / 10;
+
     if (state.thread_index() == 0) {
-        fails = 0;
-        operations_done = 0;
+        fails_count = 0;
+        done_operations_count = 0;
         bytes_processed_count = 0;
+        done_iterations_count = 0;
+        last_printed_iterations_count = 0;
         cpu_stat.start();
         mem_stat.start();
     }
 
-    size_t current_iteration = 0;
-    size_t last_printed_iteration = 0;
-    size_t const printable_iterations_distance = workload.operations_count / 10;
     for (auto _ : state) {
         operation_result_t result;
         auto operation = chooser->choose();
@@ -300,16 +305,17 @@ void bench(bm::State& state, workload_t const& workload, data_accessor_t& data_a
         }
 
         bool success = result.status == operation_status_t::ok_k;
-        ucsb::add_atomic(operations_done, result.entries_touched);
-        ucsb::add_atomic(fails, size_t(!success) * result.entries_touched);
+        ucsb::add_atomic(done_operations_count, result.entries_touched);
+        ucsb::add_atomic(fails_count, size_t(!success) * result.entries_touched);
         ucsb::add_atomic(bytes_processed_count, size_t(success) * workload.value_length * result.entries_touched);
 
         // Print progress
-        ++current_iteration;
-        if (current_iteration - last_printed_iteration > printable_iterations_distance || current_iteration == 1 ||
-            current_iteration == workload.operations_count) {
-            float percent = 100.f * current_iteration / workload.operations_count;
-            last_printed_iteration = current_iteration;
+        ucsb::add_atomic(done_iterations_count, size_t(1));
+        if (done_iterations_count - last_printed_iterations_count > printable_iterations_distance ||
+            done_iterations_count <= state.threads() || done_iterations_count == iterations_total_count) {
+
+            last_printed_iterations_count = done_iterations_count;
+            float percent = 100.f * done_iterations_count / iterations_total_count;
             fmt::print("{}: {:>6.2f}%\r", workload.name, percent);
             fflush(stdout);
         }
@@ -320,8 +326,9 @@ void bench(bm::State& state, workload_t const& workload, data_accessor_t& data_a
         mem_stat.stop();
 
         state.SetBytesProcessed(bytes_processed_count);
-        state.counters["fails,%"] = bm::Counter(operations_done ? fails * 100.0 / operations_done : 100.0);
-        state.counters["operations/s"] = bm::Counter(operations_done - fails, bm::Counter::kIsRate);
+        state.counters["fails,%"] =
+            bm::Counter(done_operations_count ? fails_count * 100.0 / done_operations_count : 100.0);
+        state.counters["operations/s"] = bm::Counter(done_operations_count - fails_count, bm::Counter::kIsRate);
         state.counters["cpu_max,%"] = bm::Counter(cpu_stat.percent().max);
         state.counters["cpu_avg,%"] = bm::Counter(cpu_stat.percent().avg);
         state.counters["mem_max,bytes"] = bm::Counter(mem_stat.rss().max, bm::Counter::kDefaults, bm::Counter::kIs1024);
@@ -331,14 +338,13 @@ void bench(bm::State& state, workload_t const& workload, data_accessor_t& data_a
     }
 }
 
-void bench(
-    bm::State& state, workload_t const& workload, db_t& db, bool transactional, threads_synchronizer_t& synchronizer) {
+void bench(bm::State& state, workload_t const& workload, db_t& db, bool transactional, threads_fence_t& fence) {
 
     if (state.thread_index() == 0) {
         bool ok = db.open();
         assert(ok);
     }
-    synchronizer.sync();
+    fence.sync();
 
     if (transactional) {
         auto transaction = db.create_transaction();
@@ -349,7 +355,7 @@ void bench(
     else
         bench(state, workload, db);
 
-    synchronizer.sync();
+    fence.sync();
     if (state.thread_index() == 0) {
         db.flush();
         state.counters["disk,bytes"] = bm::Counter(db.size_on_disk(), bm::Counter::kDefaults, bm::Counter::kIs1024);
@@ -400,8 +406,8 @@ int main(int argc, char** argv) {
     ucsb::fs::create_directories(settings.results_path.parent_path());
 
     // Setup DB
-    db_kind_t kind = ucsb::parse_db(settings.db_name);
-    std::shared_ptr<db_t> db = factory_t {}.create(kind, settings.transactional);
+    db_brand_t kind = ucsb::parse_db_brand(settings.db_name);
+    std::shared_ptr<db_t> db = ucsb::make_db(kind, settings.transactional);
     if (!db) {
         if (settings.transactional)
             fmt::print("Failed to create transactional DB: {}\n", settings.db_name);
@@ -411,7 +417,7 @@ int main(int argc, char** argv) {
     }
     db->set_config(settings.db_config_path, settings.db_dir_path);
 
-    threads_synchronizer_t synchronizer(settings.threads_count);
+    threads_fence_t fence(settings.threads_count);
 
     // Register benchmarks
     register_section(section_name(settings, workloads));
@@ -419,7 +425,7 @@ int main(int argc, char** argv) {
         auto const& first = splited_workloads.front();
         register_benchmark(first.name, first.operations_count, settings.threads_count, [&](bm::State& state) {
             auto const& workload = splited_workloads[state.thread_index()];
-            bench(state, workload, *db, settings.transactional, synchronizer);
+            bench(state, workload, *db, settings.transactional, fence);
         });
     }
 

@@ -13,8 +13,9 @@ struct bulk_metadata_t {
 };
 
 /**
- * @brief A base class for data accessing.
+ * @brief A base class for data accessing: on DBs and Transactions state.
  *
+ * @section Keys.
  * The key type is set to a 64-bit unsigned integer.
  * Todays engines often support string keys of variable length,
  * but generally work faster if keys are of identical length.

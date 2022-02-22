@@ -265,8 +265,8 @@ operation_result_t unumdb_t::range_select(key_t key, size_t length, value_span_t
             it.get(citizen, countdown);
         }
     }
-    region_.unlock_shared();
     selected_records_count += size_t(countdown.wait()) * tasks_cnt;
+    region_.unlock_shared();
     return {selected_records_count, operation_status_t::ok_k};
 }
 
@@ -301,7 +301,7 @@ std::unique_ptr<transaction_t> unumdb_t::create_transaction() {
 }
 
 bool unumdb_t::load_config() {
-    if (!fs::exists(config_path_.c_str()))
+    if (!fs::exists(config_path_))
         return false;
 
     std::ifstream i_config(config_path_);
@@ -314,17 +314,21 @@ bool unumdb_t::load_config() {
         j_config["transaction_migration_max_cnt"].get<size_t>();
 
     config_.region_config.country.fixed_citizen_size = 0;
+    config_.region_config.country.unfixed_citizen_max_size = j_config["unfixed_citizen_max_size"].get<size_t>();
     config_.region_config.country.migration_capacity = j_config["migration_capacity"].get<size_t>();
     config_.region_config.country.migration_max_cnt = j_config["migration_max_cnt"].get<size_t>();
 
-    config_.region_config.country.city.fixed_citizen_size = 0;
+    config_.region_config.country.city.fixed_citizen_size = config_.region_config.country.fixed_citizen_size;
     config_.region_config.country.city.files_size_enlarge_factor = j_config["files_size_enlarge_factor"].get<size_t>();
 
-    config_.region_config.country.city.street.fixed_citizen_size = 0;
+    config_.region_config.country.city.street.fixed_citizen_size = config_.region_config.country.fixed_citizen_size;
+    config_.region_config.country.city.street.unfixed_citizen_max_size =
+        config_.region_config.country.unfixed_citizen_max_size;
     config_.region_config.country.city.street.max_files_cnt = j_config["max_files_cnt"].get<size_t>();
     config_.region_config.country.city.street.files_count_enlarge_factor =
         j_config["files_count_enlarge_factor"].get<size_t>();
-    config_.region_config.country.city.street.building.fixed_citizen_size = 0;
+    config_.region_config.country.city.street.building.fixed_citizen_size =
+        config_.region_config.country.fixed_citizen_size;
 
     config_.io_device = j_config["io_device"].get<std::string>().c_str();
     config_.uring_max_files_count = j_config["uring_max_files_count"].get<size_t>();

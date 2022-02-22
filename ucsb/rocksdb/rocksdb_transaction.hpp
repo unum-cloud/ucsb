@@ -53,7 +53,6 @@ struct rocksdb_transaction_t : public ucsb::transaction_t {
 
   private:
     std::unique_ptr<rocksdb::Transaction> transaction_;
-    mutable dbuffer_t batch_buffer_;
 };
 
 inline rocksdb_transaction_t::~rocksdb_transaction_t() {

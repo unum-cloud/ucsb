@@ -63,20 +63,9 @@
         "value_length": 1024
     },
     {
-        "name": "BatchInsert",
-        "records_count": 10000000,
-        "operations_count": 60,
-        "batch_insert_proportion": 1.0,
-        "key_dist": "zipfian",
-        "value_length": 1024,
-        "batch_insert_min_length": 16384,
-        "batch_insert_max_length": 16384,
-        "batch_insert_length_dist": "uniform"
-    },
-    {
         "name": "Remove",
         "records_count": 10000000,
-        "operations_count": 1500000,
+        "operations_count": 500000,
         "remove_proportion": 1.0,
         "key_dist": "zipfian"
     }

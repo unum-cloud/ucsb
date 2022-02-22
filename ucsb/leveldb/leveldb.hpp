@@ -1,6 +1,7 @@
 #pragma once
 
 #include <iostream>
+#include <memory>
 #include <string>
 #include <fmt/format.h>
 #include <nlohmann/json.hpp>
@@ -78,6 +79,8 @@ struct leveldb_t : public ucsb::db_t {
         size_t filter_bits = -1;
     };
 
+    inline bool load_config(config_t& config);
+
     struct key_comparator_t final /*: public leveldb::Comparator*/ {
         int Compare(leveldb::Slice const& left, leveldb::Slice const& right) const /*override*/ {
             assert(left.size() == sizeof(key_t));
@@ -92,13 +95,11 @@ struct leveldb_t : public ucsb::db_t {
         void FindShortSuccessor(std::string*) const {}
     };
 
-    inline bool load_config(fs::path const& config_path, config_t& config);
-
     fs::path config_path_;
     fs::path dir_path_;
 
     leveldb::Options options_;
-    leveldb::DB* db_;
+    std::unique_ptr<leveldb::DB> db_;
     key_comparator_t key_cmp_;
 };
 
@@ -112,7 +113,7 @@ bool leveldb_t::open() {
         return true;
 
     config_t config;
-    if (!load_config(config_path_, config))
+    if (!load_config(config))
         return false;
 
     options_ = leveldb::Options();
@@ -133,13 +134,15 @@ bool leveldb_t::open() {
     if (config.filter_bits > 0)
         options_.filter_policy = leveldb::NewBloomFilterPolicy(config.filter_bits);
 
-    leveldb::Status status = leveldb::DB::Open(options_, dir_path_.string(), &db_);
+    leveldb::DB* db_raw = nullptr;
+    leveldb::Status status = leveldb::DB::Open(options_, dir_path_.string(), &db_raw);
+    db_.reset(db_raw);
+
     return status.ok();
 }
 
 bool leveldb_t::close() {
-    delete db_;
-    db_ = nullptr;
+    db_.reset(nullptr);
     return true;
 }
 
@@ -272,11 +275,11 @@ std::unique_ptr<transaction_t> leveldb_t::create_transaction() {
     return {};
 }
 
-bool leveldb_t::load_config(fs::path const& config_path, config_t& config) {
-    if (!fs::exists(config_path.c_str()))
+bool leveldb_t::load_config(config_t& config) {
+    if (!fs::exists(config_path_))
         return false;
 
-    std::ifstream i_config(config_path);
+    std::ifstream i_config(config_path_);
     nlohmann::json j_config;
     i_config >> j_config;
 

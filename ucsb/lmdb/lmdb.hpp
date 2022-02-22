@@ -71,7 +71,7 @@ struct lmdb_t : public ucsb::db_t {
         bool write_map = false;
     };
 
-    bool load_config(fs::path const& config_path, config_t& config);
+    bool load_config(config_t& config);
 
     fs::path config_path_;
     fs::path dir_path_;
@@ -97,7 +97,7 @@ bool lmdb_t::open() {
         return true;
 
     config_t config;
-    if (!load_config(config_path_, config))
+    if (!load_config(config))
         return false;
 
     int env_opt = 0;
@@ -161,7 +161,7 @@ bool lmdb_t::close() {
 
 void lmdb_t::destroy() {
     if (!env_ || !dbi_) {
-        ucsb::remove_dir_contents(dir_path_);
+        ucsb::clear_directory(dir_path_);
         return;
     }
 
@@ -176,7 +176,7 @@ void lmdb_t::destroy() {
     bool ok = close();
     assert(ok);
 
-    ucsb::remove_dir_contents(dir_path_);
+    ucsb::clear_directory(dir_path_);
 }
 
 operation_result_t lmdb_t::insert(key_t key, value_spanc_t value) {
@@ -412,11 +412,11 @@ std::unique_ptr<transaction_t> lmdb_t::create_transaction() {
     return {};
 }
 
-bool lmdb_t::load_config(fs::path const& config_path, config_t& config) {
-    if (!fs::exists(config_path.c_str()))
+bool lmdb_t::load_config(config_t& config) {
+    if (!fs::exists(config_path_))
         return false;
 
-    std::ifstream i_config(config_path);
+    std::ifstream i_config(config_path_);
     nlohmann::json j_config;
     i_config >> j_config;
 
