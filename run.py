@@ -86,7 +86,7 @@ def drop_system_caches():
         stream.write('3\n')
 
 
-def launch_db(db_name: str, config_path: os.PathLike):
+def launch_db(db_name: str, config_path: os.PathLike) -> None:
     if db_name == "mongodb":
         subprocess.Popen(
             ["mongo", "--eval", "db.getSiblingDB('admin').shutdownServer()"], stdout=subprocess.DEVNULL)
@@ -95,7 +95,7 @@ def launch_db(db_name: str, config_path: os.PathLike):
                          config_path], stdout=subprocess.DEVNULL)
 
 
-def run(db_name: str, size: int, threads_count: int, workload_names: list[str]) -> None:
+def run(db_name: str, size: int, threads_count: int, workload_names: list) -> None:
     config_path = get_db_config_file_path(db_name, size)
     workloads_path = get_worklods_file_path(size)
     results_path = get_results_dir_path()
@@ -112,6 +112,7 @@ def run(db_name: str, size: int, threads_count: int, workload_names: list[str]) 
                             -filter {filter}'
                           )
     child.interact()
+
 
 def main() -> None:
     if os.geteuid() != 0:
