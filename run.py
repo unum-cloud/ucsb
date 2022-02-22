@@ -6,9 +6,9 @@ import pexpect
 import pathlib
 import subprocess
 
-cleanup_previous = False
 drop_caches = False
 transactional = False
+cleanup_previous = False
 
 threads = [
     1,
