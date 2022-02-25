@@ -63,7 +63,7 @@ void parse_and_validate_args(int argc, char* argv[], settings_t& settings) {
             settings.db_name = std::string(argv[arg_idx]);
             ++arg_idx;
         }
-        if (strcmp(argv[arg_idx], "-t") == 0) {
+        else if (strcmp(argv[arg_idx], "-t") == 0) {
             settings.transactional = true;
             ++arg_idx;
         }
