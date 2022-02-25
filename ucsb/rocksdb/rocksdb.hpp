@@ -99,9 +99,7 @@ struct rocksdb_gt : public ucsb::db_t {
     fs::path config_path_;
     fs::path dir_path_;
 
-#ifdef build_transaction_m
-    bool load_transaction_options(rocksdb::TransactionDBOptions& transaction_options);
-#endif
+    bool load_aditional_options();
 
     struct key_comparator_t final : public rocksdb::Comparator {
         int Compare(rocksdb::Slice const& left, rocksdb::Slice const& right) const override {
@@ -147,10 +145,8 @@ bool rocksdb_gt<mode_ak>::open() {
         rocksdb::LoadOptionsFromFile(config_path_.string(), rocksdb::Env::Default(), &options_, &cf_descs_);
     if (!status.ok())
         return false;
-#ifdef build_transaction_m
-    if (!load_transaction_options(transaction_options_))
+    if (!load_aditional_options())
         return false;
-#endif
 
     rocksdb::BlockBasedTableOptions table_options;
     table_options.block_cache = rocksdb::NewLRUCache(options_.target_file_size_base * 10);
@@ -182,7 +178,7 @@ bool rocksdb_gt<mode_ak>::open() {
                                                   &cf_handles,
                                                   &transaction_db_);
         }
-        db_.reset(transaction_db_);
+        db_raw = transaction_db_;
 #else
         return false;
 #endif
@@ -443,7 +439,14 @@ void rocksdb_gt<mode_ak>::flush() {
 
 template <db_mode_t mode_ak>
 size_t rocksdb_gt<mode_ak>::size_on_disk() const {
-    return ucsb::size_on_disk(dir_path_);
+    size_t files_size = 0;
+    for (auto const& db_path : options_.db_paths) {
+        if (!db_path.path.empty()) {
+            if (fs::exists(db_path.path))
+                files_size += ucsb::size_on_disk(db_path.path);
+        }
+    }
+    return files_size + ucsb::size_on_disk(dir_path_);
 }
 
 template <db_mode_t mode_ak>
@@ -461,25 +464,35 @@ std::unique_ptr<transaction_t> rocksdb_gt<mode_ak>::create_transaction() {
 #endif
 }
 
-#ifdef build_transaction_m
 template <db_mode_t mode_ak>
-bool rocksdb_gt<mode_ak>::load_transaction_options(rocksdb::TransactionDBOptions& transaction_options) {
+bool rocksdb_gt<mode_ak>::load_aditional_options() {
     if (!fs::exists(config_path_))
         return false;
 
     fs::path transaction_config_path = config_path_.parent_path();
-    transaction_config_path += "/transaction.cfg";
+    transaction_config_path += "/additional.cfg";
     std::ifstream i_config(transaction_config_path);
     nlohmann::json j_config;
     i_config >> j_config;
 
-    transaction_options.default_write_batch_flush_threshold =
+    std::vector<std::string> db_paths = j_config["db_paths"].get<std::vector<std::string>>();
+    for (auto const& db_path : db_paths) {
+        if (!db_path.empty()) {
+            size_t files_size = 0;
+            if (fs::exists(db_path))
+                files_size = ucsb::size_on_disk(db_path);
+            options_.db_paths.push_back({db_path, files_size});
+        }
+    }
+
+#ifdef build_transaction_m
+    transaction_options_.default_write_batch_flush_threshold =
         j_config["default_write_batch_flush_threshold"].get<int64_t>();
-    if (transaction_options.default_write_batch_flush_threshold > 0)
+    if (transaction_options_.default_write_batch_flush_threshold > 0)
         transaction_options_.write_policy = rocksdb::TxnDBWritePolicy::WRITE_UNPREPARED;
+#endif
 
     return true;
 }
-#endif
 
 } // namespace facebook
