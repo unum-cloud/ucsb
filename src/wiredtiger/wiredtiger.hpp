@@ -1,0 +1,328 @@
+#pragma once
+
+#include <string>
+#include <vector>
+#include <fmt/format.h>
+
+#include <wiredtiger.h>
+
+#include "src/core/types.hpp"
+#include "src/core/db.hpp"
+#include "src/core/helper.hpp"
+
+namespace mongodb
+{
+
+    namespace fs = ucsb::fs;
+
+    using key_t = ucsb::key_t;
+    using keys_spanc_t = ucsb::keys_spanc_t;
+    using value_span_t = ucsb::value_span_t;
+    using value_spanc_t = ucsb::value_spanc_t;
+    using values_spanc_t = ucsb::values_spanc_t;
+    using value_lengths_spanc_t = ucsb::value_lengths_spanc_t;
+    using bulk_metadata_t = ucsb::bulk_metadata_t;
+    using operation_status_t = ucsb::operation_status_t;
+    using operation_result_t = ucsb::operation_result_t;
+    using transaction_t = ucsb::transaction_t;
+
+    /**
+     * @brief WiredTiger wrapper for the UCSB benchmark.
+     * WiredTiger is the core key-value engine of MongoDB.
+     * https://github.com/wiredtiger/wiredtiger
+     */
+    struct wiredtiger_t : public ucsb::db_t
+    {
+
+        inline wiredtiger_t()
+            : conn_(nullptr), session_(nullptr), cursor_(nullptr), table_name_("table:access"), key_buffer_(100) {}
+        inline ~wiredtiger_t() override = default;
+
+        void set_config(fs::path const &config_path, fs::path const &dir_path) override;
+        bool open() override;
+        bool close() override;
+        void destroy() override;
+
+        operation_result_t insert(key_t key, value_spanc_t value) override;
+        operation_result_t update(key_t key, value_spanc_t value) override;
+        operation_result_t remove(key_t key) override;
+
+        operation_result_t read(key_t key, value_span_t value) const override;
+        operation_result_t batch_insert(keys_spanc_t keys, values_spanc_t values, value_lengths_spanc_t sizes) override;
+        operation_result_t batch_read(keys_spanc_t keys) const override;
+
+        bulk_metadata_t prepare_bulk_import_data(keys_spanc_t keys,
+                                                 values_spanc_t values,
+                                                 value_lengths_spanc_t sizes) const override;
+        operation_result_t bulk_import(bulk_metadata_t const &metadata) override;
+
+        operation_result_t range_select(key_t key, size_t length, value_span_t single_value) const override;
+        operation_result_t scan(value_span_t single_value) const override;
+
+        void flush() override;
+        size_t size_on_disk() const override;
+
+        std::unique_ptr<transaction_t> create_transaction() override;
+
+    private:
+        fs::path config_path_;
+        fs::path dir_path_;
+
+        WT_CONNECTION *conn_;
+        WT_SESSION *session_;
+        mutable WT_CURSOR *cursor_;
+        std::string table_name_;
+        std::vector<char> key_buffer_;
+        mutable std::vector<char> value_buffer_;
+    };
+
+    inline int compare_keys(
+        WT_COLLATOR *collator, WT_SESSION *session, WT_ITEM const *left, WT_ITEM const *right, int *res) noexcept
+    {
+        (void)collator;
+        (void)session;
+
+        key_t left_key = *reinterpret_cast<key_t const *>(left->data);
+        key_t right_key = *reinterpret_cast<key_t const *>(right->data);
+        *res = left_key < right_key ? -1 : left_key > right_key;
+        return 0;
+    }
+
+    WT_COLLATOR key_comparator = {compare_keys, nullptr, nullptr};
+
+    void wiredtiger_t::set_config(fs::path const &config_path, fs::path const &dir_path)
+    {
+        config_path_ = config_path;
+        dir_path_ = dir_path;
+    }
+
+    bool wiredtiger_t::open()
+    {
+
+        int res = wiredtiger_open(dir_path_.c_str(), NULL, "create", &conn_);
+        if (res)
+            return false;
+
+        res = conn_->open_session(conn_, NULL, NULL, &session_);
+        if (res)
+        {
+            close();
+            return false;
+        }
+
+        // res = conn_->add_collator(conn_, "key_comparator", &key_comparator, NULL);
+        // if (res) {
+        //     close();
+        //     return false;
+        // }
+
+        res = session_->create(session_, table_name_.c_str(), "key_format=S,value_format=u");
+        if (res)
+        {
+            close();
+            return false;
+        }
+
+        res = session_->open_cursor(session_, table_name_.c_str(), NULL, NULL, &cursor_);
+        if (res)
+        {
+            close();
+            return false;
+        }
+
+        return true;
+    }
+
+    bool wiredtiger_t::close()
+    {
+        if (!conn_)
+            return true;
+
+        int res = conn_->close(conn_, NULL);
+        if (res)
+            return false;
+
+        cursor_ = nullptr;
+        session_ = nullptr;
+        conn_ = nullptr;
+        return true;
+    }
+
+    void wiredtiger_t::destroy()
+    {
+        if (session_)
+            session_->drop(session_, table_name_.c_str(), "key_format=S,value_format=u");
+
+        bool ok = close();
+        assert(ok);
+
+        ucsb::clear_directory(dir_path_);
+    }
+
+    operation_result_t wiredtiger_t::insert(key_t key, value_spanc_t value)
+    {
+
+        cursor_->set_key(cursor_, &key);
+        WT_ITEM db_value;
+        db_value.data = value.data();
+        db_value.size = value.size();
+        cursor_->set_value(cursor_, &db_value);
+        int res = cursor_->insert(cursor_);
+        cursor_->reset(cursor_);
+        if (res)
+            return {0, operation_status_t::error_k};
+        return {1, operation_status_t::ok_k};
+    }
+
+    operation_result_t wiredtiger_t::update(key_t key, value_spanc_t value)
+    {
+
+        cursor_->set_key(cursor_, &key);
+        WT_ITEM db_value;
+        db_value.data = value.data();
+        db_value.size = value.size();
+        cursor_->set_value(cursor_, &db_value);
+        int res = cursor_->update(cursor_);
+        cursor_->reset(cursor_);
+        if (res)
+            return {0, operation_status_t::error_k};
+        return {1, operation_status_t::ok_k};
+    }
+
+    operation_result_t wiredtiger_t::remove(key_t key)
+    {
+
+        cursor_->set_key(cursor_, &key);
+        int res = cursor_->remove(cursor_);
+        cursor_->reset(cursor_);
+        if (res)
+            return {0, operation_status_t::error_k};
+        return {1, operation_status_t::ok_k};
+    }
+
+    operation_result_t wiredtiger_t::read(key_t key, value_span_t value) const
+    {
+
+        cursor_->set_key(cursor_, &key);
+        int res = cursor_->search(cursor_);
+        if (res)
+            return {0, operation_status_t::error_k};
+        WT_ITEM db_value;
+        res = cursor_->get_value(cursor_, &db_value);
+        cursor_->reset(cursor_);
+        if (res)
+            return {1, operation_status_t::not_found_k};
+
+        memcpy(value.data(), db_value.data, db_value.size);
+        return {1, operation_status_t::ok_k};
+    }
+
+    operation_result_t wiredtiger_t::batch_insert(keys_spanc_t keys, values_spanc_t values, value_lengths_spanc_t sizes)
+    {
+        return {0, operation_status_t::not_implemented_k};
+    }
+
+    operation_result_t wiredtiger_t::batch_read(keys_spanc_t keys) const
+    {
+
+        // Note: imitation of batch read!
+        for (auto key : keys)
+        {
+            WT_ITEM db_value;
+            cursor_->set_key(cursor_, &key);
+            int res = cursor_->search(cursor_);
+            if (res == 0)
+            {
+                res = cursor_->get_value(cursor_, &db_value);
+                if (res == 0)
+                {
+                    if (db_value.size > value_buffer_.size())
+                        value_buffer_ = std::vector<char>(db_value.size);
+                    memcpy(value_buffer_.data(), db_value.data, db_value.size);
+                }
+            }
+            cursor_->reset(cursor_);
+        }
+        return {keys.size(), operation_status_t::ok_k};
+    }
+
+    bulk_metadata_t wiredtiger_t::prepare_bulk_import_data(keys_spanc_t keys,
+                                                           values_spanc_t values,
+                                                           value_lengths_spanc_t sizes) const
+    {
+        // This DB doesn't support bulk import
+        (void)keys;
+        (void)values;
+        (void)sizes;
+        return {};
+    }
+
+    operation_result_t wiredtiger_t::bulk_import(bulk_metadata_t const &metadata)
+    {
+        return {0, operation_status_t::not_implemented_k};
+    }
+
+    operation_result_t wiredtiger_t::range_select(key_t key, size_t length, value_span_t single_value) const
+    {
+
+        cursor_->set_key(cursor_, &key);
+        int res = cursor_->search(cursor_);
+        if (res)
+            return {0, operation_status_t::error_k};
+
+        size_t i = 0;
+        WT_ITEM db_value;
+        const char *db_key = nullptr;
+        size_t selected_records_count = 0;
+        while ((res = cursor_->next(cursor_)) == 0 && i++ < length)
+        {
+            res = cursor_->get_key(cursor_, &db_key);
+            res |= cursor_->get_value(cursor_, &db_value);
+            if (res == 0)
+            {
+                memcpy(single_value.data(), db_value.data, db_value.size);
+                ++selected_records_count;
+            }
+        }
+        return {selected_records_count, operation_status_t::ok_k};
+    }
+
+    operation_result_t wiredtiger_t::scan(value_span_t single_value) const
+    {
+
+        int res = session_->open_cursor(session_, table_name_.c_str(), NULL, NULL, &cursor_);
+        if (res)
+            return {0, operation_status_t::error_k};
+
+        WT_ITEM db_value;
+        const char *db_key = nullptr;
+        size_t scanned_records_count = 0;
+        while ((res = cursor_->next(cursor_)) == 0)
+        {
+            res = cursor_->get_key(cursor_, &db_key);
+            res |= cursor_->get_value(cursor_, &db_value);
+            if (res == 0)
+            {
+                memcpy(single_value.data(), db_value.data, db_value.size);
+                ++scanned_records_count;
+            }
+        }
+        return {scanned_records_count, operation_status_t::ok_k};
+    }
+
+    void wiredtiger_t::flush()
+    {
+        // Nothing to do
+    }
+
+    size_t wiredtiger_t::size_on_disk() const
+    {
+        return ucsb::size_on_disk(dir_path_);
+    }
+
+    std::unique_ptr<transaction_t> wiredtiger_t::create_transaction()
+    {
+        return {};
+    }
+
+} // namespace mongodb
