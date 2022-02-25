@@ -20,6 +20,7 @@ using key_t = ucsb::key_t;
 using keys_spanc_t = ucsb::keys_spanc_t;
 using value_span_t = ucsb::value_span_t;
 using value_spanc_t = ucsb::value_spanc_t;
+using values_span_t = ucsb::values_span_t;
 using values_spanc_t = ucsb::values_spanc_t;
 using value_lengths_spanc_t = ucsb::value_lengths_spanc_t;
 using bulk_metadata_t = ucsb::bulk_metadata_t;
@@ -47,15 +48,15 @@ struct lmdb_t : public ucsb::db_t {
 
     operation_result_t read(key_t key, value_span_t value) const override;
     operation_result_t batch_insert(keys_spanc_t keys, values_spanc_t values, value_lengths_spanc_t sizes) override;
-    operation_result_t batch_read(keys_spanc_t keys) const override;
+    operation_result_t batch_read(keys_spanc_t keys, values_span_t values) const override;
 
     bulk_metadata_t prepare_bulk_import_data(keys_spanc_t keys,
                                              values_spanc_t values,
                                              value_lengths_spanc_t sizes) const override;
     operation_result_t bulk_import(bulk_metadata_t const& metadata) override;
 
-    operation_result_t range_select(key_t key, size_t length, value_span_t single_value) const override;
-    operation_result_t scan(value_span_t single_value) const override;
+    operation_result_t range_select(key_t key, size_t length, values_span_t values) const override;
+    operation_result_t scan(key_t key, size_t length, value_span_t single_value) const override;
 
     void flush() override;
     size_t size_on_disk() const override;
@@ -78,7 +79,6 @@ struct lmdb_t : public ucsb::db_t {
 
     MDB_env* env_;
     MDB_dbi dbi_;
-    mutable std::vector<char> value_buffer_;
 };
 
 inline static int compare_keys(MDB_val const* left, MDB_val const* right) noexcept {
@@ -291,7 +291,7 @@ operation_result_t lmdb_t::batch_insert(keys_spanc_t keys, values_spanc_t values
     return {0, operation_status_t::not_implemented_k};
 }
 
-operation_result_t lmdb_t::batch_read(keys_spanc_t keys) const {
+operation_result_t lmdb_t::batch_read(keys_spanc_t keys, values_span_t values) const {
 
     MDB_txn* txn = nullptr;
     MDB_val key_slice, val_slice;
@@ -302,19 +302,21 @@ operation_result_t lmdb_t::batch_read(keys_spanc_t keys) const {
     // mdb_set_compare(txn, &dbi_, compare_keys);
 
     // Note: imitation of batch read!
+    size_t offset = 0;
+    size_t found_cnt = 0;
     for (auto key : keys) {
         key_slice.mv_data = &key;
         key_slice.mv_size = sizeof(key);
         res = mdb_get(txn, dbi_, &key_slice, &val_slice);
         if (res == 0) {
-            if (val_slice.mv_size > value_buffer_.size())
-                value_buffer_ = std::vector<char>(val_slice.mv_size);
-            memcpy(value_buffer_.data(), val_slice.mv_data, val_slice.mv_size);
+            memcpy(values.data() + offset, val_slice.mv_data, val_slice.mv_size);
+            offset += val_slice.mv_size;
+            ++found_cnt;
         }
     }
 
     mdb_txn_abort(txn);
-    return {keys.size(), operation_status_t::ok_k};
+    return {found_cnt, operation_status_t::ok_k};
 }
 
 bulk_metadata_t lmdb_t::prepare_bulk_import_data(keys_spanc_t keys,
@@ -331,7 +333,7 @@ operation_result_t lmdb_t::bulk_import(bulk_metadata_t const& metadata) {
     return {0, operation_status_t::not_implemented_k};
 }
 
-operation_result_t lmdb_t::range_select(key_t key, size_t length, value_span_t single_value) const {
+operation_result_t lmdb_t::range_select(key_t key, size_t length, values_span_t values) const {
 
     MDB_txn* txn = nullptr;
     MDB_cursor* cursor = nullptr;
@@ -355,9 +357,11 @@ operation_result_t lmdb_t::range_select(key_t key, size_t length, value_span_t s
         return {1, operation_status_t::not_found_k};
     }
 
+    size_t offset = 0;
     size_t selected_records_count = 0;
     for (size_t i = 0; res == 0 && i < length; i++) {
-        memcpy(single_value.data(), val_slice.mv_data, val_slice.mv_size);
+        memcpy(values.data() + offset, val_slice.mv_data, val_slice.mv_size);
+        offset += val_slice.mv_size;
         res = mdb_cursor_get(cursor, &key_slice, &val_slice, MDB_NEXT);
         ++selected_records_count;
     }
@@ -367,11 +371,14 @@ operation_result_t lmdb_t::range_select(key_t key, size_t length, value_span_t s
     return {selected_records_count, operation_status_t::ok_k};
 }
 
-operation_result_t lmdb_t::scan(value_span_t single_value) const {
+operation_result_t lmdb_t::scan(key_t key, size_t length, value_span_t single_value) const {
 
     MDB_txn* txn = nullptr;
     MDB_cursor* cursor = nullptr;
     MDB_val key_slice, val_slice;
+
+    key_slice.mv_data = &key;
+    key_slice.mv_size = sizeof(key);
 
     int res = mdb_txn_begin(env_, nullptr, 0, &txn);
     if (res)
@@ -382,14 +389,14 @@ operation_result_t lmdb_t::scan(value_span_t single_value) const {
         mdb_txn_abort(txn);
         return {0, operation_status_t::error_k};
     }
-    res = mdb_cursor_get(cursor, &key_slice, &val_slice, MDB_FIRST);
+    res = mdb_cursor_get(cursor, &key_slice, &val_slice, MDB_SET);
     if (res) {
         mdb_txn_abort(txn);
         return {1, operation_status_t::not_found_k};
     }
 
     size_t scanned_records_count = 0;
-    while (!res) {
+    for (size_t i = 0; res == 0 && i < length; i++) {
         memcpy(single_value.data(), val_slice.mv_data, val_slice.mv_size);
         res = mdb_cursor_get(cursor, &key_slice, &val_slice, MDB_NEXT);
         ++scanned_records_count;
