@@ -182,7 +182,7 @@ bool rocksdb_gt<mode_ak>::open() {
                                                   &cf_handles,
                                                   &transaction_db_);
         }
-        db_ = transaction_db_;
+        db_.reset(transaction_db_);
 #else
         return false;
 #endif
