@@ -1,7 +1,6 @@
 #pragma once
 #include <cassert>
 
-#include "ucsb/core/hash.hpp"
 #include "ucsb/core/generators/counter_generator.hpp"
 #include "ucsb/core/generators/zipfian_generator.hpp"
 

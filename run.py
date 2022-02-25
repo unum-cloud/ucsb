@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 import os
 import sys
 import time
@@ -6,9 +7,9 @@ import pexpect
 import pathlib
 import subprocess
 
-cleanup_previous = False
 drop_caches = False
 transactional = False
+cleanup_previous = False
 
 threads = [
     1,
@@ -16,6 +17,8 @@ threads = [
     # 4,
     # 8,
     # 16,
+    # 32,
+    # 64,
 ]
 
 db_names = [
@@ -50,22 +53,22 @@ workload_names = [
 ]
 
 
-def get_db_config_file_path(db_name, size):
+def get_db_config_file_path(db_name: str, size: int) -> str:
     path = f'./bench/configs/{db_name}/{size}.cfg'
     if not os.path.exists(path):
         path = f'./bench/configs/{db_name}/default.cfg'
     return path
 
 
-def get_worklods_file_path(size):
+def get_worklods_file_path(size: int) -> str:
     return f'./bench/workloads/{size}.json'
 
 
-def get_db_path(db_name, size):
+def get_db_path(db_name: str, size: int) -> str:
     return f'./tmp/{db_name}/{size}/'
 
 
-def get_results_dir_path():
+def get_results_dir_path() -> str:
     if drop_caches:
         if transactional:
             return './bench/results/without_caches/transactional/'
@@ -83,7 +86,7 @@ def drop_system_caches():
         stream.write('3\n')
 
 
-def launch_db(db_name, config_path):
+def launch_db(db_name: str, config_path: os.PathLike) -> None:
     if db_name == "mongodb":
         subprocess.Popen(
             ["mongo", "--eval", "db.getSiblingDB('admin').shutdownServer()"], stdout=subprocess.DEVNULL)
@@ -92,7 +95,7 @@ def launch_db(db_name, config_path):
                          config_path], stdout=subprocess.DEVNULL)
 
 
-def run(db_name, size, threads_count, workload_names):
+def run(db_name: str, size: int, threads_count: int, workload_names: list) -> None:
     config_path = get_db_config_file_path(db_name, size)
     workloads_path = get_worklods_file_path(size)
     results_path = get_results_dir_path()
@@ -111,32 +114,42 @@ def run(db_name, size, threads_count, workload_names):
     child.interact()
 
 
-if os.geteuid() != 0:
-    sys.exit('Run as sudo!')
+def main() -> None:
+    if os.geteuid() != 0:
+        sys.exit('Run as sudo!')
 
-if cleanup_previous:
-    print('Cleanup...')
-    for size in sizes:
-        for db_name in db_names:
-            db_path = get_db_path(db_name, size)
-            if os.path.exists(db_path):
-                shutil.rmtree(db_path)
+    if cleanup_previous:
+        print('Cleanup...')
+        for size in sizes:
+            for db_name in db_names:
+                db_path = get_db_path(db_name, size)
+                if os.path.exists(db_path):
+                    shutil.rmtree(db_path)
 
-pathlib.Path(get_results_dir_path()).mkdir(parents=True, exist_ok=True)
+    pathlib.Path(get_results_dir_path()).mkdir(parents=True, exist_ok=True)
 
-for threads_count in threads:
-    for size in sizes:
-        for db_name in db_names:
-            db_path = get_db_path(db_name, size)
-            pathlib.Path(db_path).mkdir(parents=True, exist_ok=True)
-            config_path = get_db_config_file_path(db_name, size)
-            launch_db(db_name, config_path)
+    for threads_count in threads:
+        for size in sizes:
+            for db_name in db_names:
+                db_path = get_db_path(db_name, size)
+                # Cleanup old DB
+                if len(threads) > 1 and cleanup_previous:
+                    if os.path.exists(db_path):
+                        shutil.rmtree(db_path)
+                # Prepare DB enviroment
+                pathlib.Path(db_path).mkdir(parents=True, exist_ok=True)
+                config_path = get_db_config_file_path(db_name, size)
+                launch_db(db_name, config_path)
 
-            if drop_caches:
-                for workload_name in workload_names:
-                    print('Dropping caches...')
-                    drop_system_caches()
-                    time.sleep(8)
-                    run(db_name, size, threads_count, [workload_name])
-            else:
-                run(db_name, size, threads_count, workload_names)
+                if drop_caches:
+                    for workload_name in workload_names:
+                        print('Dropping caches...')
+                        drop_system_caches()
+                        time.sleep(8)
+                        run(db_name, size, threads_count, [workload_name])
+                else:
+                    run(db_name, size, threads_count, workload_names)
+
+
+if __name__ == '__main__':
+    main()

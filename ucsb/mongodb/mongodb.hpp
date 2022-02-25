@@ -20,6 +20,7 @@ using key_t = ucsb::key_t;
 using keys_spanc_t = ucsb::keys_spanc_t;
 using value_span_t = ucsb::value_span_t;
 using value_spanc_t = ucsb::value_spanc_t;
+using values_span_t = ucsb::values_span_t;
 using values_spanc_t = ucsb::values_spanc_t;
 using value_lengths_spanc_t = ucsb::value_lengths_spanc_t;
 using bulk_metadata_t = ucsb::bulk_metadata_t;
@@ -52,14 +53,14 @@ struct mongodb_t : public ucsb::db_t {
 
     operation_result_t read(key_t key, value_span_t value) const override;
     operation_result_t batch_insert(keys_spanc_t keys, values_spanc_t values, value_lengths_spanc_t sizes) override;
-    operation_result_t batch_read(keys_spanc_t keys) const override;
+    operation_result_t batch_read(keys_spanc_t keys, values_span_t values) const override;
 
     bulk_metadata_t prepare_bulk_import_data(keys_spanc_t keys,
                                              values_spanc_t values,
                                              value_lengths_spanc_t sizes) const override;
     operation_result_t bulk_import(bulk_metadata_t const& metadata) override;
-    operation_result_t range_select(key_t key, size_t length, value_span_t single_value) const override;
-    operation_result_t scan(value_span_t single_value) const override;
+    operation_result_t range_select(key_t key, size_t length, values_span_t values) const override;
+    operation_result_t scan(key_t key, size_t length, value_span_t single_value) const override;
 
     void flush() override;
     size_t size_on_disk() const override;
@@ -148,7 +149,7 @@ operation_result_t mongodb_t::batch_insert(keys_spanc_t keys, values_spanc_t val
     return {inserted_count, operation_status_t::error_k};
 }
 
-operation_result_t mongodb_t::batch_read(keys_spanc_t keys) const {
+operation_result_t mongodb_t::batch_read(keys_spanc_t keys, values_span_t values) const {
     return {0, operation_status_t::not_implemented_k};
 }
 
@@ -183,20 +184,23 @@ operation_result_t mongodb_t::bulk_import(bulk_metadata_t const& metadata) {
     return {inserted_count, operation_status_t::error_k};
 }
 
-operation_result_t mongodb_t::range_select(key_t key, size_t length, value_span_t single_value) const {
+operation_result_t mongodb_t::range_select(key_t key, size_t length, values_span_t values) const {
     return {0, operation_status_t::not_implemented_k};
 }
 
-operation_result_t mongodb_t::scan(value_span_t single_value) const {
-    auto client = pool_.acquire();
-    mongocxx::collection coll = mongocxx::collection((*client)["mongodb"][coll_name]);
-    size_t scanned_records_count = 0;
-    for (auto&& doc : coll.find({})) {
-        std::string_view data = bsoncxx::to_json(doc);
-        memcpy(single_value.data(), data.data(), data.size());
-        ++scanned_records_count;
-    }
-    return {scanned_records_count, operation_status_t::ok_k};
+operation_result_t mongodb_t::scan(key_t key, size_t length, value_span_t single_value) const {
+    // TODO: scan method interface changed so need to reimplement
+    return {0, operation_status_t::not_implemented_k};
+
+    // auto client = pool_.acquire();
+    // mongocxx::collection coll = mongocxx::collection((*client)["mongodb"][coll_name]);
+    // size_t scanned_records_count = 0;
+    // for (auto&& doc : coll.find({})) {
+    //     std::string_view data = bsoncxx::to_json(doc);
+    //     memcpy(single_value.data(), data.data(), data.size());
+    //     ++scanned_records_count;
+    // }
+    // return {scanned_records_count, operation_status_t::ok_k};
 }
 
 void mongodb_t::flush() {
