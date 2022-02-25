@@ -18,6 +18,7 @@ using key_t = ucsb::key_t;
 using keys_spanc_t = ucsb::keys_spanc_t;
 using value_span_t = ucsb::value_span_t;
 using value_spanc_t = ucsb::value_spanc_t;
+using values_span_t = ucsb::values_span_t;
 using values_spanc_t = ucsb::values_spanc_t;
 using value_lengths_spanc_t = ucsb::value_lengths_spanc_t;
 using bulk_metadata_t = ucsb::bulk_metadata_t;
@@ -47,15 +48,15 @@ struct wiredtiger_t : public ucsb::db_t {
 
     operation_result_t read(key_t key, value_span_t value) const override;
     operation_result_t batch_insert(keys_spanc_t keys, values_spanc_t values, value_lengths_spanc_t sizes) override;
-    operation_result_t batch_read(keys_spanc_t keys) const override;
+    operation_result_t batch_read(keys_spanc_t keys, values_span_t values) const override;
 
     bulk_metadata_t prepare_bulk_import_data(keys_spanc_t keys,
                                              values_spanc_t values,
                                              value_lengths_spanc_t sizes) const override;
     operation_result_t bulk_import(bulk_metadata_t const& metadata) override;
 
-    operation_result_t range_select(key_t key, size_t length, value_span_t single_value) const override;
-    operation_result_t scan(value_span_t single_value) const override;
+    operation_result_t range_select(key_t key, size_t length, values_span_t values) const override;
+    operation_result_t scan(key_t key, size_t length, value_span_t single_value) const override;
 
     void flush() override;
     size_t size_on_disk() const override;
@@ -71,7 +72,6 @@ struct wiredtiger_t : public ucsb::db_t {
     mutable WT_CURSOR* cursor_;
     std::string table_name_;
     std::vector<char> key_buffer_;
-    mutable std::vector<char> value_buffer_;
 };
 
 inline int compare_keys(
@@ -146,7 +146,7 @@ void wiredtiger_t::destroy() {
     bool ok = close();
     assert(ok);
 
-    ucsb::remove_dir_contents(dir_path_);
+    ucsb::clear_directory(dir_path_);
 }
 
 operation_result_t wiredtiger_t::insert(key_t key, value_spanc_t value) {
@@ -207,9 +207,11 @@ operation_result_t wiredtiger_t::batch_insert(keys_spanc_t keys, values_spanc_t 
     return {0, operation_status_t::not_implemented_k};
 }
 
-operation_result_t wiredtiger_t::batch_read(keys_spanc_t keys) const {
+operation_result_t wiredtiger_t::batch_read(keys_spanc_t keys, values_span_t values) const {
 
     // Note: imitation of batch read!
+    size_t offset = 0;
+    size_t found_cnt = 0;
     for (auto key : keys) {
         WT_ITEM db_value;
         cursor_->set_key(cursor_, &key);
@@ -217,14 +219,14 @@ operation_result_t wiredtiger_t::batch_read(keys_spanc_t keys) const {
         if (res == 0) {
             res = cursor_->get_value(cursor_, &db_value);
             if (res == 0) {
-                if (db_value.size > value_buffer_.size())
-                    value_buffer_ = std::vector<char>(db_value.size);
-                memcpy(value_buffer_.data(), db_value.data, db_value.size);
+                memcpy(values.data() + offset, db_value.data, db_value.size);
+                offset += db_value.size;
+                ++found_cnt;
             }
         }
         cursor_->reset(cursor_);
     }
-    return {keys.size(), operation_status_t::ok_k};
+    return {found_cnt, operation_status_t::ok_k};
 }
 
 bulk_metadata_t wiredtiger_t::prepare_bulk_import_data(keys_spanc_t keys,
@@ -241,7 +243,7 @@ operation_result_t wiredtiger_t::bulk_import(bulk_metadata_t const& metadata) {
     return {0, operation_status_t::not_implemented_k};
 }
 
-operation_result_t wiredtiger_t::range_select(key_t key, size_t length, value_span_t single_value) const {
+operation_result_t wiredtiger_t::range_select(key_t key, size_t length, values_span_t values) const {
 
     cursor_->set_key(cursor_, &key);
     int res = cursor_->search(cursor_);
@@ -251,28 +253,32 @@ operation_result_t wiredtiger_t::range_select(key_t key, size_t length, value_sp
     size_t i = 0;
     WT_ITEM db_value;
     const char* db_key = nullptr;
+    size_t offset = 0;
     size_t selected_records_count = 0;
     while ((res = cursor_->next(cursor_)) == 0 && i++ < length) {
         res = cursor_->get_key(cursor_, &db_key);
         res |= cursor_->get_value(cursor_, &db_value);
         if (res == 0) {
-            memcpy(single_value.data(), db_value.data, db_value.size);
+            memcpy(values.data() + offset, db_value.data, db_value.size);
+            offset += db_value.size;
             ++selected_records_count;
         }
     }
     return {selected_records_count, operation_status_t::ok_k};
 }
 
-operation_result_t wiredtiger_t::scan(value_span_t single_value) const {
+operation_result_t wiredtiger_t::scan(key_t key, size_t length, value_span_t single_value) const {
 
-    int res = session_->open_cursor(session_, table_name_.c_str(), NULL, NULL, &cursor_);
+    cursor_->set_key(cursor_, &key);
+    int res = cursor_->search(cursor_);
     if (res)
         return {0, operation_status_t::error_k};
 
+    size_t i = 0;
     WT_ITEM db_value;
     const char* db_key = nullptr;
     size_t scanned_records_count = 0;
-    while ((res = cursor_->next(cursor_)) == 0) {
+    while ((res = cursor_->next(cursor_)) == 0 && i++ < length) {
         res = cursor_->get_key(cursor_, &db_key);
         res |= cursor_->get_value(cursor_, &db_value);
         if (res == 0) {

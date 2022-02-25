@@ -12,7 +12,7 @@
 
 namespace ucsb {
 
-enum class db_kind_t {
+enum class db_brand_t {
     unknown_k,
 
     unumdb_k,
@@ -23,53 +23,49 @@ enum class db_kind_t {
     mongodb_k,
 };
 
-struct factory_t {
-    inline std::shared_ptr<db_t> create(db_kind_t kind, bool transactional);
-};
-
-inline std::shared_ptr<db_t> factory_t::create(db_kind_t kind, bool transactional) {
+inline std::shared_ptr<db_t> make_db(db_brand_t kind, bool transactional) {
     if (transactional) {
         switch (kind) {
-        case db_kind_t::unumdb_k: {
+        case db_brand_t::unumdb_k: {
             init_file_io_by_libc("./"); // Note: Temporary solution
             return std::make_shared<unum::unumdb_t>();
         }
-        case db_kind_t::rocksdb_k:
+        case db_brand_t::rocksdb_k:
             return std::make_shared<facebook::rocksdb_gt<facebook::db_mode_t::transactional_k>>();
         default: break;
         }
     }
     else {
         switch (kind) {
-        case db_kind_t::unumdb_k: {
+        case db_brand_t::unumdb_k: {
             init_file_io_by_libc("./"); // Note: Temporary solution
             return std::make_shared<unum::unumdb_t>();
         }
-        case db_kind_t::rocksdb_k: return std::make_shared<facebook::rocksdb_gt<facebook::db_mode_t::regular_k>>();
-        case db_kind_t::leveldb_k: return std::make_shared<google::leveldb_t>();
-        case db_kind_t::wiredtiger_k: return std::make_shared<mongodb::wiredtiger_t>();
-        case db_kind_t::lmdb_k: return std::make_shared<symas::lmdb_t>();
-        case db_kind_t::mongodb_k: return std::make_shared<mongo::mongodb_t>();
+        case db_brand_t::rocksdb_k: return std::make_shared<facebook::rocksdb_gt<facebook::db_mode_t::regular_k>>();
+        case db_brand_t::leveldb_k: return std::make_shared<google::leveldb_t>();
+        case db_brand_t::wiredtiger_k: return std::make_shared<mongodb::wiredtiger_t>();
+        case db_brand_t::lmdb_k: return std::make_shared<symas::lmdb_t>();
+        case db_brand_t::mongodb_k: return std::make_shared<mongo::mongodb_t>();
         default: break;
         }
     }
     return {};
 }
 
-inline db_kind_t parse_db(std::string const& name) {
-    db_kind_t dist = db_kind_t::unknown_k;
+inline db_brand_t parse_db_brand(std::string const& name) {
+    db_brand_t dist = db_brand_t::unknown_k;
     if (name == "unumdb")
-        return db_kind_t::unumdb_k;
+        return db_brand_t::unumdb_k;
     if (name == "rocksdb")
-        return db_kind_t::rocksdb_k;
+        return db_brand_t::rocksdb_k;
     if (name == "leveldb")
-        return db_kind_t::leveldb_k;
+        return db_brand_t::leveldb_k;
     if (name == "wiredtiger")
-        return db_kind_t::wiredtiger_k;
+        return db_brand_t::wiredtiger_k;
     if (name == "lmdb")
-        return db_kind_t::lmdb_k;
+        return db_brand_t::lmdb_k;
     if (name == "mongodb")
-        return db_kind_t::mongodb_k;
+        return db_brand_t::mongodb_k;
     return dist;
 }
 

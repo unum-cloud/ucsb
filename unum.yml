@@ -1,22 +1,23 @@
 project:
-  - name: UCSB
+  name: UCSB
 
-unum:
-  - DiskKV
+dependencies:
+  unum:
+    - DiskKV
 
-conan:
-  - fmt/8.0.1
-  - benchmark/1.6.0
-  - nlohmann_json/3.10.4
-  - rocksdb/6.20.3
-  - leveldb/1.23
-  - lmdb/0.9.29
-  - snappy/1.1.9
-  - mongo-cxx-driver/3.6.6
+  conan:
+    - fmt/8.0.1
+    - benchmark/1.6.0
+    - nlohmann_json/3.10.4
+    - rocksdb/6.20.3
+    - leveldb/1.23
+    - lmdb/0.9.29
+    - snappy/1.1.9
+    - mongo-cxx-driver/3.6.6
 
-packages:
-  pkg-config:
-    - wiredtiger
+  packages:
+    pkg-config:
+      - wiredtiger
 
 build:
-  - cpu-isa: lzcnt
+  cpu-isa: lzcnt

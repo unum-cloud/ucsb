@@ -19,6 +19,7 @@ using key_t = ucsb::key_t;
 using keys_spanc_t = ucsb::keys_spanc_t;
 using value_span_t = ucsb::value_span_t;
 using value_spanc_t = ucsb::value_spanc_t;
+using values_span_t = ucsb::values_span_t;
 using values_spanc_t = ucsb::values_spanc_t;
 using value_lengths_spanc_t = ucsb::value_lengths_spanc_t;
 using bulk_metadata_t = ucsb::bulk_metadata_t;
@@ -46,20 +47,19 @@ struct unumdb_transaction_t : public ucsb::transaction_t {
 
     operation_result_t read(key_t key, value_span_t value) const override;
     operation_result_t batch_insert(keys_spanc_t keys, values_spanc_t values, value_lengths_spanc_t sizes) override;
-    operation_result_t batch_read(keys_spanc_t keys) const override;
+    operation_result_t batch_read(keys_spanc_t keys, values_span_t values) const override;
 
     bulk_metadata_t prepare_bulk_import_data(keys_spanc_t keys,
                                              values_spanc_t values,
                                              value_lengths_spanc_t sizes) const override;
     operation_result_t bulk_import(bulk_metadata_t const& metadata) override;
 
-    operation_result_t range_select(key_t key, size_t length, value_span_t single_value) const override;
-    operation_result_t scan(value_span_t single_value) const override;
+    operation_result_t range_select(key_t key, size_t length, values_span_t values) const override;
+    operation_result_t scan(key_t key, size_t length, value_span_t single_value) const override;
 
   private:
     size_t uring_queue_depth_;
     std::unique_ptr<region_transaction_t> transaction_;
-    mutable dbuffer_t batch_buffer_;
 };
 
 inline unumdb_transaction_t::~unumdb_transaction_t() {
@@ -133,28 +133,35 @@ operation_result_t unumdb_transaction_t::batch_insert(keys_spanc_t keys,
     return {0, operation_status_t::not_implemented_k};
 }
 
-operation_result_t unumdb_transaction_t::batch_read(keys_spanc_t keys) const {
-    size_t batch_size = keys.size();
+operation_result_t unumdb_transaction_t::batch_read(keys_spanc_t keys, values_span_t values) const {
+
     darray_gt<fingerprint_t> fingerprints;
-    fingerprints.reserve(batch_size);
+    fingerprints.reserve(keys.size());
     for (const auto& key : keys)
         fingerprints.push_back(key);
-    size_t batch_buffer_size = 0;
-    darray_gt<citizen_location_t> locations(batch_size);
-    transaction_->find<find_purpose_t::read_only_k>(fingerprints.view(), locations.span(), batch_buffer_size);
 
-    if (!batch_buffer_size)
-        return {batch_size, operation_status_t::not_found_k};
+    size_t found_cnt = 0;
+    size_t current_idx = 0;
+    while (current_idx < fingerprints.size()) {
+        size_t batch_size = std::min(uring_queue_depth_, keys.size() - current_idx);
+        size_t found_buffer_size = 0;
+        darray_gt<citizen_location_t> locations(batch_size);
+        transaction_->find(fingerprints.view().subspan(current_idx, batch_size), locations.span(), found_buffer_size);
 
-    if (batch_buffer_size > batch_buffer_.size())
-        batch_buffer_ = dbuffer_t(batch_buffer_size);
-    countdown_t countdown(locations.size());
-    notifier_t notifier(countdown);
-    transaction_->select(locations.view(), {batch_buffer_.span()}, notifier);
-    if (!countdown.wait())
-        return {0, operation_status_t::error_k};
+        if (found_buffer_size) {
+            countdown_t countdown(batch_size);
+            span_gt<byte_t> buffer_span(reinterpret_cast<byte_t*>(values.data()), found_buffer_size);
+            transaction_->select(locations.view(), buffer_span, countdown);
+            if (!countdown.wait())
+                return {0, operation_status_t::error_k};
+            found_cnt += batch_size;
+        }
+        current_idx += batch_size;
+    };
 
-    return {batch_size, operation_status_t::ok_k};
+    if (!found_cnt)
+        return {current_idx, operation_status_t::not_found_k};
+    return {found_cnt, operation_status_t::ok_k};
 }
 
 bulk_metadata_t unumdb_transaction_t::prepare_bulk_import_data(keys_spanc_t keys,
@@ -171,42 +178,44 @@ operation_result_t unumdb_transaction_t::bulk_import(bulk_metadata_t const& meta
     return {0, operation_status_t::not_implemented_k};
 }
 
-operation_result_t unumdb_transaction_t::range_select(key_t key, size_t length, value_span_t single_value) const {
+operation_result_t unumdb_transaction_t::range_select(key_t key, size_t length, values_span_t values) const {
+
     countdown_t countdown(0);
     notifier_t read_notifier(countdown);
-    if (length * single_value.size() > batch_buffer_.size())
-        batch_buffer_ = dbuffer_t(length * single_value.size());
-
     size_t selected_records_count = 0;
-    size_t tasks_cnt = std::min(length, uring_queue_depth_);
-    size_t task_idx = 0;
+    size_t task_cnt = 0;
+    size_t batch_size = std::min(length, uring_queue_depth_);
+
     transaction_->lock_commit_shared();
     auto it = transaction_->find(key);
-    for (size_t i = 0; it != transaction_->end() && i < length; ++task_idx, ++i, ++it) {
-        if ((task_idx == tasks_cnt) | (read_notifier.has_failed())) {
-            selected_records_count += size_t(countdown.wait()) * tasks_cnt;
-            tasks_cnt = std::min(length - i, uring_queue_depth_);
-            task_idx = 0;
-        }
+    for (size_t i = 0; it != transaction_->end() && i < length; ++it, ++i) {
         if (!it.is_removed()) {
-            citizen_span_t citizen {batch_buffer_.data() + task_idx * single_value.size(), single_value.size()};
+            citizen_size_t citizen_size = it.size();
+            citizen_span_t citizen {reinterpret_cast<byte_t*>(values.data()) + i * citizen_size, citizen_size};
             read_notifier.add_one();
             it.get(citizen, countdown);
+            ++task_cnt;
+        }
+
+        if ((task_cnt == batch_size) | (read_notifier.has_failed())) {
+            selected_records_count += size_t(countdown.wait()) * batch_size;
+            batch_size = std::min(length - i + 1, uring_queue_depth_);
+            task_cnt = 0;
         }
     }
-    selected_records_count += size_t(countdown.wait()) * tasks_cnt;
     transaction_->unlock_commit_shared();
+
     return {selected_records_count, operation_status_t::ok_k};
 }
 
-operation_result_t unumdb_transaction_t::scan(value_span_t single_value) const {
+operation_result_t unumdb_transaction_t::scan(key_t key, size_t length, value_span_t single_value) const {
     countdown_t countdown;
     citizen_span_t citizen {reinterpret_cast<byte_t*>(single_value.data()), single_value.size()};
     size_t scanned_records_count = 0;
 
     transaction_->lock_commit_shared();
-    auto it = transaction_->begin<caching_t::ram_k>();
-    for (; it != transaction_->end<caching_t::ram_k>(); ++it) {
+    auto it = transaction_->find<caching_t::ram_k>(key);
+    for (size_t i = 0; it != transaction_->end<caching_t::ram_k>() && i < length; ++it, ++i) {
         if (!it.is_removed()) {
             countdown.reset(1);
             it.get(citizen, countdown);

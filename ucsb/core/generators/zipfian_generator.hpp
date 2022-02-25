@@ -22,8 +22,8 @@ struct zipfian_generator_t : public generator_gt<size_t> {
     inline size_t generate(size_t items_count);
 
   private:
-    inline float eta() { return (1 - std::pow(2.0 / items_count_, 1 - theta_)) / (1 - zeta_2_ / zeta_n_); }
-    inline float zeta(size_t num, float theta) { return zeta(0, num, theta, 0.0); }
+    inline float eta() { return (1 - std::pow(2.f / items_count_, 1 - theta_)) / (1 - zeta_2_ / zeta_n_); }
+    inline float zeta(size_t num, float theta) { return zeta(0, num, theta, 0.f); }
     inline float zeta(size_t last_num, size_t cur_num, float theta, float last_zeta);
 
     randome_double_generator_t generator_;
@@ -31,7 +31,11 @@ struct zipfian_generator_t : public generator_gt<size_t> {
     size_t base_;
     size_t count_for_zeta_;
     size_t last_;
-    float theta_, zeta_n_, eta_, alpha_, zeta_2_;
+    float theta_;
+    float zeta_n_;
+    float eta_;
+    float alpha_;
+    float zeta_2_;
     bool allow_count_decrease_;
 };
 

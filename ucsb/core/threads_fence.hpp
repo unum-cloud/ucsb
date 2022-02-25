@@ -6,8 +6,8 @@
 
 namespace ucsb {
 
-struct threads_synchronizer_t {
-    inline threads_synchronizer_t(size_t threads_count)
+struct threads_fence_t {
+    inline threads_fence_t(size_t threads_count)
         : threads_count_(threads_count), waiting_threads_count_(0), released_threads_count_(0) {}
 
     inline void sync() {

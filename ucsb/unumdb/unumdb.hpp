@@ -20,6 +20,7 @@ using key_t = ucsb::key_t;
 using keys_spanc_t = ucsb::keys_spanc_t;
 using value_span_t = ucsb::value_span_t;
 using value_spanc_t = ucsb::value_spanc_t;
+using values_span_t = ucsb::values_span_t;
 using values_spanc_t = ucsb::values_spanc_t;
 using value_lengths_spanc_t = ucsb::value_lengths_spanc_t;
 using bulk_metadata_t = ucsb::bulk_metadata_t;
@@ -49,15 +50,15 @@ struct unumdb_t : public ucsb::db_t {
 
     operation_result_t read(key_t key, value_span_t value) const override;
     operation_result_t batch_insert(keys_spanc_t keys, values_spanc_t values, value_lengths_spanc_t sizes) override;
-    operation_result_t batch_read(keys_spanc_t keys) const override;
+    operation_result_t batch_read(keys_spanc_t keys, values_span_t values) const override;
 
     bulk_metadata_t prepare_bulk_import_data(keys_spanc_t keys,
                                              values_spanc_t values,
                                              value_lengths_spanc_t sizes) const override;
     operation_result_t bulk_import(bulk_metadata_t const& metadata) override;
 
-    operation_result_t range_select(key_t key, size_t length, value_span_t single_value) const override;
-    operation_result_t scan(value_span_t single_value) const override;
+    operation_result_t range_select(key_t key, size_t length, values_span_t values) const override;
+    operation_result_t scan(key_t key, size_t length, value_span_t single_value) const override;
 
     void flush() override;
     size_t size_on_disk() const override;
@@ -70,6 +71,7 @@ struct unumdb_t : public ucsb::db_t {
         string_t io_device;
         size_t uring_max_files_count = 0;
         size_t uring_queue_depth = 0;
+        darray_gt<string_t> paths;
     };
 
     bool load_config();
@@ -79,7 +81,6 @@ struct unumdb_t : public ucsb::db_t {
     db_config_t config_;
 
     region_t region_;
-    mutable dbuffer_t batch_buffer_;
 };
 
 void unumdb_t::set_config(fs::path const& config_path, fs::path const& dir_path) {
@@ -95,16 +96,30 @@ bool unumdb_t::open() {
     if (!validator_t::validate(config_.region_config, issues))
         return false;
 
+    for (auto const& path : config_.paths) {
+        if (!fs::exists(path.c_str()))
+            if (!fs::create_directory(path.c_str()))
+                return false;
+    }
+
+    darray_gt<string_t> paths = config_.paths;
+    paths.push_back(dir_path_.c_str());
     if (config_.io_device == string_t("libc"))
-        init_file_io_by_libc(dir_path_.c_str());
+        init_file_io_by_libc(paths);
     else if (config_.io_device == string_t("pulling"))
-        init_file_io_by_pulling(dir_path_.c_str(), config_.uring_queue_depth);
+        init_file_io_by_pulling(paths, config_.uring_queue_depth);
     else if (config_.io_device == string_t("polling"))
-        init_file_io_by_polling(dir_path_.c_str(), config_.uring_max_files_count, config_.uring_queue_depth);
+        init_file_io_by_polling(paths, config_.uring_max_files_count, config_.uring_queue_depth);
     else
         return false;
 
     region_ = region_t("Kovkas", config_.region_config);
+
+    // Cleanup directories
+    if (!region_.population_count()) {
+        for (auto const& path : config_.paths)
+            ucsb::clear_directory(path.c_str());
+    }
 
     return true;
 }
@@ -167,28 +182,35 @@ operation_result_t unumdb_t::batch_insert(keys_spanc_t keys, values_spanc_t valu
     return {keys.size(), operation_status_t::ok_k};
 }
 
-operation_result_t unumdb_t::batch_read(keys_spanc_t keys) const {
-    size_t batch_size = keys.size();
+operation_result_t unumdb_t::batch_read(keys_spanc_t keys, values_span_t values) const {
+
     darray_gt<fingerprint_t> fingerprints;
-    fingerprints.reserve(batch_size);
+    fingerprints.reserve(keys.size());
     for (const auto& key : keys)
         fingerprints.push_back(key);
-    size_t batch_buffer_size = 0;
-    darray_gt<citizen_location_t> locations(batch_size);
-    region_.find(fingerprints.view(), locations.span(), batch_buffer_size);
 
-    if (!batch_buffer_size)
-        return {batch_size, operation_status_t::not_found_k};
+    size_t found_cnt = 0;
+    size_t current_idx = 0;
+    while (current_idx < fingerprints.size()) {
+        size_t batch_size = std::min(config_.uring_queue_depth, keys.size() - current_idx);
+        size_t found_buffer_size = 0;
+        darray_gt<citizen_location_t> locations(batch_size);
+        region_.find(fingerprints.view().subspan(current_idx, batch_size), locations.span(), found_buffer_size);
 
-    if (batch_buffer_size > batch_buffer_.size())
-        batch_buffer_ = dbuffer_t(batch_buffer_size);
-    countdown_t countdown(locations.size());
-    notifier_t notifier(countdown);
-    region_.select(locations.view(), {batch_buffer_.span()}, notifier);
-    if (!countdown.wait())
-        return {0, operation_status_t::error_k};
+        if (found_buffer_size) {
+            countdown_t countdown(batch_size);
+            span_gt<byte_t> buffer_span(reinterpret_cast<byte_t*>(values.data()), found_buffer_size);
+            region_.select(locations.view(), buffer_span, countdown);
+            if (!countdown.wait())
+                return {0, operation_status_t::error_k};
+            found_cnt += batch_size;
+        }
+        current_idx += batch_size;
+    };
 
-    return {batch_size, operation_status_t::ok_k};
+    if (!found_cnt)
+        return {current_idx, operation_status_t::not_found_k};
+    return {found_cnt, operation_status_t::ok_k};
 }
 
 bulk_metadata_t unumdb_t::prepare_bulk_import_data(keys_spanc_t keys,
@@ -242,41 +264,45 @@ operation_result_t unumdb_t::bulk_import(bulk_metadata_t const& metadata) {
     return {metadata.records_count, operation_status_t::ok_k};
 }
 
-operation_result_t unumdb_t::range_select(key_t key, size_t length, value_span_t single_value) const {
+operation_result_t unumdb_t::range_select(key_t key, size_t length, values_span_t values) const {
+
     countdown_t countdown(0);
     notifier_t read_notifier(countdown);
-    if (length * single_value.size() > batch_buffer_.size())
-        batch_buffer_ = dbuffer_t(length * single_value.size());
-
     size_t selected_records_count = 0;
-    size_t tasks_cnt = std::min(length, config_.uring_queue_depth);
-    size_t task_idx = 0;
+    size_t task_cnt = 0;
+    size_t batch_size = std::min(length, config_.uring_queue_depth);
+
     region_.lock_shared();
     auto it = region_.find(key);
-    for (size_t i = 0; it != region_.end() && i < length; ++task_idx, ++i, ++it) {
-        if ((task_idx == tasks_cnt) | (read_notifier.has_failed())) {
-            selected_records_count += size_t(countdown.wait()) * tasks_cnt;
-            tasks_cnt = std::min(length - i, config_.uring_queue_depth);
-            task_idx = 0;
-        }
+    for (size_t i = 0; it != region_.end() && i < length; ++it, ++i) {
         if (!it.is_removed()) {
-            citizen_span_t citizen {batch_buffer_.data() + task_idx * single_value.size(), single_value.size()};
+            citizen_size_t citizen_size = it.size();
+            citizen_span_t citizen {reinterpret_cast<byte_t*>(values.data()) + i * citizen_size, citizen_size};
             read_notifier.add_one();
             it.get(citizen, countdown);
+            ++task_cnt;
+        }
+
+        if ((task_cnt == batch_size) | (read_notifier.has_failed())) {
+            selected_records_count += size_t(countdown.wait()) * batch_size;
+            batch_size = std::min(length - i + 1, config_.uring_queue_depth);
+            task_cnt = 0;
         }
     }
-    selected_records_count += size_t(countdown.wait()) * tasks_cnt;
     region_.unlock_shared();
+
     return {selected_records_count, operation_status_t::ok_k};
 }
 
-operation_result_t unumdb_t::scan(value_span_t single_value) const {
+operation_result_t unumdb_t::scan(key_t key, size_t length, value_span_t single_value) const {
+
     countdown_t countdown;
     citizen_span_t citizen {reinterpret_cast<byte_t*>(single_value.data()), single_value.size()};
     size_t scanned_records_count = 0;
+
     region_.lock_shared();
-    auto it = region_.begin<caching_t::ram_k>();
-    for (; it != region_.end<caching_t::ram_k>(); ++it) {
+    auto it = region_.find<caching_t::ram_k>(key);
+    for (size_t i = 0; it != region_.end<caching_t::ram_k>() && i < length; ++it, ++i) {
         if (!it.is_removed()) {
             countdown.reset(1);
             it.get(citizen, countdown);
@@ -293,7 +319,12 @@ void unumdb_t::flush() {
 }
 
 size_t unumdb_t::size_on_disk() const {
-    return ucsb::size_on_disk(dir_path_);
+    size_t files_size = 0;
+    for (auto const& path : config_.paths) {
+        if (!path.empty() && fs::exists(path.c_str()))
+            files_size += ucsb::size_on_disk(path.c_str());
+    }
+    return files_size + ucsb::size_on_disk(dir_path_);
 }
 
 std::unique_ptr<transaction_t> unumdb_t::create_transaction() {
@@ -333,6 +364,12 @@ bool unumdb_t::load_config() {
     config_.io_device = j_config["io_device"].get<std::string>().c_str();
     config_.uring_max_files_count = j_config["uring_max_files_count"].get<size_t>();
     config_.uring_queue_depth = j_config["uring_queue_depth"].get<size_t>();
+
+    std::vector<std::string> paths = j_config["paths"].get<std::vector<std::string>>();
+    for (auto const& path : paths) {
+        if (!path.empty())
+            config_.paths.push_back(path.c_str());
+    }
 
     return true;
 }

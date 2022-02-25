@@ -1,7 +1,6 @@
 #pragma once
 #include <cassert>
 
-#include "ucsb/core/hash.hpp"
 #include "ucsb/core/generators/zipfian_generator.hpp"
 
 namespace ucsb {
@@ -21,10 +20,24 @@ struct scrambled_zipfian_generator_t : public generator_gt<size_t> {
   private:
     static constexpr float zetan_k = 26.46902820178302;
 
-    inline size_t scramble(size_t value) const { return base_ + fnv_hash64(value) % num_items_; }
+    inline size_t scramble(size_t value) const noexcept { return base_ + fnv_hash64(value) % num_items_; }
 
-    const size_t base_;
-    const size_t num_items_;
+    inline size_t fnv_hash64(size_t val) const noexcept {
+        size_t constexpr fnv_offset_basis64 = 0xCBF29CE484222325ull;
+        size_t constexpr fnv_prime64 = 1099511628211ull;
+        size_t hash = fnv_offset_basis64;
+#pragma unroll
+        for (int i = 0; i < 8; ++i) {
+            size_t octet = val & 0x00ff;
+            val = val >> 8;
+            hash = hash ^ octet;
+            hash = hash * fnv_prime64;
+        }
+        return hash;
+    }
+
+    size_t const base_;
+    size_t const num_items_;
     zipfian_generator_t generator_;
 };
 
