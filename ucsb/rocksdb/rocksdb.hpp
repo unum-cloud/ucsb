@@ -441,10 +441,8 @@ template <db_mode_t mode_ak>
 size_t rocksdb_gt<mode_ak>::size_on_disk() const {
     size_t files_size = 0;
     for (auto const& db_path : options_.db_paths) {
-        if (!db_path.path.empty()) {
-            if (fs::exists(db_path.path))
-                files_size += ucsb::size_on_disk(db_path.path);
-        }
+        if (!db_path.path.empty() && fs::exists(db_path.path))
+            files_size += ucsb::size_on_disk(db_path.path);
     }
     return files_size + ucsb::size_on_disk(dir_path_);
 }

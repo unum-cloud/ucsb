@@ -71,6 +71,7 @@ struct unumdb_t : public ucsb::db_t {
         string_t io_device;
         size_t uring_max_files_count = 0;
         size_t uring_queue_depth = 0;
+        darray_gt<string_t> paths;
     };
 
     bool load_config();
@@ -95,16 +96,30 @@ bool unumdb_t::open() {
     if (!validator_t::validate(config_.region_config, issues))
         return false;
 
+    for (auto const& path : config_.paths) {
+        if (!fs::exists(path.c_str()))
+            if (!fs::create_directory(path.c_str()))
+                return false;
+    }
+
+    darray_gt<string_t> paths = config_.paths;
+    paths.push_back(dir_path_.c_str());
     if (config_.io_device == string_t("libc"))
-        init_file_io_by_libc(dir_path_.c_str());
+        init_file_io_by_libc(paths);
     else if (config_.io_device == string_t("pulling"))
-        init_file_io_by_pulling(dir_path_.c_str(), config_.uring_queue_depth);
+        init_file_io_by_pulling(paths, config_.uring_queue_depth);
     else if (config_.io_device == string_t("polling"))
-        init_file_io_by_polling(dir_path_.c_str(), config_.uring_max_files_count, config_.uring_queue_depth);
+        init_file_io_by_polling(paths, config_.uring_max_files_count, config_.uring_queue_depth);
     else
         return false;
 
     region_ = region_t("Kovkas", config_.region_config);
+
+    // Cleanup directories
+    if (!region_.population_count()) {
+        for (auto const& path : config_.paths)
+            ucsb::clear_directory(path.c_str());
+    }
 
     return true;
 }
@@ -304,7 +319,12 @@ void unumdb_t::flush() {
 }
 
 size_t unumdb_t::size_on_disk() const {
-    return ucsb::size_on_disk(dir_path_);
+    size_t files_size = 0;
+    for (auto const& path : config_.paths) {
+        if (!path.empty() && fs::exists(path.c_str()))
+            files_size += ucsb::size_on_disk(path.c_str());
+    }
+    return files_size + ucsb::size_on_disk(dir_path_);
 }
 
 std::unique_ptr<transaction_t> unumdb_t::create_transaction() {
@@ -344,6 +364,12 @@ bool unumdb_t::load_config() {
     config_.io_device = j_config["io_device"].get<std::string>().c_str();
     config_.uring_max_files_count = j_config["uring_max_files_count"].get<size_t>();
     config_.uring_queue_depth = j_config["uring_queue_depth"].get<size_t>();
+
+    std::vector<std::string> paths = j_config["paths"].get<std::vector<std::string>>();
+    for (auto const& path : paths) {
+        if (!path.empty())
+            config_.paths.push_back(path.c_str());
+    }
 
     return true;
 }
