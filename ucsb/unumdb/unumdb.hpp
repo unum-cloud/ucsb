@@ -103,7 +103,8 @@ bool unumdb_t::open() {
     }
 
     darray_gt<string_t> paths = config_.paths;
-    paths.push_back(dir_path_.c_str());
+    if (config_.paths.empty())
+        paths.push_back(dir_path_.c_str());
     if (config_.io_device == string_t("libc"))
         init_file_io_by_libc(paths);
     else if (config_.io_device == string_t("pulling"))
@@ -319,12 +320,15 @@ void unumdb_t::flush() {
 }
 
 size_t unumdb_t::size_on_disk() const {
-    size_t files_size = 0;
-    for (auto const& path : config_.paths) {
-        if (!path.empty() && fs::exists(path.c_str()))
-            files_size += ucsb::size_on_disk(path.c_str());
+    if (!config_.paths.empty()) {
+        size_t files_size = 0;
+        for (auto const& path : config_.paths) {
+            if (!path.empty() && fs::exists(path.c_str()))
+                files_size += ucsb::size_on_disk(path.c_str());
+        }
+        return files_size;
     }
-    return files_size + ucsb::size_on_disk(dir_path_);
+    return ucsb::size_on_disk(dir_path_);
 }
 
 std::unique_ptr<transaction_t> unumdb_t::create_transaction() {
