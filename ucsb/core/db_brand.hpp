@@ -23,9 +23,9 @@ enum class db_brand_t {
     mongodb_k,
 };
 
-inline std::shared_ptr<db_t> make_db(db_brand_t kind, bool transactional) {
+inline std::shared_ptr<db_t> make_db(db_brand_t db_brand, bool transactional) {
     if (transactional) {
-        switch (kind) {
+        switch (db_brand) {
         case db_brand_t::unumdb_k: {
             init_file_io_by_libc("./"); // Note: Temporary solution
             return std::make_shared<unum::unumdb_t>();
@@ -36,7 +36,7 @@ inline std::shared_ptr<db_t> make_db(db_brand_t kind, bool transactional) {
         }
     }
     else {
-        switch (kind) {
+        switch (db_brand) {
         case db_brand_t::unumdb_k: {
             init_file_io_by_libc("./"); // Note: Temporary solution
             return std::make_shared<unum::unumdb_t>();
@@ -53,7 +53,6 @@ inline std::shared_ptr<db_t> make_db(db_brand_t kind, bool transactional) {
 }
 
 inline db_brand_t parse_db_brand(std::string const& name) {
-    db_brand_t dist = db_brand_t::unknown_k;
     if (name == "unumdb")
         return db_brand_t::unumdb_k;
     if (name == "rocksdb")
@@ -66,7 +65,7 @@ inline db_brand_t parse_db_brand(std::string const& name) {
         return db_brand_t::lmdb_k;
     if (name == "mongodb")
         return db_brand_t::mongodb_k;
-    return dist;
+    return db_brand_t::unknown_k;
 }
 
 } // namespace ucsb

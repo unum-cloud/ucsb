@@ -103,7 +103,8 @@ bool unumdb_t::open() {
     }
 
     darray_gt<string_t> paths = config_.paths;
-    paths.push_back(dir_path_.c_str());
+    if (config_.paths.empty())
+        paths.push_back(dir_path_.c_str());
     if (config_.io_device == string_t("libc"))
         init_file_io_by_libc(paths);
     else if (config_.io_device == string_t("pulling"))
@@ -168,7 +169,7 @@ operation_result_t unumdb_t::read(key_t key, value_span_t value) const {
     notifier_t read_notifier(countdown);
     citizen_span_t citizen {reinterpret_cast<byte_t*>(value.data()), value.size()};
     region_.select<caching_t::io_k>(location, citizen, read_notifier);
-    if (!countdown.wait())
+    if (!countdown.wait(*threads_pile))
         return {0, operation_status_t::error_k};
 
     return {1, operation_status_t::ok_k};
@@ -201,7 +202,7 @@ operation_result_t unumdb_t::batch_read(keys_spanc_t keys, values_span_t values)
             countdown_t countdown(batch_size);
             span_gt<byte_t> buffer_span(reinterpret_cast<byte_t*>(values.data()), found_buffer_size);
             region_.select(locations.view(), buffer_span, countdown);
-            if (!countdown.wait())
+            if (!countdown.wait(*threads_pile))
                 return {0, operation_status_t::error_k};
             found_cnt += batch_size;
         }
@@ -284,7 +285,7 @@ operation_result_t unumdb_t::range_select(key_t key, size_t length, values_span_
         }
 
         if ((task_cnt == batch_size) | (read_notifier.has_failed())) {
-            selected_records_count += size_t(countdown.wait()) * batch_size;
+            selected_records_count += size_t(countdown.wait(*threads_pile)) * batch_size;
             batch_size = std::min(length - i + 1, config_.uring_queue_depth);
             task_cnt = 0;
         }
@@ -306,7 +307,7 @@ operation_result_t unumdb_t::scan(key_t key, size_t length, value_span_t single_
         if (!it.is_removed()) {
             countdown.reset(1);
             it.get(citizen, countdown);
-            countdown.wait();
+            countdown.wait(*threads_pile);
             ++scanned_records_count;
         }
     }
@@ -319,12 +320,15 @@ void unumdb_t::flush() {
 }
 
 size_t unumdb_t::size_on_disk() const {
-    size_t files_size = 0;
-    for (auto const& path : config_.paths) {
-        if (!path.empty() && fs::exists(path.c_str()))
-            files_size += ucsb::size_on_disk(path.c_str());
+    if (!config_.paths.empty()) {
+        size_t files_size = 0;
+        for (auto const& path : config_.paths) {
+            if (!path.empty() && fs::exists(path.c_str()))
+                files_size += ucsb::size_on_disk(path.c_str());
+        }
+        return files_size;
     }
-    return files_size + ucsb::size_on_disk(dir_path_);
+    return ucsb::size_on_disk(dir_path_);
 }
 
 std::unique_ptr<transaction_t> unumdb_t::create_transaction() {

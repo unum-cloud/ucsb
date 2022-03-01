@@ -55,10 +55,10 @@
       "time_unit": "ns"
     },
     {
-      "name": "Init/iterations:100000/real_time/threads:1",
+      "name": "Init/iterations:100000/real_time",
       "family_index": 1,
       "per_family_instance_index": 0,
-      "run_name": "Init/iterations:100000/real_time/threads:1",
+      "run_name": "Init/iterations:100000/real_time",
       "run_type": "iteration",
       "repetitions": 1,
       "repetition_index": 0,
@@ -78,10 +78,10 @@
       "processed,bytes": 102400000.0
     },
     {
-      "name": "Read/iterations:100000/real_time/threads:1",
+      "name": "Read/iterations:100000/real_time",
       "family_index": 1,
       "per_family_instance_index": 0,
-      "run_name": "Read/iterations:100000/real_time/threads:1",
+      "run_name": "Read/iterations:100000/real_time",
       "run_type": "iteration",
       "repetitions": 1,
       "repetition_index": 0,
@@ -101,10 +101,10 @@
       "processed,bytes": 102400000.0
     },
     {
-      "name": "BatchRead/iterations:500/real_time/threads:1",
+      "name": "BatchRead/iterations:500/real_time",
       "family_index": 1,
       "per_family_instance_index": 0,
-      "run_name": "BatchRead/iterations:500/real_time/threads:1",
+      "run_name": "BatchRead/iterations:500/real_time",
       "run_type": "iteration",
       "repetitions": 1,
       "repetition_index": 0,
@@ -124,10 +124,10 @@
       "processed,bytes": 131072000.0
     },
     {
-      "name": "RangeSelect/iterations:1000/real_time/threads:1",
+      "name": "RangeSelect/iterations:1000/real_time",
       "family_index": 1,
       "per_family_instance_index": 0,
-      "run_name": "RangeSelect/iterations:1000/real_time/threads:1",
+      "run_name": "RangeSelect/iterations:1000/real_time",
       "run_type": "iteration",
       "repetitions": 1,
       "repetition_index": 0,
@@ -147,10 +147,10 @@
       "processed,bytes": 102398976.0
     },
     {
-      "name": "Scan/iterations:1/real_time/threads:1",
+      "name": "Scan/iterations:1/real_time",
       "family_index": 1,
       "per_family_instance_index": 0,
-      "run_name": "Scan/iterations:1/real_time/threads:1",
+      "run_name": "Scan/iterations:1/real_time",
       "run_type": "iteration",
       "repetitions": 1,
       "repetition_index": 0,
@@ -170,10 +170,10 @@
       "processed,bytes": 102400000.0
     },
     {
-      "name": "ReadUpdate_50_50/iterations:100000/real_time/threads:1",
+      "name": "ReadUpdate_50_50/iterations:100000/real_time",
       "family_index": 1,
       "per_family_instance_index": 0,
-      "run_name": "ReadUpdate_50_50/iterations:100000/real_time/threads:1",
+      "run_name": "ReadUpdate_50_50/iterations:100000/real_time",
       "run_type": "iteration",
       "repetitions": 1,
       "repetition_index": 0,
@@ -193,10 +193,10 @@
       "processed,bytes": 102400000.0
     },
     {
-      "name": "ReadInsert_95_5/iterations:100000/real_time/threads:1",
+      "name": "ReadInsert_95_5/iterations:100000/real_time",
       "family_index": 1,
       "per_family_instance_index": 0,
-      "run_name": "ReadInsert_95_5/iterations:100000/real_time/threads:1",
+      "run_name": "ReadInsert_95_5/iterations:100000/real_time",
       "run_type": "iteration",
       "repetitions": 1,
       "repetition_index": 0,
@@ -216,10 +216,10 @@
       "processed,bytes": 102400000.0
     },
     {
-      "name": "Remove/iterations:15000/real_time/threads:1",
+      "name": "Remove/iterations:15000/real_time",
       "family_index": 1,
       "per_family_instance_index": 0,
-      "run_name": "Remove/iterations:15000/real_time/threads:1",
+      "run_name": "Remove/iterations:15000/real_time",
       "run_type": "iteration",
       "repetitions": 1,
       "repetition_index": 0,

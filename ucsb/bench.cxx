@@ -406,8 +406,8 @@ int main(int argc, char** argv) {
     ucsb::fs::create_directories(settings.results_path.parent_path());
 
     // Setup DB
-    db_brand_t kind = ucsb::parse_db_brand(settings.db_name);
-    std::shared_ptr<db_t> db = ucsb::make_db(kind, settings.transactional);
+    db_brand_t db_brand = ucsb::parse_db_brand(settings.db_name);
+    std::shared_ptr<db_t> db = ucsb::make_db(db_brand, settings.transactional);
     if (!db) {
         if (settings.transactional)
             fmt::print("Failed to create transactional DB: {}\n", settings.db_name);

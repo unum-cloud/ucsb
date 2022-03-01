@@ -55,10 +55,10 @@
       "time_unit": "ns"
     },
     {
-      "name": "Init/iterations:1562/real_time/threads:64",
+      "name": "Init/iterations:1562/real_time",
       "family_index": 1,
       "per_family_instance_index": 0,
-      "run_name": "Init/iterations:1562/real_time/threads:64",
+      "run_name": "Init/iterations:1562/real_time",
       "run_type": "iteration",
       "repetitions": 1,
       "repetition_index": 0,
@@ -78,10 +78,10 @@
       "processed,bytes": 102367232.0
     },
     {
-      "name": "Read/iterations:1562/real_time/threads:64",
+      "name": "Read/iterations:1562/real_time",
       "family_index": 2,
       "per_family_instance_index": 0,
-      "run_name": "Read/iterations:1562/real_time/threads:64",
+      "run_name": "Read/iterations:1562/real_time",
       "run_type": "iteration",
       "repetitions": 1,
       "repetition_index": 0,
@@ -101,10 +101,10 @@
       "processed,bytes": 102367232.0
     },
     {
-      "name": "BatchRead/iterations:7/real_time/threads:64",
+      "name": "BatchRead/iterations:7/real_time",
       "family_index": 3,
       "per_family_instance_index": 0,
-      "run_name": "BatchRead/iterations:7/real_time/threads:64",
+      "run_name": "BatchRead/iterations:7/real_time",
       "run_type": "iteration",
       "repetitions": 1,
       "repetition_index": 0,
@@ -124,10 +124,10 @@
       "processed,bytes": 117440512.0
     },
     {
-      "name": "RangeSelect/iterations:15/real_time/threads:64",
+      "name": "RangeSelect/iterations:15/real_time",
       "family_index": 4,
       "per_family_instance_index": 0,
-      "run_name": "RangeSelect/iterations:15/real_time/threads:64",
+      "run_name": "RangeSelect/iterations:15/real_time",
       "run_type": "iteration",
       "repetitions": 1,
       "repetition_index": 0,
@@ -147,10 +147,10 @@
       "processed,bytes": 98201600.0
     },
     {
-      "name": "Scan/iterations:1/real_time/threads:64",
+      "name": "Scan/iterations:1/real_time",
       "family_index": 5,
       "per_family_instance_index": 0,
-      "run_name": "Scan/iterations:1/real_time/threads:64",
+      "run_name": "Scan/iterations:1/real_time",
       "run_type": "iteration",
       "repetitions": 1,
       "repetition_index": 0,
@@ -170,10 +170,10 @@
       "processed,bytes": 6551502848.0
     },
     {
-      "name": "ReadUpdate_50_50/iterations:1562/real_time/threads:64",
+      "name": "ReadUpdate_50_50/iterations:1562/real_time",
       "family_index": 6,
       "per_family_instance_index": 0,
-      "run_name": "ReadUpdate_50_50/iterations:1562/real_time/threads:64",
+      "run_name": "ReadUpdate_50_50/iterations:1562/real_time",
       "run_type": "iteration",
       "repetitions": 1,
       "repetition_index": 0,
@@ -193,10 +193,10 @@
       "processed,bytes": 102367232.0
     },
     {
-      "name": "ReadInsert_95_5/iterations:1562/real_time/threads:64",
+      "name": "ReadInsert_95_5/iterations:1562/real_time",
       "family_index": 7,
       "per_family_instance_index": 0,
-      "run_name": "ReadInsert_95_5/iterations:1562/real_time/threads:64",
+      "run_name": "ReadInsert_95_5/iterations:1562/real_time",
       "run_type": "iteration",
       "repetitions": 1,
       "repetition_index": 0,
@@ -216,10 +216,10 @@
       "processed,bytes": 17514496.0
     },
     {
-      "name": "Remove/iterations:78/real_time/threads:64",
+      "name": "Remove/iterations:78/real_time",
       "family_index": 8,
       "per_family_instance_index": 0,
-      "run_name": "Remove/iterations:78/real_time/threads:64",
+      "run_name": "Remove/iterations:78/real_time",
       "run_type": "iteration",
       "repetitions": 1,
       "repetition_index": 0,
