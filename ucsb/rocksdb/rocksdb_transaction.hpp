@@ -32,8 +32,9 @@ using operation_result_t = ucsb::operation_result_t;
  */
 struct rocksdb_transaction_t : public ucsb::transaction_t {
   public:
-    inline rocksdb_transaction_t(std::unique_ptr<rocksdb::Transaction>&& transaction)
-        : transaction_(std::forward<std::unique_ptr<rocksdb::Transaction>&&>(transaction)) {}
+    inline rocksdb_transaction_t(std::unique_ptr<rocksdb::Transaction>&& transaction,
+                                 std::vector<rocksdb::ColumnFamilyHandle*> const& cf_handles)
+        : transaction_(std::forward<std::unique_ptr<rocksdb::Transaction>&&>(transaction)), cf_handles_(cf_handles) {}
     inline ~rocksdb_transaction_t();
 
     operation_result_t insert(key_t key, value_spanc_t value) override;
@@ -54,6 +55,11 @@ struct rocksdb_transaction_t : public ucsb::transaction_t {
 
   private:
     std::unique_ptr<rocksdb::Transaction> transaction_;
+    std::vector<rocksdb::ColumnFamilyHandle*> cf_handles_;
+
+    std::vector<rocksdb::Slice> key_slices_;
+    mutable std::vector<rocksdb::PinnableSlice> values_;
+    mutable std::vector<rocksdb::Status> statuses_;
 };
 
 inline rocksdb_transaction_t::~rocksdb_transaction_t() {
@@ -131,23 +137,31 @@ operation_result_t rocksdb_transaction_t::batch_insert(keys_spanc_t keys,
 }
 
 operation_result_t rocksdb_transaction_t::batch_read(keys_spanc_t keys, values_span_t values) const {
-    std::vector<rocksdb::Slice> slices;
-    slices.reserve(keys.size());
-    for (const auto& key : keys) {
-        rocksdb::Slice slice {reinterpret_cast<char const*>(&key), sizeof(key)};
-        slices.push_back(slice);
+
+    if (keys.size() > key_slices_.size()) {
+        key_slices_ = std::vector<rocksdb::Slice>(keys.size());
+        values_ = std::vector<rocksdb::PinnableSlice>(keys.size());
+        statuses_ = std::vector<rocksdb::Status>(keys.size());
     }
 
-    std::vector<std::string> data;
-    data.reserve(keys.size());
-    std::vector<rocksdb::Status> status = transaction_->MultiGet(rocksdb::ReadOptions(), slices, &data);
+    for (size_t idx = 0; idx < keys.size(); ++idx) {
+        rocksdb::Slice slice {reinterpret_cast<char const*>(&keys[idx]), sizeof(keys[idx])};
+        key_slices_[idx] = slice;
+    }
+
+    transaction_->MultiGet(rocksdb::ReadOptions(),
+                           cf_handles_[0],
+                           key_slices_.size(),
+                           key_slices_.data(),
+                           values_.data(),
+                           statuses_.data());
 
     size_t offset = 0;
     size_t found_cnt = 0;
-    for (size_t i = 0; i < status.size(); ++i) {
-        if (status[i].ok()) {
-            memcpy(values.data() + offset, data[i].data(), data[i].size());
-            offset += data[i].size();
+    for (size_t i = 0; i < statuses_.size(); ++i) {
+        if (statuses_[i].ok()) {
+            memcpy(values.data() + offset, values_[i].data(), values_[i].size());
+            offset += values_[i].size();
             ++found_cnt;
         }
     }

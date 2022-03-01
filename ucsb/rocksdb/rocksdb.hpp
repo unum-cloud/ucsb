@@ -120,6 +120,11 @@ struct rocksdb_gt : public ucsb::db_t {
     rocksdb::TransactionDBOptions transaction_options_;
 #endif
     std::vector<rocksdb::ColumnFamilyDescriptor> cf_descs_;
+    std::vector<rocksdb::ColumnFamilyHandle*> cf_handles_;
+
+    std::vector<rocksdb::Slice> key_slices_;
+    mutable std::vector<rocksdb::PinnableSlice> values_;
+    mutable std::vector<rocksdb::Status> statuses_;
 
     std::unique_ptr<rocksdb::DB> db_;
 #ifdef build_transaction_m
@@ -139,11 +144,13 @@ bool rocksdb_gt<mode_ak>::open() {
     if (db_)
         return true;
 
-    options_ = rocksdb::Options();
     cf_descs_.clear();
+    cf_handles_.clear();
+
+    options_ = rocksdb::Options();
     rocksdb::Status status =
         rocksdb::LoadOptionsFromFile(config_path_.string(), rocksdb::Env::Default(), &options_, &cf_descs_);
-    if (!status.ok())
+    if (!status.ok() || cf_descs_.empty())
         return false;
     if (!load_aditional_options())
         return false;
@@ -157,27 +164,16 @@ bool rocksdb_gt<mode_ak>::open() {
     // options_.comparator = &key_cmp_;
 
     rocksdb::DB* db_raw = nullptr;
-    if constexpr (mode_ak == db_mode_t::regular_k) {
-        if (cf_descs_.empty())
-            status = rocksdb::DB::Open(options_, dir_path_.string(), &db_raw);
-        else {
-            std::vector<rocksdb::ColumnFamilyHandle*> cf_handles;
-            status = rocksdb::DB::Open(options_, dir_path_.string(), cf_descs_, &cf_handles, &db_raw);
-        }
-    }
+    if constexpr (mode_ak == db_mode_t::regular_k)
+        status = rocksdb::DB::Open(options_, dir_path_.string(), cf_descs_, &cf_handles_, &db_raw);
     else {
 #ifdef build_transaction_m
-        if (cf_descs_.empty())
-            status = rocksdb::TransactionDB::Open(options_, transaction_options_, dir_path_.string(), &transaction_db_);
-        else {
-            std::vector<rocksdb::ColumnFamilyHandle*> cf_handles;
-            status = rocksdb::TransactionDB::Open(options_,
-                                                  transaction_options_,
-                                                  dir_path_.string(),
-                                                  cf_descs_,
-                                                  &cf_handles,
-                                                  &transaction_db_);
-        }
+        status = rocksdb::TransactionDB::Open(options_,
+                                              transaction_options_,
+                                              dir_path_.string(),
+                                              cf_descs_,
+                                              &cf_handles_,
+                                              &transaction_db_);
         db_raw = transaction_db_;
 #else
         return false;
@@ -191,6 +187,7 @@ bool rocksdb_gt<mode_ak>::open() {
 template <db_mode_t mode_ak>
 bool rocksdb_gt<mode_ak>::close() {
     db_.reset(nullptr);
+    cf_handles_.clear();
 #ifdef build_transaction_m
     transaction_db_ = nullptr;
 #endif
@@ -309,23 +306,30 @@ operation_result_t rocksdb_gt<mode_ak>::batch_insert(keys_spanc_t keys,
 template <db_mode_t mode_ak>
 operation_result_t rocksdb_gt<mode_ak>::batch_read(keys_spanc_t keys, values_span_t values) const {
 
-    std::vector<rocksdb::Slice> slices;
-    slices.reserve(keys.size());
-    for (const auto& key : keys) {
-        rocksdb::Slice slice {reinterpret_cast<char const*>(&key), sizeof(key)};
-        slices.push_back(slice);
+    if (keys.size() > key_slices_.size()) {
+        key_slices_ = std::vector<rocksdb::Slice>(keys.size());
+        values_ = std::vector<rocksdb::PinnableSlice>(keys.size());
+        statuses_ = std::vector<rocksdb::Status>(keys.size());
     }
 
-    std::vector<std::string> data;
-    data.reserve(keys.size());
-    std::vector<rocksdb::Status> status = db_->MultiGet(rocksdb::ReadOptions(), slices, &data);
+    for (size_t idx = 0; idx < keys.size(); ++idx) {
+        rocksdb::Slice slice {reinterpret_cast<char const*>(&keys[idx]), sizeof(keys[idx])};
+        key_slices_[idx] = slice;
+    }
+
+    db_->MultiGet(rocksdb::ReadOptions(),
+                  cf_handles_[0],
+                  key_slices_.size(),
+                  key_slices_.data(),
+                  values_.data(),
+                  statuses_.data());
 
     size_t offset = 0;
     size_t found_cnt = 0;
-    for (size_t i = 0; i < status.size(); ++i) {
-        if (status[i].ok()) {
-            memcpy(values.data() + offset, data[i].data(), data[i].size());
-            offset += data[i].size();
+    for (size_t i = 0; i < statuses_.size(); ++i) {
+        if (statuses_[i].ok()) {
+            memcpy(values.data() + offset, values_[i].data(), values_[i].size());
+            offset += values_[i].size();
             ++found_cnt;
         }
     }
@@ -456,7 +460,7 @@ std::unique_ptr<transaction_t> rocksdb_gt<mode_ak>::create_transaction() {
     raw_transaction.reset(transaction_db_->BeginTransaction(write_options));
     auto id = size_t(raw_transaction.get());
     raw_transaction->SetName(std::to_string(id));
-    return std::make_unique<rocksdb_transaction_t>(std::move(raw_transaction));
+    return std::make_unique<rocksdb_transaction_t>(std::move(raw_transaction), cf_handles_);
 #else
     return {};
 #endif
