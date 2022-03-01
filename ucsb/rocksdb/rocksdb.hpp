@@ -122,7 +122,7 @@ struct rocksdb_gt : public ucsb::db_t {
     std::vector<rocksdb::ColumnFamilyDescriptor> cf_descs_;
     std::vector<rocksdb::ColumnFamilyHandle*> cf_handles_;
 
-    std::vector<rocksdb::Slice> key_slices_;
+    mutable std::vector<rocksdb::Slice> key_slices_;
     mutable std::vector<rocksdb::PinnableSlice> values_;
     mutable std::vector<rocksdb::Status> statuses_;
 
