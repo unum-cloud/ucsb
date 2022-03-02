@@ -19,5 +19,8 @@ dependencies:
     pkg-config:
       - wiredtiger
 
+  # cpp-library:
+  #   - librocksdb
+
 build:
   cpu-isa: lzcnt
