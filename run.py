@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+
 import os
 import sys
 import time
@@ -10,6 +11,7 @@ import subprocess
 drop_caches = False
 transactional = False
 cleanup_previous = False
+run_docker_image = False
 
 threads = [
     1,
@@ -30,11 +32,11 @@ db_names = [
 
 sizes = [
     '100MB',
-    # '1GB',
-    # '10GB',
-    # '100GB',
-    # '250GB',
-    # '1TB',
+    '1GB',
+    '10GB',
+    '100GB',
+    '250GB',
+    '1TB',
 ]
 
 workload_names = [
@@ -91,7 +93,12 @@ def run(db_name: str, size: int, threads_count: int, workload_names: list) -> No
 
     transactional_flag = '-t' if transactional else ''
     filter = ','.join(workload_names)
-    child = pexpect.spawn(f'./build_release/bin/ucsb_bench \
+    runner: str
+    if run_docker_image:
+        runner = f'docker run  --mount type=bind,source={os.getcwd()}/bench,target=/ucsb/bench -it ucsb-image'
+    else:
+        runner = './build_release/bin/ucsb_bench'
+    child = pexpect.spawn(f'{runner} \
                             -db {db_name} \
                             {transactional_flag}\
                             -c {config_path} \

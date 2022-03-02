@@ -11,7 +11,7 @@ class UCSBConan(ConanFile):
 
     name = "UCSB"
     version = "0.0.1"
-    url = "https://gitlab.unum.am/Unum/UCSB"
+    url = "https://github.com/unum-cloud/ucsb.git"
 
     settings = "os", "compiler", "build_type", "arch"
     generators = "cmake", "cmake_paths", "cmake_find_package"

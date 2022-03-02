@@ -37,7 +37,10 @@ namespace ucsb
 
         /**
          * @brief Performs many insert at once in a batch-asynchronous fashion.
-         * Keys are in strict ascending order
+         *
+         * @param keys Keys are in strict ascending order
+         * @param values Values are written in continuous form
+         * @param sizes Value sizes
          */
         virtual operation_result_t batch_insert(keys_spanc_t keys, values_spanc_t values, value_lengths_spanc_t sizes) = 0;
 
@@ -50,36 +53,48 @@ namespace ucsb
          * way, making designing generic interfaces cumbersome and costly (performance-
          * wise). For this benchmark we don't return the retrieved the values and only
          * check them under the hood.
+         *
+         * @param keys Keys are randome
+         * @param values single buffer for all values
          */
-        virtual operation_result_t batch_read(keys_spanc_t keys) const = 0;
+        virtual operation_result_t batch_read(keys_spanc_t keys, values_span_t values) const = 0;
 
         /**
-         * @brief Performs bulk import from external prepared data.
-         * Keys are in strict ascending order
+         * @brief Prepares data for bulk import, returns metadata
+         *
+         * @param keys Keys are in strict ascending order
+         * @param values Values are written in continuous form
+         * @param sizes Value sizes
          */
         virtual bulk_metadata_t prepare_bulk_import_data(keys_spanc_t keys,
                                                          values_spanc_t values,
                                                          value_lengths_spanc_t sizes) const = 0;
+
+        /**
+         * @brief Performs bulk import from external prepared data.
+         *
+         * */
         virtual operation_result_t bulk_import(bulk_metadata_t const &metadata) = 0;
 
         /**
          * @brief Performs many reads at once in an ordered fashion,
          * starting from a specified `key` location.
          *
-         * Just like `batch_read(...)` we don't return all the found values.
-         * It's irrelevant for benchmarking, so we only output the first one.
+         * @param key The first entry to find and read.
+         * @param length The number of consecutive entries to read.
+         * @param values A temporary buffer big enough for a all values.
+         */
+        virtual operation_result_t range_select(key_t key, size_t length, values_span_t values) const = 0;
+
+        /**
+         * @brief Performs many reads in an ordered fashion,
+         * starting from a specified `key` location.
          *
          * @param key The first entry to find and read.
          * @param length The number of consecutive entries to read.
-         * @param single_value A temporary buffer big enough for a single value.
+         * @param values A temporary buffer big enough for a all values.
          */
-        virtual operation_result_t range_select(key_t key, size_t length, value_span_t single_value) const = 0;
-
-        /**
-         * @brief Reads all the entries in DBMS from start to end (in ordered fashion).
-         * @param single_value A temporary buffer big enough for the biggest single value.
-         */
-        virtual operation_result_t scan(value_span_t single_value) const = 0;
+        virtual operation_result_t scan(key_t key, size_t length, value_span_t single_value) const = 0;
     };
 
 } // namespace ucsb

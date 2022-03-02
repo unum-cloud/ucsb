@@ -68,7 +68,7 @@ void parse_and_validate_args(int argc, char *argv[], settings_t &settings)
             settings.db_name = std::string(argv[arg_idx]);
             ++arg_idx;
         }
-        if (strcmp(argv[arg_idx], "-t") == 0)
+        else if (strcmp(argv[arg_idx], "-t") == 0)
         {
             settings.transactional = true;
             ++arg_idx;
@@ -478,8 +478,8 @@ int main(int argc, char **argv)
     ucsb::fs::create_directories(settings.results_path.parent_path());
 
     // Setup DB
-    db_brand_t kind = ucsb::parse_db_brand(settings.db_name);
-    std::shared_ptr<db_t> db = ucsb::make_db(kind, settings.transactional);
+    db_brand_t db_brand = ucsb::parse_db_brand(settings.db_name);
+    std::shared_ptr<db_t> db = ucsb::make_db(db_brand, settings.transactional);
     if (!db)
     {
         if (settings.transactional)

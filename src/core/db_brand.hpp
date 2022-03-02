@@ -21,11 +21,11 @@ namespace ucsb
         lmdb_k,
     };
 
-    inline std::shared_ptr<db_t> make_db(db_brand_t kind, bool transactional)
+    inline std::shared_ptr<db_t> make_db(db_brand_t db_brand, bool transactional)
     {
         if (transactional)
         {
-            switch (kind)
+            switch (db_brand)
             {
             case db_brand_t::rocksdb_k:
                 return std::make_shared<facebook::rocksdb_gt<facebook::db_mode_t::transactional_k>>();
@@ -35,7 +35,7 @@ namespace ucsb
         }
         else
         {
-            switch (kind)
+            switch (db_brand)
             {
             case db_brand_t::rocksdb_k:
                 return std::make_shared<facebook::rocksdb_gt<facebook::db_mode_t::regular_k>>();
@@ -54,7 +54,6 @@ namespace ucsb
 
     inline db_brand_t parse_db_brand(std::string const &name)
     {
-        db_brand_t dist = db_brand_t::unknown_k;
         if (name == "rocksdb")
             return db_brand_t::rocksdb_k;
         if (name == "leveldb")
@@ -63,7 +62,7 @@ namespace ucsb
             return db_brand_t::wiredtiger_k;
         if (name == "lmdb")
             return db_brand_t::lmdb_k;
-        return dist;
+        return db_brand_t::unknown_k;
     }
 
 } // namespace ucsb

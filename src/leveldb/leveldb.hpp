@@ -27,6 +27,7 @@ namespace google
     using keys_spanc_t = ucsb::keys_spanc_t;
     using value_span_t = ucsb::value_span_t;
     using value_spanc_t = ucsb::value_spanc_t;
+    using values_span_t = ucsb::values_span_t;
     using values_spanc_t = ucsb::values_spanc_t;
     using value_lengths_spanc_t = ucsb::value_lengths_spanc_t;
     using bulk_metadata_t = ucsb::bulk_metadata_t;
@@ -56,15 +57,15 @@ namespace google
 
         operation_result_t read(key_t key, value_span_t value) const override;
         operation_result_t batch_insert(keys_spanc_t keys, values_spanc_t values, value_lengths_spanc_t sizes) override;
-        operation_result_t batch_read(keys_spanc_t keys) const override;
+        operation_result_t batch_read(keys_spanc_t keys, values_span_t values) const override;
 
         bulk_metadata_t prepare_bulk_import_data(keys_spanc_t keys,
                                                  values_spanc_t values,
                                                  value_lengths_spanc_t sizes) const override;
         operation_result_t bulk_import(bulk_metadata_t const &metadata) override;
 
-        operation_result_t range_select(key_t key, size_t length, value_span_t single_value) const override;
-        operation_result_t scan(value_span_t single_value) const override;
+        operation_result_t range_select(key_t key, size_t length, values_span_t values) const override;
+        operation_result_t scan(key_t key, size_t length, value_span_t single_value) const override;
 
         void flush() override;
         size_t size_on_disk() const override;
@@ -221,17 +222,24 @@ namespace google
         return {0, operation_status_t::not_implemented_k};
     }
 
-    operation_result_t leveldb_t::batch_read(keys_spanc_t keys) const
+    operation_result_t leveldb_t::batch_read(keys_spanc_t keys, values_span_t values) const
     {
-
         // Note: imitation of batch read!
+        size_t offset = 0;
+        size_t found_cnt = 0;
         for (auto key : keys)
         {
             std::string data;
             leveldb::Slice slice{reinterpret_cast<char const *>(&key), sizeof(key)};
             leveldb::Status status = db_->Get(leveldb::ReadOptions(), slice, &data);
+            if (status.ok())
+            {
+                memcpy(values.data() + offset, data.data(), data.size());
+                offset += data.size();
+                ++found_cnt;
+            }
         }
-        return {keys.size(), operation_status_t::ok_k};
+        return {found_cnt, operation_status_t::ok_k};
     }
 
     bulk_metadata_t leveldb_t::prepare_bulk_import_data(keys_spanc_t keys,
@@ -250,17 +258,18 @@ namespace google
         return {0, operation_status_t::not_implemented_k};
     }
 
-    operation_result_t leveldb_t::range_select(key_t key, size_t length, value_span_t single_value) const
+    operation_result_t leveldb_t::range_select(key_t key, size_t length, values_span_t values) const
     {
-
         leveldb::Iterator *db_iter = db_->NewIterator(leveldb::ReadOptions());
         leveldb::Slice slice{reinterpret_cast<char const *>(&key), sizeof(key)};
         db_iter->Seek(slice);
+        size_t offset = 0;
         size_t selected_records_count = 0;
         for (size_t i = 0; db_iter->Valid() && i < length; i++)
         {
             std::string data = db_iter->value().ToString();
-            memcpy(single_value.data(), data.data(), data.size());
+            memcpy(values.data() + offset, data.data(), data.size());
+            offset += data.size();
             db_iter->Next();
             ++selected_records_count;
         }
@@ -268,13 +277,13 @@ namespace google
         return {selected_records_count, operation_status_t::ok_k};
     }
 
-    operation_result_t leveldb_t::scan(value_span_t single_value) const
+    operation_result_t leveldb_t::scan(key_t key, size_t length, value_span_t single_value) const
     {
-
-        size_t scanned_records_count = 0;
         leveldb::Iterator *db_iter = db_->NewIterator(leveldb::ReadOptions());
-        db_iter->SeekToFirst();
-        while (db_iter->Valid())
+        leveldb::Slice slice{reinterpret_cast<char const *>(&key), sizeof(key)};
+        db_iter->Seek(slice);
+        size_t scanned_records_count = 0;
+        for (size_t i = 0; db_iter->Valid() && i < length; i++)
         {
             std::string data = db_iter->value().ToString();
             memcpy(single_value.data(), data.data(), data.size());

@@ -56,6 +56,7 @@ namespace ucsb
         inline value_spanc_t generate_value();
         inline values_and_sizes_spansc_t generate_values(size_t count);
         inline value_span_t value_buffer();
+        inline values_span_t values_buffer(size_t count);
 
         workload_t workload_;
         data_accessor_t *data_accessor_;
@@ -159,7 +160,8 @@ namespace ucsb
     inline operation_result_t worker_t::do_batch_read()
     {
         keys_spanc_t keys = generate_batch_read_keys();
-        return data_accessor_->batch_read(keys);
+        values_span_t values = values_buffer(keys.size());
+        return data_accessor_->batch_read(keys, values);
     }
 
     inline operation_result_t worker_t::do_bulk_import()
@@ -178,14 +180,14 @@ namespace ucsb
     {
         key_t key = generate_key();
         size_t length = range_select_length_generator_->generate();
-        value_span_t single_value = value_buffer();
-        return data_accessor_->range_select(key, length, single_value);
+        values_span_t values = values_buffer(length);
+        return data_accessor_->range_select(key, length, values);
     }
 
     inline operation_result_t worker_t::do_scan()
     {
         value_span_t single_value = value_buffer();
-        return data_accessor_->scan(single_value);
+        return data_accessor_->scan(workload_.start_key, workload_.records_count, single_value);
     }
 
     inline worker_t::key_generator_t worker_t::create_key_generator(workload_t const &workload,
@@ -389,7 +391,13 @@ namespace ucsb
 
     inline value_span_t worker_t::value_buffer()
     {
-        return value_span_t(values_buffer_.data(), workload_.value_length);
+        return values_buffer(1);
+    }
+
+    inline values_span_t worker_t::values_buffer(size_t count)
+    {
+        size_t total_length = count * workload_.value_length;
+        return values_span_t(values_buffer_.data(), total_length);
     }
 
 } // namespace ucsb
