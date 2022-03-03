@@ -126,10 +126,12 @@ bool unumdb_t::open() {
 }
 
 bool unumdb_t::close() {
-    if (!region_.name().empty())
-        region_.flush();
-    region_ = region_t("", region_config_t());
-    cleanup_file_io();
+    if (raid_rand) {
+        if (!region_.name().empty())
+            region_.flush();
+        region_ = region_t("", region_config_t());
+        cleanup_file_io();
+    }
     return true;
 }
 
