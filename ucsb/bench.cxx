@@ -341,8 +341,8 @@ void bench(bm::State& state, workload_t const& workload, data_accessor_t& data_a
 void bench(bm::State& state, workload_t const& workload, db_t& db, bool transactional, threads_fence_t& fence) {
 
     if (state.thread_index() == 0) {
-        bool ok = db.open();
-        assert(ok);
+        if (!db.open())
+            throw exception_t("Failed to open DB");
     }
     fence.sync();
 
@@ -359,8 +359,8 @@ void bench(bm::State& state, workload_t const& workload, db_t& db, bool transact
     if (state.thread_index() == 0) {
         db.flush();
         state.counters["disk,bytes"] = bm::Counter(db.size_on_disk(), bm::Counter::kDefaults, bm::Counter::kIs1024);
-        bool ok = db.close();
-        assert(ok);
+        if (!db.close())
+            throw exception_t("Failed to close DB");
     }
 }
 
