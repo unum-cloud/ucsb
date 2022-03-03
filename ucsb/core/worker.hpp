@@ -83,8 +83,7 @@ inline worker_t::worker_t(workload_t const& workload, data_accessor_t& data_acce
         workload.bulk_import_proportion == 1.0) // Initialization case
         insert_key_sequence_generator = std::make_unique<counter_generator_t>(workload.start_key);
     else {
-        acknowledged_key_generator =
-            std::make_unique<acknowledged_counter_generator_t>(workload.start_key + workload.db_records_count);
+        acknowledged_key_generator = std::make_unique<acknowledged_counter_generator_t>(workload.db_records_count);
         key_generator_ = create_key_generator(workload, *acknowledged_key_generator);
         insert_key_sequence_generator = std::move(acknowledged_key_generator);
     }
