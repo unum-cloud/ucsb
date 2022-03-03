@@ -56,10 +56,6 @@ struct rocksdb_transaction_t : public ucsb::transaction_t {
   private:
     std::unique_ptr<rocksdb::Transaction> transaction_;
     std::vector<rocksdb::ColumnFamilyHandle*> cf_handles_;
-
-    mutable std::vector<rocksdb::Slice> key_slices_;
-    mutable std::vector<rocksdb::PinnableSlice> values_;
-    mutable std::vector<rocksdb::Status> statuses_;
 };
 
 inline rocksdb_transaction_t::~rocksdb_transaction_t() {
@@ -138,30 +134,34 @@ operation_result_t rocksdb_transaction_t::batch_insert(keys_spanc_t keys,
 
 operation_result_t rocksdb_transaction_t::batch_read(keys_spanc_t keys, values_span_t values) const {
 
-    if (keys.size() > key_slices_.size()) {
-        key_slices_ = std::vector<rocksdb::Slice>(keys.size());
-        values_ = std::vector<rocksdb::PinnableSlice>(keys.size());
-        statuses_ = std::vector<rocksdb::Status>(keys.size());
+    thread_local std::vector<rocksdb::Slice> key_slices;
+    thread_local std::vector<rocksdb::PinnableSlice> value_slices;
+    thread_local std::vector<rocksdb::Status> statuses;
+
+    if (keys.size() > key_slices.size()) {
+        key_slices = std::vector<rocksdb::Slice>(keys.size());
+        value_slices = std::vector<rocksdb::PinnableSlice>(keys.size());
+        statuses = std::vector<rocksdb::Status>(keys.size());
     }
 
     for (size_t idx = 0; idx < keys.size(); ++idx) {
         rocksdb::Slice slice {reinterpret_cast<char const*>(&keys[idx]), sizeof(keys[idx])};
-        key_slices_[idx] = slice;
+        key_slices[idx] = slice;
     }
 
     transaction_->MultiGet(rocksdb::ReadOptions(),
                            cf_handles_[0],
-                           key_slices_.size(),
-                           key_slices_.data(),
-                           values_.data(),
-                           statuses_.data());
+                           key_slices.size(),
+                           key_slices.data(),
+                           value_slices.data(),
+                           statuses.data());
 
     size_t offset = 0;
     size_t found_cnt = 0;
-    for (size_t i = 0; i < statuses_.size(); ++i) {
-        if (statuses_[i].ok()) {
-            memcpy(values.data() + offset, values_[i].data(), values_[i].size());
-            offset += values_[i].size();
+    for (size_t i = 0; i < statuses.size(); ++i) {
+        if (statuses[i].ok()) {
+            memcpy(values.data() + offset, value_slices[i].data(), value_slices[i].size());
+            offset += value_slices[i].size();
             ++found_cnt;
         }
     }
