@@ -33,11 +33,11 @@ db_names = [
 
 sizes = [
     '100MB',
-    '1GB',
-    '10GB',
-    '100GB',
-    '250GB',
-    '1TB',
+    # '1GB',
+    # '10GB',
+    # '100GB',
+    # '250GB',
+    # '1TB',
 ]
 
 workload_names = [
