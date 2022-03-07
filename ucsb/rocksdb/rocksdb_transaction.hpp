@@ -28,6 +28,17 @@ using operation_status_t = ucsb::operation_status_t;
 using operation_result_t = ucsb::operation_result_t;
 
 /**
+ * @brief Prealocated buffers for batch operations.
+ * These variables defined as global not as function local,
+ * because at the end of the benchmark (see ~rocksdb_transaction_t())
+ * we need to clear them before RocksDB statis objects are destructed
+ * https://github.com/facebook/rocksdb/issues/649
+ */
+thread_local std::vector<rocksdb::Slice> transaction_key_slices;
+thread_local std::vector<rocksdb::PinnableSlice> transaction_value_slices;
+thread_local std::vector<rocksdb::Status> transaction_statuses;
+
+/**
  * @brief RocksDB transactional wrapper for the UCSB benchmark.
  */
 struct rocksdb_transaction_t : public ucsb::transaction_t {
@@ -37,7 +48,11 @@ struct rocksdb_transaction_t : public ucsb::transaction_t {
         : transaction_(std::forward<std::unique_ptr<rocksdb::Transaction>&&>(transaction)), cf_handles_(cf_handles) {
         read_options_.verify_checksums = false;
     }
-    inline ~rocksdb_transaction_t();
+    inline ~rocksdb_transaction_t() {
+        key_sltransaction_key_slicesices.clear();
+        transaction_value_slices.clear();
+        transaction_statuses.clear();
+    }
 
     operation_result_t insert(key_t key, value_spanc_t value) override;
     operation_result_t update(key_t key, value_spanc_t value) override;
@@ -138,34 +153,30 @@ operation_result_t rocksdb_transaction_t::batch_insert(keys_spanc_t keys,
 
 operation_result_t rocksdb_transaction_t::batch_read(keys_spanc_t keys, values_span_t values) const {
 
-    thread_local std::vector<rocksdb::Slice> key_slices;
-    thread_local std::vector<rocksdb::PinnableSlice> value_slices;
-    thread_local std::vector<rocksdb::Status> statuses;
-
-    if (keys.size() > key_slices.size()) {
-        key_slices = std::vector<rocksdb::Slice>(keys.size());
-        value_slices = std::vector<rocksdb::PinnableSlice>(keys.size());
-        statuses = std::vector<rocksdb::Status>(keys.size());
+    if (keys.size() > transaction_key_slices.size()) {
+        transaction_key_slices = std::vector<rocksdb::Slice>(keys.size());
+        transaction_value_slices = std::vector<rocksdb::PinnableSlice>(keys.size());
+        transaction_statuses = std::vector<rocksdb::Status>(keys.size());
     }
 
     for (size_t idx = 0; idx < keys.size(); ++idx) {
         rocksdb::Slice slice {reinterpret_cast<char const*>(&keys[idx]), sizeof(keys[idx])};
-        key_slices[idx] = slice;
+        transaction_key_slices[idx] = slice;
     }
 
     transaction_->MultiGet(read_options_,
                            cf_handles_[0],
-                           key_slices.size(),
-                           key_slices.data(),
-                           value_slices.data(),
-                           statuses.data());
+                           transaction_key_slices.size(),
+                           transaction_key_slices.data(),
+                           transaction_value_slices.data(),
+                           transaction_statuses.data());
 
     size_t offset = 0;
     size_t found_cnt = 0;
-    for (size_t i = 0; i < statuses.size(); ++i) {
-        if (statuses[i].ok()) {
-            memcpy(values.data() + offset, value_slices[i].data(), value_slices[i].size());
-            offset += value_slices[i].size();
+    for (size_t i = 0; i < transaction_statuses.size(); ++i) {
+        if (transaction_statuses[i].ok()) {
+            memcpy(values.data() + offset, transaction_value_slices[i].data(), transaction_value_slices[i].size());
+            offset += transaction_value_slices[i].size();
             ++found_cnt;
         }
     }

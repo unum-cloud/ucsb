@@ -53,6 +53,17 @@ enum class db_mode_t {
 };
 
 /**
+ * @brief Prealocated buffers for batch operations.
+ * These variables defined as global not as function local,
+ * because at the end of the benchmark (see close())
+ * we need to clear them before RocksDB statis objects are destructed
+ * https://github.com/facebook/rocksdb/issues/649
+ */
+thread_local std::vector<rocksdb::Slice> key_slices;
+thread_local std::vector<rocksdb::PinnableSlice> value_slices;
+thread_local std::vector<rocksdb::Status> statuses;
+
+/**
  * @brief RocksDB wrapper for the UCSB benchmark.
  * https://github.com/facebook/rocksdb
  */
@@ -188,6 +199,10 @@ bool rocksdb_gt<mode_ak>::open() {
 
 template <db_mode_t mode_ak>
 bool rocksdb_gt<mode_ak>::close() {
+    key_slices.clear();
+    value_slices.clear();
+    statuses.clear();
+
     db_.reset(nullptr);
     cf_handles_.clear();
 #ifdef build_transaction_m
@@ -304,10 +319,6 @@ operation_result_t rocksdb_gt<mode_ak>::batch_insert(keys_spanc_t keys,
 
 template <db_mode_t mode_ak>
 operation_result_t rocksdb_gt<mode_ak>::batch_read(keys_spanc_t keys, values_span_t values) const {
-
-    thread_local std::vector<rocksdb::Slice> key_slices;
-    thread_local std::vector<rocksdb::PinnableSlice> value_slices;
-    thread_local std::vector<rocksdb::Status> statuses;
 
     if (keys.size() > key_slices.size()) {
         key_slices = std::vector<rocksdb::Slice>(keys.size());
