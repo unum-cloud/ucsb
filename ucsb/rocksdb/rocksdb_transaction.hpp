@@ -34,7 +34,9 @@ struct rocksdb_transaction_t : public ucsb::transaction_t {
   public:
     inline rocksdb_transaction_t(std::unique_ptr<rocksdb::Transaction>&& transaction,
                                  std::vector<rocksdb::ColumnFamilyHandle*> const& cf_handles)
-        : transaction_(std::forward<std::unique_ptr<rocksdb::Transaction>&&>(transaction)), cf_handles_(cf_handles) {}
+        : transaction_(std::forward<std::unique_ptr<rocksdb::Transaction>&&>(transaction)), cf_handles_(cf_handles) {
+        read_options_.verify_checksums = false;
+    }
     inline ~rocksdb_transaction_t();
 
     operation_result_t insert(key_t key, value_spanc_t value) override;
@@ -56,6 +58,8 @@ struct rocksdb_transaction_t : public ucsb::transaction_t {
   private:
     std::unique_ptr<rocksdb::Transaction> transaction_;
     std::vector<rocksdb::ColumnFamilyHandle*> cf_handles_;
+
+    rocksdb::ReadOptions read_options_;
 };
 
 inline rocksdb_transaction_t::~rocksdb_transaction_t() {
@@ -81,7 +85,7 @@ operation_result_t rocksdb_transaction_t::update(key_t key, value_spanc_t value)
 
     std::string data;
     rocksdb::Slice slice {reinterpret_cast<char const*>(&key), sizeof(key)};
-    rocksdb::Status status = transaction_->Get(rocksdb::ReadOptions(), slice, &data);
+    rocksdb::Status status = transaction_->Get(read_options_, slice, &data);
     if (status.IsNotFound())
         return {1, operation_status_t::not_found_k};
     else if (!status.ok())
@@ -116,7 +120,7 @@ operation_result_t rocksdb_transaction_t::remove(key_t key) {
 operation_result_t rocksdb_transaction_t::read(key_t key, value_span_t value) const {
     std::string data;
     rocksdb::Slice slice {reinterpret_cast<char const*>(&key), sizeof(key)};
-    rocksdb::Status status = transaction_->Get(rocksdb::ReadOptions(), slice, &data);
+    rocksdb::Status status = transaction_->Get(read_options_, slice, &data);
     if (status.IsNotFound())
         return {1, operation_status_t::not_found_k};
     else if (!status.ok())
@@ -149,7 +153,7 @@ operation_result_t rocksdb_transaction_t::batch_read(keys_spanc_t keys, values_s
         key_slices[idx] = slice;
     }
 
-    transaction_->MultiGet(rocksdb::ReadOptions(),
+    transaction_->MultiGet(read_options_,
                            cf_handles_[0],
                            key_slices.size(),
                            key_slices.data(),
@@ -185,7 +189,7 @@ operation_result_t rocksdb_transaction_t::bulk_import(bulk_metadata_t const& met
 
 operation_result_t rocksdb_transaction_t::range_select(key_t key, size_t length, values_span_t values) const {
 
-    rocksdb::Iterator* db_iter = transaction_->GetIterator(rocksdb::ReadOptions());
+    rocksdb::Iterator* db_iter = transaction_->GetIterator(read_options_);
     rocksdb::Slice slice {reinterpret_cast<char const*>(&key), sizeof(key)};
     db_iter->Seek(slice);
     size_t offset = 0;
@@ -203,7 +207,7 @@ operation_result_t rocksdb_transaction_t::range_select(key_t key, size_t length,
 
 operation_result_t rocksdb_transaction_t::scan(key_t key, size_t length, value_span_t single_value) const {
 
-    rocksdb::Iterator* db_iter = transaction_->GetIterator(rocksdb::ReadOptions());
+    rocksdb::Iterator* db_iter = transaction_->GetIterator(read_options_);
     rocksdb::Slice slice {reinterpret_cast<char const*>(&key), sizeof(key)};
     db_iter->Seek(slice);
     size_t scanned_records_count = 0;
