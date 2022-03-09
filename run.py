@@ -37,7 +37,6 @@ sizes = [
     # '1GB',
     # '10GB',
     # '100GB',
-    # '250GB',
     # '1TB',
 ]
 
@@ -49,9 +48,13 @@ workload_names = [
     'Scan',
     'ReadUpdate_50_50',
     'ReadInsert_95_5',
-    'BulkImport',
-    'BatchInsert',
     'Remove',
+
+    ### Aditional workloads
+    ### BulkImport: Imports whole DB from scratch
+    ### BatchInsert: Do batch inserts equal to 10% of initialized DB
+    # 'BulkImport',
+    # 'BatchInsert',
 ]
 
 
