@@ -106,7 +106,7 @@ def run(db_name: str, size: int, threads_count: int, workload_names: list) -> No
     filter = ','.join(workload_names)
     runner: str
     if run_docker_image:
-        runner = f'docker run  --mount type=bind,source={os.getcwd()}/bench,target=/ucsb/bench -it ucsb-image-dev'
+        runner = f'docker run --mount type=bind,source={os.getcwd()}/bench,target=/ucsb/bench -it ucsb-image-dev'
     else:
         runner = './build_release/bin/_ucsb_bench'
     child = pexpect.spawn(f'{runner} \
