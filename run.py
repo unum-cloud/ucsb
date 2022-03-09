@@ -11,6 +11,7 @@ import subprocess
 drop_caches = False
 transactional = False
 cleanup_previous = False
+run_docker_image = False
 
 threads = [
     1,
@@ -103,7 +104,12 @@ def run(db_name: str, size: int, threads_count: int, workload_names: list) -> No
 
     transactional_flag = '-t' if transactional else ''
     filter = ','.join(workload_names)
-    child = pexpect.spawn(f'./build_release/bin/_ucsb_bench \
+    runner: str
+    if run_docker_image:
+        runner = f'docker run  --mount type=bind,source={os.getcwd()}/bench,target=/ucsb/bench -it ucsb-image-dev'
+    else:
+        runner = './build_release/bin/_ucsb_bench'
+    child = pexpect.spawn(f'{runner} \
                             -db {db_name} \
                             {transactional_flag}\
                             -c {config_path} \
@@ -144,9 +150,10 @@ def main() -> None:
 
                 if drop_caches:
                     for workload_name in workload_names:
-                        print('Dropping caches...')
-                        drop_system_caches()
-                        time.sleep(8)
+                        if not run_docker_image:
+                            print('Dropping caches...')
+                            drop_system_caches()
+                            time.sleep(8)
                         run(db_name, size, threads_count, [workload_name])
                 else:
                     run(db_name, size, threads_count, workload_names)
