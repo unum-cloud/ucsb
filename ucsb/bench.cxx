@@ -285,6 +285,10 @@ void bench(bm::State& state, workload_t const& workload, data_accessor_t& data_a
         last_printed_iterations_count = 0;
         cpu_stat.start();
         mem_stat.start();
+
+        // Print initial progress
+        fmt::print("{}: {:>6.2f}%\r", workload.name, 0.0);
+        fflush(stdout);
     }
 
     for (auto _ : state) {
