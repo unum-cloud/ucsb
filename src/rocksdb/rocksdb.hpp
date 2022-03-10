@@ -55,6 +55,17 @@ namespace facebook
     };
 
     /**
+     * @brief Prealocated buffers for batch operations.
+     * These variables defined as global not as function local,
+     * because at the end of the benchmark (see close())
+     * we need to clear them before RocksDB statis objects are destructed
+     * https://github.com/facebook/rocksdb/issues/649
+     */
+    thread_local std::vector<rocksdb::Slice> key_slices;
+    thread_local std::vector<rocksdb::PinnableSlice> value_slices;
+    thread_local std::vector<rocksdb::Status> statuses;
+
+    /**
      * @brief RocksDB wrapper for the UCSB benchmark.
      * https://github.com/facebook/rocksdb
      */
@@ -124,12 +135,11 @@ namespace facebook
 #ifdef build_transaction_m
         rocksdb::TransactionDBOptions transaction_options_;
 #endif
+        rocksdb::ReadOptions read_options_;
+        rocksdb::WriteOptions write_options_;
+
         std::vector<rocksdb::ColumnFamilyDescriptor> cf_descs_;
         std::vector<rocksdb::ColumnFamilyHandle *> cf_handles_;
-
-        mutable std::vector<rocksdb::Slice> key_slices_;
-        mutable std::vector<rocksdb::PinnableSlice> values_;
-        mutable std::vector<rocksdb::Status> statuses_;
 
         std::unique_ptr<rocksdb::DB> db_;
 #ifdef build_transaction_m
@@ -170,6 +180,9 @@ namespace facebook
         options_.table_factory.reset(rocksdb::NewBlockBasedTableFactory(table_options));
         // options_.comparator = &key_cmp_;
 
+        read_options_.verify_checksums = false;
+        write_options_.disableWAL = true;
+
         rocksdb::DB *db_raw = nullptr;
         if constexpr (mode_ak == db_mode_t::regular_k)
             status = rocksdb::DB::Open(options_, dir_path_.string(), cf_descs_, &cf_handles_, &db_raw);
@@ -195,6 +208,10 @@ namespace facebook
     template <db_mode_t mode_ak>
     bool rocksdb_gt<mode_ak>::close()
     {
+        key_slices.clear();
+        value_slices.clear();
+        statuses.clear();
+
         db_.reset(nullptr);
         cf_handles_.clear();
 #ifdef build_transaction_m
@@ -216,8 +233,7 @@ namespace facebook
     {
         rocksdb::Slice slice{reinterpret_cast<char const *>(&key), sizeof(key)};
         rocksdb::Slice data_slice{reinterpret_cast<char const *>(value.data()), value.size()};
-        rocksdb::WriteOptions wopt;
-        rocksdb::Status status = db_->Put(wopt, slice, data_slice);
+        rocksdb::Status status = db_->Put(write_options_, slice, data_slice);
         if (!status.ok())
             return {0, operation_status_t::error_k};
         return {1, operation_status_t::ok_k};
@@ -229,15 +245,14 @@ namespace facebook
 
         std::string data;
         rocksdb::Slice slice{reinterpret_cast<char const *>(&key), sizeof(key)};
-        rocksdb::Status status = db_->Get(rocksdb::ReadOptions(), slice, &data);
+        rocksdb::Status status = db_->Get(read_options_, slice, &data);
         if (status.IsNotFound())
             return {1, operation_status_t::not_found_k};
         else if (!status.ok())
             return {0, operation_status_t::error_k};
 
         rocksdb::Slice data_slice{reinterpret_cast<char const *>(value.data()), value.size()};
-        rocksdb::WriteOptions wopt;
-        status = db_->Put(wopt, slice, data_slice);
+        status = db_->Put(write_options_, slice, data_slice);
         if (!status.ok())
             return {0, operation_status_t::error_k};
         return {1, operation_status_t::ok_k};
@@ -246,9 +261,8 @@ namespace facebook
     template <db_mode_t mode_ak>
     operation_result_t rocksdb_gt<mode_ak>::remove(key_t key)
     {
-        rocksdb::WriteOptions wopt;
         rocksdb::Slice slice{reinterpret_cast<char const *>(&key), sizeof(key)};
-        rocksdb::Status status = db_->Delete(wopt, slice);
+        rocksdb::Status status = db_->Delete(write_options_, slice);
         if (!status.ok())
             return {0, operation_status_t::error_k};
 
@@ -260,7 +274,7 @@ namespace facebook
     {
         std::string data;
         rocksdb::Slice slice{reinterpret_cast<char const *>(&key), sizeof(key)};
-        rocksdb::Status status = db_->Get(rocksdb::ReadOptions(), slice, &data);
+        rocksdb::Status status = db_->Get(read_options_, slice, &data);
         if (status.IsNotFound())
             return {1, operation_status_t::not_found_k};
         else if (!status.ok())
@@ -325,34 +339,35 @@ namespace facebook
     template <db_mode_t mode_ak>
     operation_result_t rocksdb_gt<mode_ak>::batch_read(keys_spanc_t keys, values_span_t values) const
     {
-        if (keys.size() > key_slices_.size())
+
+        if (keys.size() > key_slices.size())
         {
-            key_slices_ = std::vector<rocksdb::Slice>(keys.size());
-            values_ = std::vector<rocksdb::PinnableSlice>(keys.size());
-            statuses_ = std::vector<rocksdb::Status>(keys.size());
+            key_slices = std::vector<rocksdb::Slice>(keys.size());
+            value_slices = std::vector<rocksdb::PinnableSlice>(keys.size());
+            statuses = std::vector<rocksdb::Status>(keys.size());
         }
 
         for (size_t idx = 0; idx < keys.size(); ++idx)
         {
             rocksdb::Slice slice{reinterpret_cast<char const *>(&keys[idx]), sizeof(keys[idx])};
-            key_slices_[idx] = slice;
+            key_slices[idx] = slice;
         }
 
-        db_->MultiGet(rocksdb::ReadOptions(),
+        db_->MultiGet(read_options_,
                       cf_handles_[0],
-                      key_slices_.size(),
-                      key_slices_.data(),
-                      values_.data(),
-                      statuses_.data());
+                      key_slices.size(),
+                      key_slices.data(),
+                      value_slices.data(),
+                      statuses.data());
 
         size_t offset = 0;
         size_t found_cnt = 0;
-        for (size_t i = 0; i < statuses_.size(); ++i)
+        for (size_t i = 0; i < statuses.size(); ++i)
         {
-            if (statuses_[i].ok())
+            if (statuses[i].ok())
             {
-                memcpy(values.data() + offset, values_[i].data(), values_[i].size());
-                offset += values_[i].size();
+                memcpy(values.data() + offset, value_slices[i].data(), value_slices[i].size());
+                offset += value_slices[i].size();
                 ++found_cnt;
             }
         }
@@ -433,7 +448,8 @@ namespace facebook
     template <db_mode_t mode_ak>
     operation_result_t rocksdb_gt<mode_ak>::range_select(key_t key, size_t length, values_span_t values) const
     {
-        rocksdb::Iterator *db_iter = db_->NewIterator(rocksdb::ReadOptions());
+
+        rocksdb::Iterator *db_iter = db_->NewIterator(read_options_);
         rocksdb::Slice slice{reinterpret_cast<char const *>(&key), sizeof(key)};
         db_iter->Seek(slice);
         size_t offset = 0;
@@ -453,7 +469,8 @@ namespace facebook
     template <db_mode_t mode_ak>
     operation_result_t rocksdb_gt<mode_ak>::scan(key_t key, size_t length, value_span_t single_value) const
     {
-        rocksdb::Iterator *db_iter = db_->NewIterator(rocksdb::ReadOptions());
+
+        rocksdb::Iterator *db_iter = db_->NewIterator(read_options_);
         rocksdb::Slice slice{reinterpret_cast<char const *>(&key), sizeof(key)};
         db_iter->Seek(slice);
         size_t scanned_records_count = 0;
@@ -491,9 +508,8 @@ namespace facebook
     {
 
 #ifdef build_transaction_m
-        rocksdb::WriteOptions write_options;
         std::unique_ptr<rocksdb::Transaction> raw_transaction;
-        raw_transaction.reset(transaction_db_->BeginTransaction(write_options));
+        raw_transaction.reset(transaction_db_->BeginTransaction(write_options_));
         auto id = size_t(raw_transaction.get());
         raw_transaction->SetName(std::to_string(id));
         return std::make_unique<rocksdb_transaction_t>(std::move(raw_transaction), cf_handles_);

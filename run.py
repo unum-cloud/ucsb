@@ -32,11 +32,10 @@ db_names = [
 
 sizes = [
     '100MB',
-    '1GB',
-    '10GB',
-    '100GB',
-    '250GB',
-    '1TB',
+    # '1GB',
+    # '10GB',
+    # '100GB',
+    # '1TB',
 ]
 
 workload_names = [
@@ -47,9 +46,13 @@ workload_names = [
     'Scan',
     'ReadUpdate_50_50',
     'ReadInsert_95_5',
-    'BatchInsert',
-    'BulkImport',
     'Remove',
+
+    # Aditional workloads
+    # BulkImport: Imports whole DB equal to the workload size
+    # BatchInsert: Do batch inserts equal to 10% of the workload size
+    # 'BulkImport',
+    # 'BatchInsert',
 ]
 
 
@@ -95,7 +98,7 @@ def run(db_name: str, size: int, threads_count: int, workload_names: list) -> No
     filter = ','.join(workload_names)
     runner: str
     if run_docker_image:
-        runner = f'docker run  --mount type=bind,source={os.getcwd()}/bench,target=/ucsb/bench -it ucsb-image'
+        runner = f'docker run -v {os.getcwd()}/bench:/ucsb/bench -v {os.getcwd()}/tmp:/ucsb/tmp -it ucsb-image-dev'
     else:
         runner = './build_release/bin/ucsb_bench'
     child = pexpect.spawn(f'{runner} \
@@ -135,10 +138,11 @@ def main() -> None:
 
                 if drop_caches:
                     for workload_name in workload_names:
-                        print('Dropping caches...')
-                        drop_system_caches()
-                        time.sleep(8)
-                        run(db_name, size, threads_count, [workload_name])
+                        if not run_docker_image:
+                            print('Dropping caches...')
+                            drop_system_caches()
+                            time.sleep(8)
+                            run(db_name, size, threads_count, [workload_name])
                 else:
                     run(db_name, size, threads_count, workload_names)
 

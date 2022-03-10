@@ -318,6 +318,7 @@ namespace symas
 
     operation_result_t lmdb_t::batch_read(keys_spanc_t keys, values_span_t values) const
     {
+
         MDB_txn *txn = nullptr;
         MDB_val key_slice, val_slice;
 
@@ -406,6 +407,7 @@ namespace symas
 
     operation_result_t lmdb_t::scan(key_t key, size_t length, value_span_t single_value) const
     {
+
         MDB_txn *txn = nullptr;
         MDB_cursor *cursor = nullptr;
         MDB_val key_slice, val_slice;

@@ -29,6 +29,17 @@ namespace facebook
     using operation_result_t = ucsb::operation_result_t;
 
     /**
+     * @brief Prealocated buffers for batch operations.
+     * These variables defined as global not as function local,
+     * because at the end of the benchmark (see ~rocksdb_transaction_t())
+     * we need to clear them before RocksDB statis objects are destructed
+     * https://github.com/facebook/rocksdb/issues/649
+     */
+    thread_local std::vector<rocksdb::Slice> transaction_key_slices;
+    thread_local std::vector<rocksdb::PinnableSlice> transaction_value_slices;
+    thread_local std::vector<rocksdb::Status> transaction_statuses;
+
+    /**
      * @brief RocksDB transactional wrapper for the UCSB benchmark.
      */
     struct rocksdb_transaction_t : public ucsb::transaction_t
@@ -36,8 +47,16 @@ namespace facebook
     public:
         inline rocksdb_transaction_t(std::unique_ptr<rocksdb::Transaction> &&transaction,
                                      std::vector<rocksdb::ColumnFamilyHandle *> const &cf_handles)
-            : transaction_(std::forward<std::unique_ptr<rocksdb::Transaction> &&>(transaction)), cf_handles_(cf_handles) {}
-        inline ~rocksdb_transaction_t();
+            : transaction_(std::forward<std::unique_ptr<rocksdb::Transaction> &&>(transaction)), cf_handles_(cf_handles)
+        {
+            read_options_.verify_checksums = false;
+        }
+        inline ~rocksdb_transaction_t()
+        {
+            key_sltransaction_key_slicesices.clear();
+            transaction_value_slices.clear();
+            transaction_statuses.clear();
+        }
 
         operation_result_t insert(key_t key, value_spanc_t value) override;
         operation_result_t update(key_t key, value_spanc_t value) override;
@@ -59,9 +78,7 @@ namespace facebook
         std::unique_ptr<rocksdb::Transaction> transaction_;
         std::vector<rocksdb::ColumnFamilyHandle *> cf_handles_;
 
-        mutable std::vector<rocksdb::Slice> key_slices_;
-        mutable std::vector<rocksdb::PinnableSlice> values_;
-        mutable std::vector<rocksdb::Status> statuses_;
+        rocksdb::ReadOptions read_options_;
     };
 
     inline rocksdb_transaction_t::~rocksdb_transaction_t()
@@ -91,7 +108,7 @@ namespace facebook
 
         std::string data;
         rocksdb::Slice slice{reinterpret_cast<char const *>(&key), sizeof(key)};
-        rocksdb::Status status = transaction_->Get(rocksdb::ReadOptions(), slice, &data);
+        rocksdb::Status status = transaction_->Get(read_options_, slice, &data);
         if (status.IsNotFound())
             return {1, operation_status_t::not_found_k};
         else if (!status.ok())
@@ -130,7 +147,7 @@ namespace facebook
     {
         std::string data;
         rocksdb::Slice slice{reinterpret_cast<char const *>(&key), sizeof(key)};
-        rocksdb::Status status = transaction_->Get(rocksdb::ReadOptions(), slice, &data);
+        rocksdb::Status status = transaction_->Get(read_options_, slice, &data);
         if (status.IsNotFound())
             return {1, operation_status_t::not_found_k};
         else if (!status.ok())
@@ -150,34 +167,34 @@ namespace facebook
     operation_result_t rocksdb_transaction_t::batch_read(keys_spanc_t keys, values_span_t values) const
     {
 
-        if (keys.size() > key_slices_.size())
+        if (keys.size() > transaction_key_slices.size())
         {
-            key_slices_ = std::vector<rocksdb::Slice>(keys.size());
-            values_ = std::vector<rocksdb::PinnableSlice>(keys.size());
-            statuses_ = std::vector<rocksdb::Status>(keys.size());
+            transaction_key_slices = std::vector<rocksdb::Slice>(keys.size());
+            transaction_value_slices = std::vector<rocksdb::PinnableSlice>(keys.size());
+            transaction_statuses = std::vector<rocksdb::Status>(keys.size());
         }
 
         for (size_t idx = 0; idx < keys.size(); ++idx)
         {
             rocksdb::Slice slice{reinterpret_cast<char const *>(&keys[idx]), sizeof(keys[idx])};
-            key_slices_[idx] = slice;
+            transaction_key_slices[idx] = slice;
         }
 
-        transaction_->MultiGet(rocksdb::ReadOptions(),
+        transaction_->MultiGet(read_options_,
                                cf_handles_[0],
-                               key_slices_.size(),
-                               key_slices_.data(),
-                               values_.data(),
-                               statuses_.data());
+                               transaction_key_slices.size(),
+                               transaction_key_slices.data(),
+                               transaction_value_slices.data(),
+                               transaction_statuses.data());
 
         size_t offset = 0;
         size_t found_cnt = 0;
-        for (size_t i = 0; i < statuses_.size(); ++i)
+        for (size_t i = 0; i < transaction_statuses.size(); ++i)
         {
-            if (statuses_[i].ok())
+            if (transaction_statuses[i].ok())
             {
-                memcpy(values.data() + offset, values_[i].data(), values_[i].size());
-                offset += values_[i].size();
+                memcpy(values.data() + offset, transaction_value_slices[i].data(), transaction_value_slices[i].size());
+                offset += transaction_value_slices[i].size();
                 ++found_cnt;
             }
         }
@@ -203,7 +220,8 @@ namespace facebook
 
     operation_result_t rocksdb_transaction_t::range_select(key_t key, size_t length, values_span_t values) const
     {
-        rocksdb::Iterator *db_iter = transaction_->GetIterator(rocksdb::ReadOptions());
+
+        rocksdb::Iterator *db_iter = transaction_->GetIterator(read_options_);
         rocksdb::Slice slice{reinterpret_cast<char const *>(&key), sizeof(key)};
         db_iter->Seek(slice);
         size_t offset = 0;
@@ -222,7 +240,8 @@ namespace facebook
 
     operation_result_t rocksdb_transaction_t::scan(key_t key, size_t length, value_span_t single_value) const
     {
-        rocksdb::Iterator *db_iter = transaction_->GetIterator(rocksdb::ReadOptions());
+
+        rocksdb::Iterator *db_iter = transaction_->GetIterator(read_options_);
         rocksdb::Slice slice{reinterpret_cast<char const *>(&key), sizeof(key)};
         db_iter->Seek(slice);
         size_t scanned_records_count = 0;

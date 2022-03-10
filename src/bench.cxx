@@ -182,21 +182,18 @@ inline void register_section(std::string const &name)
 
 inline std::string section_name(settings_t const &settings, workloads_t const &workloads)
 {
-    std::string name = settings.db_name;
-    if (workloads.empty())
-    {
-        if (settings.transactional)
-            name = fmt::format("{} (transactional)", settings.db_name);
-    }
-    else
+    std::vector<std::string> infos;
+    if (settings.transactional)
+        infos.push_back("transactional");
+    infos.push_back(fmt::format("threads: {}", settings.threads_count));
+    if (!workloads.empty())
     {
         size_t db_size = workloads[0].db_records_count * workloads[0].value_length;
-        if (settings.transactional)
-            name = fmt::format("{} (transactional, {})", settings.db_name, printable_bytes_t{db_size});
-        else
-            name = fmt::format("{} ({})", settings.db_name, printable_bytes_t{db_size});
+        infos.push_back(fmt::format("size: {}", printable_bytes_t{db_size}));
     }
-    return name;
+
+    std::string info = fmt::format("{}", fmt::join(infos, ", "));
+    return fmt::format("{} [{}]", settings.db_name, info);
 }
 
 template <typename func_at>
@@ -322,6 +319,10 @@ void bench(bm::State &state, workload_t const &workload, data_accessor_t &data_a
         last_printed_iterations_count = 0;
         cpu_stat.start();
         mem_stat.start();
+
+        // Print initial progress
+        fmt::print("{}: {:>6.2f}%\r", workload.name, 0.0);
+        fflush(stdout);
     }
 
     for (auto _ : state)
@@ -406,8 +407,8 @@ void bench(bm::State &state, workload_t const &workload, db_t &db, bool transact
 
     if (state.thread_index() == 0)
     {
-        bool ok = db.open();
-        assert(ok);
+        if (!db.open())
+            throw exception_t("Failed to open DB");
     }
     fence.sync();
 
@@ -426,8 +427,8 @@ void bench(bm::State &state, workload_t const &workload, db_t &db, bool transact
     {
         db.flush();
         state.counters["disk,bytes"] = bm::Counter(db.size_on_disk(), bm::Counter::kDefaults, bm::Counter::kIs1024);
-        bool ok = db.close();
-        assert(ok);
+        if (!db.close())
+            throw exception_t("Failed to close DB");
     }
 }
 
