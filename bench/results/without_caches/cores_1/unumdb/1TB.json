@@ -160,13 +160,13 @@
       "cpu_time": 351834624.374,
       "time_unit": "us",
       "bytes_per_second": 985839221.3527074,
-      "cpu_avg,%": 40.86801147460938,
-      "cpu_max,%": 80.0,
+      "cpu_avg,%": 50.86801147460938,
+      "cpu_max,%": 90.0,
       "disk,bytes": 1044000019827.0,
       "fails,%": 0.0,
-      "mem_avg,bytes": 11864187056.0,
-      "mem_max,bytes": 21175660544.0,
-      "operations/s": 962733.6146022533,
+      "mem_avg,bytes": 35864187056.0,
+      "mem_max,bytes": 41175660544.0,
+      "operations/s": 1228379.6146022533,
       "processed,bytes": 1024000000000.0
     },
     {
