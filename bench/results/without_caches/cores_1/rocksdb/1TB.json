@@ -50,8 +50,8 @@
       "repetition_index": 0,
       "threads": 1,
       "iterations": 1000000000,
-      "real_time": 1.7997808754444122e-07,
-      "cpu_time": 1.8000000000240046e-07,
+      "real_time": 1.8102582544088364e-07,
+      "cpu_time": 1.899999999971369e-07,
       "time_unit": "ns"
     },
     {
@@ -237,6 +237,52 @@
       "mem_max,bytes": 4836409344.0,
       "operations/s": 327903.2115294068,
       "processed,bytes": 51200000000.0
+    },
+    {
+      "name": "BulkImport/iterations:10000/real_time/threads:1",
+      "family_index": 1,
+      "per_family_instance_index": 0,
+      "run_name": "BulkImport/iterations:10000/real_time/threads:1",
+      "run_type": "iteration",
+      "repetitions": 1,
+      "repetition_index": 0,
+      "threads": 1,
+      "iterations": 10000,
+      "real_time": 112828.94945030565,
+      "cpu_time": 95375.08441559982,
+      "time_unit": "us",
+      "bytes_per_second": 907568496.3733622,
+      "cpu_avg,%": 91.9075698852539,
+      "cpu_max,%": 120.0,
+      "disk,bytes": 1048257365971.0,
+      "fails,%": 0.0,
+      "mem_avg,bytes": 2689161394.0,
+      "mem_max,bytes": 5344509952.0,
+      "operations/s": 886297.3597396115,
+      "processed,bytes": 1024000000000.0
+    },
+    {
+      "name": "BatchInsert/iterations:10000/real_time/threads:1",
+      "family_index": 1,
+      "per_family_instance_index": 0,
+      "run_name": "BatchInsert/iterations:10000/real_time/threads:1",
+      "run_type": "iteration",
+      "repetitions": 1,
+      "repetition_index": 0,
+      "threads": 1,
+      "iterations": 10000,
+      "real_time": 54425.715108879376,
+      "cpu_time": 40839.80892249943,
+      "time_unit": "us",
+      "bytes_per_second": 188146356.54331306,
+      "cpu_avg,%": 81.2334976196289,
+      "cpu_max,%": 100.0,
+      "disk,bytes": 1153092895803.0,
+      "fails,%": 0.0,
+      "mem_avg,bytes": 5388512413.0,
+      "mem_max,bytes": 5675655168.0,
+      "operations/s": 183736.67631182916,
+      "processed,bytes": 102400000000.0
     }
   ]
 }
