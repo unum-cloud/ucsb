@@ -322,10 +322,6 @@ operation_result_t lmdb_t::batch_read(keys_spanc_t keys, values_span_t values) c
 bulk_metadata_t lmdb_t::prepare_bulk_import_data(keys_spanc_t keys,
                                                  values_spanc_t values,
                                                  value_lengths_spanc_t sizes) const {
-    // This DB doesn't support bulk import
-    (void)keys;
-    (void)values;
-    (void)sizes;
     return {};
 }
 

@@ -279,46 +279,7 @@ template <db_mode_t mode_ak>
 operation_result_t rocksdb_gt<mode_ak>::batch_insert(keys_spanc_t keys,
                                                      values_spanc_t values,
                                                      value_lengths_spanc_t sizes) {
-
-    std::string sst_file_path("/tmp/rocksdb_tmp.sst");
-    rocksdb::SstFileWriter sst_file_writer(rocksdb::EnvOptions(), options_, options_.comparator);
-    rocksdb::Status status = sst_file_writer.Open(sst_file_path);
-    if (!status.ok()) {
-        fs::remove(sst_file_path);
-        return {0, operation_status_t::error_k};
-    }
-
-    size_t idx = 0;
-    size_t offset = 0;
-    for (; idx < keys.size(); ++idx) {
-        auto key = keys[idx];
-
-        // Warning: if not using custom comparator need to swap little endian to big endian
-        if (options_.comparator != &key_cmp_)
-            key = __builtin_bswap64(key);
-
-        rocksdb::Slice slice {reinterpret_cast<char const*>(&key), sizeof(key)};
-        rocksdb::Slice data_slice {reinterpret_cast<char const*>(values.data() + offset), sizes[idx]};
-        status = sst_file_writer.Add(slice, data_slice);
-        if (!status.ok())
-            break;
-        offset += sizes[idx];
-    }
-    status = sst_file_writer.Finish();
-    if (!status.ok()) {
-        fs::remove(sst_file_path);
-        return {0, operation_status_t::error_k};
-    }
-
-    rocksdb::IngestExternalFileOptions ingest_options;
-    ingest_options.move_files = true;
-    status = db_->IngestExternalFile({sst_file_path}, ingest_options);
-    fs::remove(sst_file_path);
-    if (!status.ok())
-        return {0, operation_status_t::error_k};
-    do_compaction_on_flush.store(true);
-
-    return {idx, operation_status_t::ok_k};
+    return {0, operation_status_t::not_implemented_k};
 }
 
 template <db_mode_t mode_ak>
