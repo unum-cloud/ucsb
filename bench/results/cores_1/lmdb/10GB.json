@@ -32,15 +32,19 @@
         "num_sharing": 8
       }
     ],
-    "load_avg": [116.18,100.69,98.91],
+    "load_avg": [
+      116.18,
+      100.69,
+      98.91
+    ],
     "library_build_type": "release"
   },
   "benchmarks": [
     {
-      "name": "lmdb (9.54GB)",
+      "name": "lmdb [threads: 1, size: 9.54GB]",
       "family_index": 0,
       "per_family_instance_index": 0,
-      "run_name": "lmdb (9.54GB)",
+      "run_name": "lmdb [threads: 1, size: 9.54GB]",
       "run_type": "iteration",
       "repetitions": 1,
       "repetition_index": 0,

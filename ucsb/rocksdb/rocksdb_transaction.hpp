@@ -187,10 +187,6 @@ operation_result_t rocksdb_transaction_t::batch_read(keys_spanc_t keys, values_s
 bulk_metadata_t rocksdb_transaction_t::prepare_bulk_import_data(keys_spanc_t keys,
                                                                 values_spanc_t values,
                                                                 value_lengths_spanc_t sizes) const {
-    // RocksDB doesn't support bulk import by transaction
-    (void)keys;
-    (void)values;
-    (void)sizes;
     return {};
 }
 

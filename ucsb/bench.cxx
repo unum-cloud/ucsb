@@ -1,3 +1,4 @@
+#include <atomic>
 #include <memory>
 #include <string>
 #include <vector>
@@ -257,7 +258,7 @@ inline operation_chooser_t create_operation_chooser(workload_t const& workload) 
     return chooser;
 }
 
-void bench(bm::State& state, workload_t const& workload, data_accessor_t& data_accessor) {
+void bench(bm::State& state, workload_t const& workload, db_t& db, data_accessor_t& data_accessor) {
 
     auto chooser = create_operation_chooser(workload);
     timer_ref_t timer(state);
@@ -275,6 +276,7 @@ void bench(bm::State& state, workload_t const& workload, data_accessor_t& data_a
     size_t last_printed_iterations_count = 0;
     size_t const iterations_total_count = state.threads() * workload.operations_count;
     size_t const printable_iterations_distance = iterations_total_count / 10;
+    std::atomic_bool do_flash = true;
 
     if (state.thread_index() == 0) {
         fails_count = 0;
@@ -322,6 +324,11 @@ void bench(bm::State& state, workload_t const& workload, data_accessor_t& data_a
             fmt::print("{}: {:>6.2f}%\r", workload.name, percent);
             fflush(stdout);
         }
+
+        // Last thread will flush the DB
+        bool only_once = true;
+        if (done_iterations_count == iterations_total_count && do_flash.compare_exchange_weak(only_once, false))
+            db.flush();
     }
 
     if (state.thread_index() == 0) {
@@ -338,6 +345,7 @@ void bench(bm::State& state, workload_t const& workload, data_accessor_t& data_a
         state.counters["mem_avg,bytes"] = bm::Counter(mem_stat.rss().avg, bm::Counter::kDefaults, bm::Counter::kIs1024);
         state.counters["processed,bytes"] =
             bm::Counter(bytes_processed_count, bm::Counter::kDefaults, bm::Counter::kIs1024);
+        state.counters["disk,bytes"] = bm::Counter(db.size_on_disk(), bm::Counter::kDefaults, bm::Counter::kIs1024);
     }
 }
 
@@ -353,15 +361,13 @@ void bench(bm::State& state, workload_t const& workload, db_t& db, bool transact
         auto transaction = db.create_transaction();
         if (!transaction)
             throw exception_t("Failed to create DB transaction");
-        bench(state, workload, *transaction);
+        bench(state, workload, db, *transaction);
     }
     else
-        bench(state, workload, db);
+        bench(state, workload, db, db);
 
     fence.sync();
     if (state.thread_index() == 0) {
-        db.flush();
-        state.counters["disk,bytes"] = bm::Counter(db.size_on_disk(), bm::Counter::kDefaults, bm::Counter::kIs1024);
         if (!db.close())
             throw exception_t("Failed to close DB");
     }

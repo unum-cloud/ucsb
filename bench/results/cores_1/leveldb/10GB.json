@@ -32,15 +32,19 @@
         "num_sharing": 8
       }
     ],
-    "load_avg": [78.9,95.12,94.92],
+    "load_avg": [
+      78.9,
+      95.12,
+      94.92
+    ],
     "library_build_type": "release"
   },
   "benchmarks": [
     {
-      "name": "leveldb (9.54GB)",
+      "name": "leveldb [threads: 1, size: 9.54GB]",
       "family_index": 0,
       "per_family_instance_index": 0,
-      "run_name": "leveldb (9.54GB)",
+      "run_name": "leveldb [threads: 1, size: 9.54GB]",
       "run_type": "iteration",
       "repetitions": 1,
       "repetition_index": 0,
