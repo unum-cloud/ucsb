@@ -6,6 +6,7 @@
  */
 // #define build_transaction_m
 
+#include <atomic>
 #include <iostream>
 #include <cstring>
 #include <memory>
@@ -76,7 +77,8 @@ struct rocksdb_gt : public ucsb::db_t {
           ,
           transaction_db_(nullptr)
 #endif
-    {
+          ,
+          do_compaction_on_flush(false) {
     }
     inline ~rocksdb_gt() { close(); }
 
@@ -111,6 +113,7 @@ struct rocksdb_gt : public ucsb::db_t {
     fs::path dir_path_;
 
     bool load_aditional_options();
+    void do_compaction();
 
     struct key_comparator_t final : public rocksdb::Comparator {
         int Compare(rocksdb::Slice const& left, rocksdb::Slice const& right) const override {
@@ -141,6 +144,7 @@ struct rocksdb_gt : public ucsb::db_t {
     rocksdb::TransactionDB* transaction_db_;
 #endif
     key_comparator_t key_cmp_;
+    std::atomic_bool do_compaction_on_flush;
 };
 
 template <db_mode_t mode_ak>
@@ -202,6 +206,7 @@ bool rocksdb_gt<mode_ak>::close() {
     key_slices.clear();
     value_slices.clear();
     statuses.clear();
+    do_compaction_on_flush.store(false);
 
     db_.reset(nullptr);
     cf_handles_.clear();
@@ -308,11 +313,10 @@ operation_result_t rocksdb_gt<mode_ak>::batch_insert(keys_spanc_t keys,
     rocksdb::IngestExternalFileOptions ingest_options;
     ingest_options.move_files = true;
     status = db_->IngestExternalFile({sst_file_path}, ingest_options);
-    if (!status.ok()) {
-        fs::remove(sst_file_path);
-        return {0, operation_status_t::error_k};
-    }
     fs::remove(sst_file_path);
+    if (!status.ok())
+        return {0, operation_status_t::error_k};
+    do_compaction_on_flush.store(true);
 
     return {idx, operation_status_t::ok_k};
 }
@@ -409,6 +413,7 @@ operation_result_t rocksdb_gt<mode_ak>::bulk_import(bulk_metadata_t const& metad
                 fs::remove(*file_it);
             return {0, operation_status_t::error_k};
         }
+        do_compaction_on_flush.store(true);
     }
 
     return {metadata.records_count, operation_status_t::ok_k};
@@ -453,6 +458,10 @@ operation_result_t rocksdb_gt<mode_ak>::scan(key_t key, size_t length, value_spa
 template <db_mode_t mode_ak>
 void rocksdb_gt<mode_ak>::flush() {
     db_->Flush(rocksdb::FlushOptions());
+    if (do_compaction_on_flush.load(std::memory_order_relaxed)) {
+        do_compaction();
+        do_compaction_on_flush.store(false);
+    }
 }
 
 template <db_mode_t mode_ak>
@@ -508,6 +517,23 @@ bool rocksdb_gt<mode_ak>::load_aditional_options() {
 #endif
 
     return true;
+}
+
+template <db_mode_t mode_ak>
+void rocksdb_gt<mode_ak>::do_compaction() {
+    // https://www.facebook.com/groups/rocksdb.dev/posts/912061515559030/
+    rocksdb::CompactionOptions compaction_options;
+    rocksdb::ColumnFamilyMetaData meta;
+    db_->GetColumnFamilyMetaData(&meta);
+    for (auto const& level : meta.levels) {
+        std::vector<std::string> file_names;
+        file_names.reserve(level.files.size());
+        for (auto const& file : level.files) {
+            std::string full_name = file.db_path + "/" + file.name;
+            file_names.push_back(full_name);
+        }
+        db_->CompactFiles(compaction_options, file_names, level.level);
+    }
 }
 
 } // namespace facebook
