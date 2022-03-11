@@ -41,7 +41,7 @@
   },
   "benchmarks": [
     {
-      "name": "unumdb [transactional, threads: 1, size:  97.66MB]",
+      "name": "unumdb [transactional, threads: 1, size: 97.66MB]",
       "family_index": 0,
       "per_family_instance_index": 0,
       "run_name": "unumdb [transactional, threads: 1, size:  97.66MB]",
