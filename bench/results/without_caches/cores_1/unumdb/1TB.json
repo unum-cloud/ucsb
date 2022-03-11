@@ -210,8 +210,8 @@
       "cpu_max,%": 120.0,
       "disk,bytes": 1098198247472.0,
       "fails,%": 0.0,
-      "mem_avg,bytes": 23772438065.0,
-      "mem_max,bytes": 132984553472.0,
+      "mem_avg,bytes": 19017950452.0,
+      "mem_max,bytes": 106387642777.0,
       "operations/s": 127620.0960801362,
       "processed,bytes": 1024000000000.0
     },
