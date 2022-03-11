@@ -51,7 +51,7 @@
       "threads": 1,
       "iterations": 1000000000,
       "real_time": 1.8998980522155762e-07,
-      "cpu_time": 1.900000000110147e-07,
+      "cpu_time": 1.899999999971369e-07,
       "time_unit": "ns"
     },
     {
@@ -271,18 +271,18 @@
       "repetition_index": 0,
       "threads": 1,
       "iterations": 100,
-      "real_time": 6.181117266998626,
-      "cpu_time": 5.9481660629999995,
+      "real_time": 1425.289426697418,
+      "cpu_time": 1408.2687000000014,
       "time_unit": "us",
-      "bytes_per_second": 165665842.5600822,
-      "cpu_avg,%": 173.22581481933594,
-      "cpu_max,%": 210.0,
-      "disk,bytes": 1255728724.0,
+      "bytes_per_second": 718450569.2803334,
+      "cpu_avg,%": 105.0,
+      "cpu_max,%": 190.0,
+      "disk,bytes": 104997895.0,
       "fails,%": 0.0,
-      "mem_avg,bytes": 170375512.0,
-      "mem_max,bytes": 432553984.0,
-      "operations/s": 161783.04937508027,
-      "processed,bytes": 1024000000.0
+      "mem_avg,bytes": 77437337.0,
+      "mem_max,bytes": 120688640.0,
+      "operations/s": 701611.8840628256,
+      "processed,bytes": 102400000.0
     }
   ]
 }

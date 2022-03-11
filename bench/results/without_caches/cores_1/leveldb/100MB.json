@@ -50,7 +50,7 @@
       "repetition_index": 0,
       "threads": 1,
       "iterations": 1000000000,
-      "real_time": 1.8998980522155762e-07,
+      "real_time": 1.8009450286626816e-07,
       "cpu_time": 1.899999999971369e-07,
       "time_unit": "ns"
     },
@@ -270,19 +270,19 @@
       "repetitions": 1,
       "repetition_index": 0,
       "threads": 1,
-      "iterations": 100000,
-      "real_time": 5.666214250959456,
-      "cpu_time": 5.566337960000001,
+      "iterations": 10,
+      "real_time": 1275.586907286197,
+      "cpu_time": 1273.4879999999976,
       "time_unit": "us",
-      "bytes_per_second": 180720310.7130315,
-      "cpu_avg,%": 113.33333587646484,
-      "cpu_max,%": 170.0,
-      "disk,bytes": 105699623.0,
+      "bytes_per_second": 802767725.3120711,
+      "cpu_avg,%": 20.0,
+      "cpu_max,%": 20.0,
+      "disk,bytes": 10362626.0,
       "fails,%": 0.0,
-      "mem_avg,bytes": 65568182.0,
-      "mem_max,bytes": 100880384.0,
-      "operations/s": 176484.67843069482,
-      "processed,bytes": 102400000.0
+      "mem_avg,bytes": 20099072.0,
+      "mem_max,bytes": 26173440.0,
+      "operations/s": 783952.8567500694,
+      "processed,bytes": 10240000.0
     }
   ]
 }
