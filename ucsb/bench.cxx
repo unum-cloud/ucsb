@@ -159,19 +159,18 @@ inline void register_section(std::string const& name) {
 }
 
 inline std::string section_name(settings_t const& settings, workloads_t const& workloads) {
-    std::string name = settings.db_name;
-    if (workloads.empty()) {
-        if (settings.transactional)
-            name = fmt::format("{} (transactional)", settings.db_name);
-    }
-    else {
+
+    std::vector<std::string> infos;
+    if (settings.transactional)
+        infos.push_back("transactional");
+    infos.push_back(fmt::format("threads: {}", settings.threads_count));
+    if (!workloads.empty()) {
         size_t db_size = workloads[0].db_records_count * workloads[0].value_length;
-        if (settings.transactional)
-            name = fmt::format("{} (transactional, {})", settings.db_name, printable_bytes_t {db_size});
-        else
-            name = fmt::format("{} ({})", settings.db_name, printable_bytes_t {db_size});
+        infos.push_back(fmt::format("size: {}", printable_bytes_t {db_size}));
     }
-    return name;
+
+    std::string info = fmt::format("{}", fmt::join(infos, ", "));
+    return fmt::format("{} [{}]", settings.db_name, info);
 }
 
 template <typename func_at>
