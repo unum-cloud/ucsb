@@ -205,12 +205,10 @@ operation_result_t leveldb_t::read(key_t key, value_span_t value) const {
 }
 
 operation_result_t leveldb_t::batch_insert(keys_spanc_t keys, values_spanc_t values, value_lengths_spanc_t sizes) {
-    size_t size_bytes = 0;
     leveldb::WriteBatch batch;
     for (size_t idx = 0; idx < keys.size(); ++idx) {
         auto key = keys[idx];
         auto value = values[idx];
-        size_bytes += sizes[idx];
 
         leveldb::Slice key_slice {reinterpret_cast<char const*>(&key), sizeof(key)};
         leveldb::Slice value_slice {reinterpret_cast<char const*>(&value), sizes[idx]};
@@ -218,8 +216,7 @@ operation_result_t leveldb_t::batch_insert(keys_spanc_t keys, values_spanc_t val
     }
 
     leveldb::Status status = db_->Write(leveldb::WriteOptions(), &batch);
-    return {size_bytes, status.ok() ? operation_status_t::ok_k : operation_status_t::error_k};
-    // return {0, operation_status_t::not_implemented_k};
+    return {keys.size(), status.ok() ? operation_status_t::ok_k : operation_status_t::error_k};
 }
 
 operation_result_t leveldb_t::batch_read(keys_spanc_t keys, values_span_t values) const {
