@@ -110,7 +110,8 @@ bool wiredtiger_t::open() {
     //     return false;
     // }
 
-    res = session_->create(session_, table_name_.c_str(), "key_format=S,value_format=u");
+    static_assert(sizeof(key_t) == sizeof(uint64_t), "Need to change `key_format` below");
+    res = session_->create(session_, table_name_.c_str(), "key_format=Q,value_format=u");
     if (res) {
         close();
         return false;
@@ -141,7 +142,7 @@ bool wiredtiger_t::close() {
 
 void wiredtiger_t::destroy() {
     if (session_)
-        session_->drop(session_, table_name_.c_str(), "key_format=S,value_format=u");
+        session_->drop(session_, table_name_.c_str(), "key_format=Q,value_format=u");
 
     bool ok = close();
     assert(ok);
@@ -151,7 +152,7 @@ void wiredtiger_t::destroy() {
 
 operation_result_t wiredtiger_t::insert(key_t key, value_spanc_t value) {
 
-    cursor_->set_key(cursor_, &key);
+    cursor_->set_key(cursor_, key);
     WT_ITEM db_value;
     db_value.data = value.data();
     db_value.size = value.size();
@@ -165,7 +166,7 @@ operation_result_t wiredtiger_t::insert(key_t key, value_spanc_t value) {
 
 operation_result_t wiredtiger_t::update(key_t key, value_spanc_t value) {
 
-    cursor_->set_key(cursor_, &key);
+    cursor_->set_key(cursor_, key);
     WT_ITEM db_value;
     db_value.data = value.data();
     db_value.size = value.size();
@@ -179,7 +180,7 @@ operation_result_t wiredtiger_t::update(key_t key, value_spanc_t value) {
 
 operation_result_t wiredtiger_t::remove(key_t key) {
 
-    cursor_->set_key(cursor_, &key);
+    cursor_->set_key(cursor_, key);
     int res = cursor_->remove(cursor_);
     cursor_->reset(cursor_);
     if (res)
@@ -189,7 +190,7 @@ operation_result_t wiredtiger_t::remove(key_t key) {
 
 operation_result_t wiredtiger_t::read(key_t key, value_span_t value) const {
 
-    cursor_->set_key(cursor_, &key);
+    cursor_->set_key(cursor_, key);
     int res = cursor_->search(cursor_);
     if (res)
         return {0, operation_status_t::error_k};
@@ -214,7 +215,7 @@ operation_result_t wiredtiger_t::batch_read(keys_spanc_t keys, values_span_t val
     size_t found_cnt = 0;
     for (auto key : keys) {
         WT_ITEM db_value;
-        cursor_->set_key(cursor_, &key);
+        cursor_->set_key(cursor_, key);
         int res = cursor_->search(cursor_);
         if (res == 0) {
             res = cursor_->get_value(cursor_, &db_value);
@@ -241,7 +242,7 @@ operation_result_t wiredtiger_t::bulk_import(bulk_metadata_t const& metadata) {
 
 operation_result_t wiredtiger_t::range_select(key_t key, size_t length, values_span_t values) const {
 
-    cursor_->set_key(cursor_, &key);
+    cursor_->set_key(cursor_, key);
     int res = cursor_->search(cursor_);
     if (res)
         return {0, operation_status_t::error_k};
@@ -265,7 +266,7 @@ operation_result_t wiredtiger_t::range_select(key_t key, size_t length, values_s
 
 operation_result_t wiredtiger_t::scan(key_t key, size_t length, value_span_t single_value) const {
 
-    cursor_->set_key(cursor_, &key);
+    cursor_->set_key(cursor_, key);
     int res = cursor_->search(cursor_);
     if (res)
         return {0, operation_status_t::error_k};
