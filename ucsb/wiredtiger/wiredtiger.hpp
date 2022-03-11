@@ -33,8 +33,7 @@ using transaction_t = ucsb::transaction_t;
  */
 struct wiredtiger_t : public ucsb::db_t {
 
-    inline wiredtiger_t()
-        : conn_(nullptr), session_(nullptr), cursor_(nullptr), table_name_("table:access"), key_buffer_(100) {}
+    inline wiredtiger_t() : conn_(nullptr), session_(nullptr), cursor_(nullptr), table_name_("table:access") {}
     inline ~wiredtiger_t() override = default;
 
     void set_config(fs::path const& config_path, fs::path const& dir_path) override;
@@ -71,7 +70,6 @@ struct wiredtiger_t : public ucsb::db_t {
     WT_SESSION* session_;
     mutable WT_CURSOR* cursor_;
     std::string table_name_;
-    std::vector<char> key_buffer_;
 };
 
 inline int compare_keys(
