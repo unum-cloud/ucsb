@@ -41,10 +41,10 @@
   },
   "benchmarks": [
     {
-      "name": "wiredtiger (953.67GB)/iterations:1/real_time",
+      "name": "wiredtiger [threads: 1, size: 953.67GB]",
       "family_index": 0,
       "per_family_instance_index": 0,
-      "run_name": "wiredtiger (953.67GB)/iterations:1/real_time",
+      "run_name": "wiredtiger [threads: 1, size: 953.67GB]",
       "run_type": "iteration",
       "repetitions": 1,
       "repetition_index": 0,

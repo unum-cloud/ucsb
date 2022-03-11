@@ -32,15 +32,19 @@
         "num_sharing": 8
       }
     ],
-    "load_avg": [75.09,93.55,96.47],
+    "load_avg": [
+      75.09,
+      93.55,
+      96.47
+    ],
     "library_build_type": "release"
   },
   "benchmarks": [
     {
-      "name": "wiredtiger (9.54GB)",
+      "name": "wiredtiger [threads: 1, size: 9.54GB]",
       "family_index": 0,
       "per_family_instance_index": 0,
-      "run_name": "wiredtiger (9.54GB)",
+      "run_name": "wiredtiger [threads: 1, size: 9.54GB]",
       "run_type": "iteration",
       "repetitions": 1,
       "repetition_index": 0,

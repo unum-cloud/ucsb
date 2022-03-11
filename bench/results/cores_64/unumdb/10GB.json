@@ -41,10 +41,10 @@
   },
   "benchmarks": [
     {
-      "name": "unumdb (9.54GB)",
+      "name": "unumdb [threads: 64, size: 9.54GB]",
       "family_index": 0,
       "per_family_instance_index": 0,
-      "run_name": "unumdb (9.54GB)",
+      "run_name": "unumdb [threads: 64, size: 9.54GB]",
       "run_type": "iteration",
       "repetitions": 1,
       "repetition_index": 0,
