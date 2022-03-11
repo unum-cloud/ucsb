@@ -24,37 +24,37 @@ threads = [
 ]
 
 db_names = [
-    # 'unumdb',
-    # 'rocksdb',
+    'unumdb',
+    'rocksdb',
     'leveldb',
-    # 'wiredtiger',
-    # 'lmdb',
-    # 'mongodb'
+    'wiredtiger',
+    'lmdb',
+    'mongodb'
 ]
 
 sizes = [
-    # '100MB',
+    '100MB',
     # '1GB',
     # '10GB',
     # '100GB',
-    '1TB',
+    # '1TB',
 ]
 
 workload_names = [
-    # 'Init',
-    # 'Read',
-    # 'BatchRead',
-    # 'RangeSelect',
-    # 'Scan',
-    # 'ReadUpdate_50_50',
-    # 'ReadInsert_95_5',
-    # 'Remove',
+    'Init',
+    'Read',
+    'BatchRead',
+    'RangeSelect',
+    'Scan',
+    'ReadUpdate_50_50',
+    'ReadInsert_95_5',
+    'Remove',
 
     ### Aditional workloads
     ### BulkImport: Imports whole DB equal to the workload size
     ### BatchInsert: Do batch inserts equal to 10% of the workload size
     # 'BulkImport',
-    'BatchInsert',
+    # 'BatchInsert',
 ]
 
 
