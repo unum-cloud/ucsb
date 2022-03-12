@@ -151,7 +151,7 @@ bool rocksdb_gt<mode_ak>::open() {
     table_options.cache_index_and_filter_blocks_with_high_priority = true;
     table_options.filter_policy.reset(rocksdb::NewBloomFilterPolicy(10));
     options_.table_factory.reset(rocksdb::NewBlockBasedTableFactory(table_options));
-    // options_.comparator = &key_cmp_;
+    options_.comparator = &key_cmp_;
 
     read_options_.verify_checksums = false;
     write_options_.disableWAL = true;
@@ -307,10 +307,6 @@ operation_result_t rocksdb_gt<mode_ak>::bulk_insert(keys_spanc_t keys,
     size_t offset = 0;
     for (; idx < keys.size(); ++idx) {
         auto key = keys[idx];
-
-        // Warning: if not using custom comparator need to swap little endian to big endian
-        if (options_.comparator != &key_cmp_)
-            key = __builtin_bswap64(key);
 
         rocksdb::Slice key_slice {reinterpret_cast<char const*>(&key), sizeof(key)};
         rocksdb::Slice value_slice {reinterpret_cast<char const*>(values.data() + offset), sizes[idx]};

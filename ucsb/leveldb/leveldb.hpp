@@ -78,7 +78,7 @@ struct leveldb_t : public ucsb::db_t {
 
     inline bool load_config(config_t& config);
 
-    struct key_comparator_t final /*: public leveldb::Comparator*/ {
+    struct key_comparator_t final : public leveldb::Comparator {
         int Compare(leveldb::Slice const& left, leveldb::Slice const& right) const /*override*/ {
             assert(left.size() == sizeof(key_t));
             assert(right.size() == sizeof(key_t));
@@ -115,7 +115,7 @@ bool leveldb_t::open() {
 
     options_ = leveldb::Options();
     options_.create_if_missing = true;
-    // options.comparator = &key_cmp_;
+    options_.comparator = &key_cmp_;
     if (config.write_buffer_size > 0)
         options_.write_buffer_size = config.write_buffer_size;
     if (config.max_file_size > 0)
