@@ -294,40 +294,54 @@ template <db_mode_t mode_ak>
 operation_result_t rocksdb_gt<mode_ak>::bulk_load(keys_spanc_t keys,
                                                   values_spanc_t values,
                                                   value_lengths_spanc_t sizes) {
+    size_t data_idx = 0;
+    size_t data_offset = 0;
+    std::vector<std::string> files;
+    for (size_t i = 0; true; ++i) {
+        std::string sst_file_path = fmt::format("/tmp/rocksdb_tmp_{}.sst", i);
+        files.push_back(sst_file_path);
 
-    std::string sst_file_path("/tmp/rocksdb_tmp.sst");
-    rocksdb::SstFileWriter sst_file_writer(rocksdb::EnvOptions(), options_, options_.comparator);
-    rocksdb::Status status = sst_file_writer.Open(sst_file_path);
-    if (!status.ok()) {
-        fs::remove(sst_file_path);
-        return {0, operation_status_t::error_k};
-    }
-
-    size_t idx = 0;
-    size_t offset = 0;
-    for (; idx < keys.size(); ++idx) {
-        rocksdb::Slice key_slice {reinterpret_cast<char const*>(&keys[idx]), sizeof(key_t)};
-        rocksdb::Slice value_slice {reinterpret_cast<char const*>(values.data() + offset), sizes[idx]};
-        status = sst_file_writer.Add(key_slice, value_slice);
+        rocksdb::SstFileWriter sst_file_writer(rocksdb::EnvOptions(), options_, options_.comparator);
+        rocksdb::Status status = sst_file_writer.Open(sst_file_path);
         if (!status.ok())
             break;
-        offset += sizes[idx];
+
+        for (; data_idx < keys.size(); ++data_idx) {
+            auto key = keys[data_idx];
+
+            // Warning: if not using custom comparator need to swap little endian to big endian
+            if (options_.comparator != &key_cmp_)
+                key = __builtin_bswap64(key);
+
+            rocksdb::Slice slice {reinterpret_cast<char const*>(&key), sizeof(key)};
+            rocksdb::Slice data_slice {reinterpret_cast<char const*>(values.data() + data_offset), sizes[data_idx]};
+            status = sst_file_writer.Add(slice, data_slice);
+            if (status.ok())
+                data_offset += sizes[data_idx];
+            else
+                break;
+        }
+        status = sst_file_writer.Finish();
+        if (!status.ok() || data_idx == keys.size())
+            break;
     }
-    status = sst_file_writer.Finish();
-    if (!status.ok()) {
-        fs::remove(sst_file_path);
-        return {0, operation_status_t::error_k};
+
+    if (data_idx != keys.size()) {
+        for (auto const& file_path : files)
+            fs::remove(file_path);
+        return {keys.size(), operation_status_t::error_k};
     }
 
     rocksdb::IngestExternalFileOptions ingest_options;
     ingest_options.move_files = true;
-    status = db_->IngestExternalFile({sst_file_path}, ingest_options);
-    fs::remove(sst_file_path);
+    rocksdb::Status status = db_->IngestExternalFile(files, ingest_options);
+    for (auto const& file_path : files)
+        fs::remove(file_path);
     if (!status.ok())
         return {0, operation_status_t::error_k};
     do_compaction_on_flush.store(true);
 
-    return {idx, operation_status_t::ok_k};
+    return {keys.size(), operation_status_t::ok_k};
 }
 
 template <db_mode_t mode_ak>
