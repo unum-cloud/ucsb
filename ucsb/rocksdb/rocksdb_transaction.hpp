@@ -47,11 +47,7 @@ struct rocksdb_transaction_t : public ucsb::transaction_t {
         : transaction_(std::forward<std::unique_ptr<rocksdb::Transaction>&&>(transaction)), cf_handles_(cf_handles) {
         read_options_.verify_checksums = false;
     }
-    inline ~rocksdb_transaction_t() {
-        key_sltransaction_key_slicesices.clear();
-        transaction_value_slices.clear();
-        transaction_statuses.clear();
-    }
+    inline ~rocksdb_transaction_t();
 
     operation_result_t insert(key_t key, value_spanc_t value) override;
     operation_result_t update(key_t key, value_spanc_t value) override;
@@ -74,6 +70,10 @@ struct rocksdb_transaction_t : public ucsb::transaction_t {
 };
 
 inline rocksdb_transaction_t::~rocksdb_transaction_t() {
+    transaction_key_slices.clear();
+    transaction_value_slices.clear();
+    transaction_statuses.clear();
+
     auto status = transaction_->Commit();
     assert(status.ok());
 }
