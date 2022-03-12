@@ -50,10 +50,8 @@ workload_names = [
     'ReadInsert_95_5',
     'Remove',
 
-    ### Aditional workloads
-    ### BulkImport: Imports whole DB equal to the workload size
-    ### BatchInsert: Do batch inserts equal to 10% of the workload size
-    # 'BulkImport',
+    # Aditional workload
+    # BatchInsert: Do batch inserts equal to 10% of the workload size
     # 'BatchInsert',
 ]
 

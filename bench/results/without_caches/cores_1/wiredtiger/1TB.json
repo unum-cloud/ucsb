@@ -238,28 +238,6 @@
       "processed,bytes": 153600000000.0
     },
     {
-      "name": "BulkImport/iterations:10000/real_time/threads:1",
-      "family_index": 1,
-      "per_family_instance_index": 0,
-      "run_name": "BulkImport/iterations:10000/real_time/threads:1",
-      "run_type": "iteration",
-      "repetitions": 1,
-      "repetition_index": 0,
-      "threads": 1,
-      "iterations": 10000,
-      "real_time": 1.1383748407443700e+02,
-      "cpu_time": 4.9176733260391998e+01,
-      "time_unit": "us",
-      "bytes_per_second": 8.9952796157232206e+06,
-      "cpu_avg,%": 2.6546270751953125e+02,
-      "cpu_max,%": 5.7000000000000000e+02,
-      "disk,bytes": 1.1665235208060000e+12,
-      "fails,%": 0.0000000000000000e+00,
-      "mem_avg,bytes": 9.3470112100000000e+08,
-      "mem_max,bytes": 1.5615918080000000e+09,
-      "operations/s": 8.7844527497297076e+03
-    },
-    {
       "name": "BatchInsert/iterations:10000/real_time/threads:1",
       "family_index": 1,
       "per_family_instance_index": 0,

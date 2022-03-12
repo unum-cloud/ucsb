@@ -70,15 +70,6 @@
         "key_dist": "zipfian"
     },
     {
-        "name": "BulkImport",
-        "records_count": 1000000000,
-        "operations_count": 10000,
-        "bulk_import_proportion": 1.0,
-        "value_length": 1024,
-        "bulk_import_min_length": 100000,
-        "bulk_import_max_length": 100000
-    },
-    {
         "name": "BatchInsert",
         "records_count": 1000000000,
         "operations_count": 10000,
