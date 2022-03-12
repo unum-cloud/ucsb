@@ -56,7 +56,7 @@ struct leveldb_t : public ucsb::db_t {
     operation_result_t batch_insert(keys_spanc_t keys, values_spanc_t values, value_lengths_spanc_t sizes) override;
     operation_result_t batch_read(keys_spanc_t keys, values_span_t values) const override;
 
-    operation_result_t bulk_insert(keys_spanc_t keys, values_spanc_t values, value_lengths_spanc_t sizes) override;
+    operation_result_t bulk_load(keys_spanc_t keys, values_spanc_t values, value_lengths_spanc_t sizes) override;
 
     operation_result_t range_select(key_t key, size_t length, values_span_t values) const override;
     operation_result_t scan(key_t key, size_t length, value_span_t single_value) const override;
@@ -78,7 +78,7 @@ struct leveldb_t : public ucsb::db_t {
 
     inline bool load_config(config_t& config);
 
-    struct key_comparator_t final /*: public leveldb::Comparator*/ {
+    struct key_comparator_t final : public leveldb::Comparator {
         int Compare(leveldb::Slice const& left, leveldb::Slice const& right) const /*override*/ {
             assert(left.size() == sizeof(key_t));
             assert(right.size() == sizeof(key_t));
@@ -115,7 +115,7 @@ bool leveldb_t::open() {
 
     options_ = leveldb::Options();
     options_.create_if_missing = true;
-    // options.comparator = &key_cmp_;
+    options_.comparator = &key_cmp_;
     if (config.write_buffer_size > 0)
         options_.write_buffer_size = config.write_buffer_size;
     if (config.max_file_size > 0)
@@ -226,7 +226,7 @@ operation_result_t leveldb_t::batch_read(keys_spanc_t keys, values_span_t values
     return {found_cnt, operation_status_t::ok_k};
 }
 
-operation_result_t leveldb_t::bulk_insert(keys_spanc_t keys, values_spanc_t values, value_lengths_spanc_t sizes) {
+operation_result_t leveldb_t::bulk_load(keys_spanc_t keys, values_spanc_t values, value_lengths_spanc_t sizes) {
     // Currently this DB doesn't have bulk insert so instead we do batch insert
     return batch_insert(keys, values, sizes);
 }

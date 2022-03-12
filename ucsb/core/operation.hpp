@@ -16,7 +16,7 @@ enum class operation_kind_t {
     read_modify_write_k,
     batch_insert_k,
     batch_read_k,
-    bulk_insert_k,
+    bulk_load_k,
     range_select_k,
     scan_k,
 };

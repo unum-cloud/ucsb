@@ -49,7 +49,7 @@ struct lmdb_t : public ucsb::db_t {
     operation_result_t batch_insert(keys_spanc_t keys, values_spanc_t values, value_lengths_spanc_t sizes) override;
     operation_result_t batch_read(keys_spanc_t keys, values_span_t values) const override;
 
-    operation_result_t bulk_insert(keys_spanc_t keys, values_spanc_t values, value_lengths_spanc_t sizes) override;
+    operation_result_t bulk_load(keys_spanc_t keys, values_spanc_t values, value_lengths_spanc_t sizes) override;
 
     operation_result_t range_select(key_t key, size_t length, values_span_t values) const override;
     operation_result_t scan(key_t key, size_t length, value_span_t single_value) const override;
@@ -189,7 +189,7 @@ operation_result_t lmdb_t::insert(key_t key, value_spanc_t value) {
     int res = mdb_txn_begin(env_, nullptr, 0, &txn);
     if (res)
         return {0, operation_status_t::error_k};
-    // mdb_set_compare(txn, &dbi_, compare_keys);
+    mdb_set_compare(txn, &dbi_, compare_keys);
     res = mdb_put(txn, dbi_, &key_slice, &val_slice, 0);
     if (res) {
         mdb_txn_abort(txn);
@@ -210,7 +210,7 @@ operation_result_t lmdb_t::update(key_t key, value_spanc_t value) {
     int res = mdb_txn_begin(env_, nullptr, MDB_RDONLY, &txn);
     if (res)
         return {0, operation_status_t::error_k};
-    // mdb_set_compare(txn, &dbi_, compare_keys);
+    mdb_set_compare(txn, &dbi_, compare_keys);
     res = mdb_get(txn, dbi_, &key_slice, &val_slice);
     if (res) {
         mdb_txn_abort(txn);
@@ -241,7 +241,7 @@ operation_result_t lmdb_t::remove(key_t key) {
     int res = mdb_txn_begin(env_, nullptr, 0, &txn);
     if (res)
         return {0, operation_status_t::error_k};
-    // mdb_set_compare(txn, &dbi_, compare_keys);
+    mdb_set_compare(txn, &dbi_, compare_keys);
     res = mdb_del(txn, dbi_, &key_slice, nullptr);
     if (res) {
         mdb_txn_abort(txn);
@@ -262,7 +262,7 @@ operation_result_t lmdb_t::read(key_t key, value_span_t value) const {
     int res = mdb_txn_begin(env_, nullptr, MDB_RDONLY, &txn);
     if (res)
         return {0, operation_status_t::error_k};
-    // mdb_set_compare(txn, &dbi_, compare_keys);
+    mdb_set_compare(txn, &dbi_, compare_keys);
     res = mdb_get(txn, dbi_, &key_slice, &val_slice);
     if (res) {
         mdb_txn_abort(txn);
@@ -281,7 +281,7 @@ operation_result_t lmdb_t::batch_insert(keys_spanc_t keys, values_spanc_t values
     int res = mdb_txn_begin(env_, nullptr, 0, &txn);
     if (res)
         return {0, operation_status_t::error_k};
-    // mdb_set_compare(txn, &dbi_, compare_keys);
+    mdb_set_compare(txn, &dbi_, compare_keys);
 
     size_t offset = 0;
     for (size_t idx = 0; idx < keys.size(); ++idx) {
@@ -311,7 +311,7 @@ operation_result_t lmdb_t::batch_read(keys_spanc_t keys, values_span_t values) c
     int res = mdb_txn_begin(env_, nullptr, MDB_RDONLY, &txn);
     if (res)
         return {0, operation_status_t::error_k};
-    // mdb_set_compare(txn, &dbi_, compare_keys);
+    mdb_set_compare(txn, &dbi_, compare_keys);
 
     // Note: imitation of batch read!
     size_t offset = 0;
@@ -331,7 +331,7 @@ operation_result_t lmdb_t::batch_read(keys_spanc_t keys, values_span_t values) c
     return {found_cnt, operation_status_t::ok_k};
 }
 
-operation_result_t lmdb_t::bulk_insert(keys_spanc_t keys, values_spanc_t values, value_lengths_spanc_t sizes) {
+operation_result_t lmdb_t::bulk_load(keys_spanc_t keys, values_spanc_t values, value_lengths_spanc_t sizes) {
     // Currently this DB doesn't have bulk insert so instead we do batch insert
     return batch_insert(keys, values, sizes);
 }
@@ -348,7 +348,7 @@ operation_result_t lmdb_t::range_select(key_t key, size_t length, values_span_t 
     int res = mdb_txn_begin(env_, nullptr, 0, &txn);
     if (res)
         return {0, operation_status_t::error_k};
-    // mdb_set_compare(txn, &dbi_, compare_keys);
+    mdb_set_compare(txn, &dbi_, compare_keys);
     res = mdb_cursor_open(txn, dbi_, &cursor);
     if (res) {
         mdb_txn_abort(txn);
@@ -386,7 +386,7 @@ operation_result_t lmdb_t::scan(key_t key, size_t length, value_span_t single_va
     int res = mdb_txn_begin(env_, nullptr, 0, &txn);
     if (res)
         return {0, operation_status_t::error_k};
-    // mdb_set_compare(txn, &dbi_, compare_keys);
+    mdb_set_compare(txn, &dbi_, compare_keys);
     res = mdb_cursor_open(txn, dbi_, &cursor);
     if (res) {
         mdb_txn_abort(txn);
