@@ -35,7 +35,7 @@ struct worker_t {
     inline operation_result_t do_read_modify_write();
     inline operation_result_t do_batch_insert();
     inline operation_result_t do_batch_read();
-    inline operation_result_t do_bulk_import();
+    inline operation_result_t do_bulk_insert();
     inline operation_result_t do_range_select();
     inline operation_result_t do_scan();
 
@@ -44,13 +44,13 @@ struct worker_t {
     inline value_length_generator_t create_value_length_generator(workload_t const& workload);
     inline length_generator_t create_batch_insert_length_generator(workload_t const& workload);
     inline length_generator_t create_batch_read_length_generator(workload_t const& workload);
-    inline length_generator_t create_bulk_import_length_generator(workload_t const& workload);
+    inline length_generator_t create_bulk_insert_length_generator(workload_t const& workload);
     inline length_generator_t create_range_select_length_generator(workload_t const& workload);
 
     inline key_t generate_key();
     inline keys_spanc_t generate_batch_insert_keys();
     inline keys_spanc_t generate_batch_read_keys();
-    inline keys_spanc_t generate_bulk_import_keys();
+    inline keys_spanc_t generate_bulk_insert_keys();
     inline value_spanc_t generate_value();
     inline values_and_sizes_spansc_t generate_values(size_t count);
     inline value_span_t value_buffer();
@@ -72,7 +72,7 @@ struct worker_t {
 
     length_generator_t batch_insert_length_generator_;
     length_generator_t batch_read_length_generator_;
-    length_generator_t bulk_import_length_generator_;
+    length_generator_t bulk_insert_length_generator_;
     length_generator_t range_select_length_generator_;
 };
 
@@ -80,7 +80,7 @@ inline worker_t::worker_t(workload_t const& workload, data_accessor_t& data_acce
     : workload_(workload), data_accessor_(&data_accessor), timer_(timer) {
 
     if (workload.insert_proportion == 1.0 || workload.batch_insert_proportion == 1.0 ||
-        workload.bulk_import_proportion == 1.0) // Initialization case
+        workload.bulk_insert_proportion == 1.0) // Initialization case
         insert_key_sequence_generator = std::make_unique<counter_generator_t>(workload.start_key);
     else {
         acknowledged_key_generator = std::make_unique<acknowledged_counter_generator_t>(workload.db_records_count);
@@ -88,7 +88,7 @@ inline worker_t::worker_t(workload_t const& workload, data_accessor_t& data_acce
         insert_key_sequence_generator = std::move(acknowledged_key_generator);
     }
     size_t elements_max_count = std::max(
-        {workload.batch_insert_max_length, workload.batch_read_max_length, workload.bulk_import_max_length, size_t(1)});
+        {workload.batch_insert_max_length, workload.batch_read_max_length, workload.bulk_insert_max_length, size_t(1)});
     keys_buffer_ = keys_t(elements_max_count);
 
     value_length_generator_ = create_value_length_generator(workload);
@@ -97,7 +97,7 @@ inline worker_t::worker_t(workload_t const& workload, data_accessor_t& data_acce
 
     batch_insert_length_generator_ = create_batch_insert_length_generator(workload);
     batch_read_length_generator_ = create_batch_read_length_generator(workload);
-    bulk_import_length_generator_ = create_bulk_import_length_generator(workload);
+    bulk_insert_length_generator_ = create_bulk_insert_length_generator(workload);
     range_select_length_generator_ = create_range_select_length_generator(workload);
 }
 
@@ -152,15 +152,14 @@ inline operation_result_t worker_t::do_batch_read() {
     return data_accessor_->batch_read(keys, values);
 }
 
-inline operation_result_t worker_t::do_bulk_import() {
-    // Note: Pause benchmark timer to do data preparation, to measure bulk import time only
+inline operation_result_t worker_t::do_bulk_insert() {
+    // Note: Pause benchmark timer to do data preparation, to measure bulk insert time only
     timer_.pause();
-    keys_spanc_t keys = generate_bulk_import_keys();
+    keys_spanc_t keys = generate_bulk_insert_keys();
     values_and_sizes_spansc_t values_and_sizes = generate_values(keys.size());
-    auto metadata = data_accessor_->prepare_bulk_import_data(keys, values_and_sizes.first, values_and_sizes.second);
     timer_.resume();
 
-    return data_accessor_->bulk_import(metadata);
+    return data_accessor_->bulk_insert(keys, values_and_sizes.first, values_and_sizes.second);
 }
 
 inline operation_result_t worker_t::do_range_select() {
@@ -250,21 +249,21 @@ inline worker_t::length_generator_t worker_t::create_batch_read_length_generator
     return generator;
 }
 
-inline worker_t::length_generator_t worker_t::create_bulk_import_length_generator(workload_t const& workload) {
+inline worker_t::length_generator_t worker_t::create_bulk_insert_length_generator(workload_t const& workload) {
 
     length_generator_t generator;
-    switch (workload.bulk_import_length_dist) {
+    switch (workload.bulk_insert_length_dist) {
     case distribution_kind_t::uniform_k:
-        generator = std::make_unique<uniform_generator_gt<size_t>>(workload.bulk_import_min_length,
-                                                                   workload.bulk_import_max_length);
+        generator = std::make_unique<uniform_generator_gt<size_t>>(workload.bulk_insert_min_length,
+                                                                   workload.bulk_insert_max_length);
         break;
     case distribution_kind_t::zipfian_k:
         generator =
-            std::make_unique<zipfian_generator_t>(workload.bulk_import_min_length, workload.bulk_import_max_length);
+            std::make_unique<zipfian_generator_t>(workload.bulk_insert_min_length, workload.bulk_insert_max_length);
         break;
     default:
         throw exception_t(
-            fmt::format("Unknown range select length distribution: {}", int(workload.bulk_import_length_dist)));
+            fmt::format("Unknown range select length distribution: {}", int(workload.bulk_insert_length_dist)));
     }
     return generator;
 }
@@ -317,8 +316,8 @@ inline keys_spanc_t worker_t::generate_batch_read_keys() {
     return keys;
 }
 
-inline keys_spanc_t worker_t::generate_bulk_import_keys() {
-    size_t bulk_length = bulk_import_length_generator_->generate();
+inline keys_spanc_t worker_t::generate_bulk_insert_keys() {
+    size_t bulk_length = bulk_insert_length_generator_->generate();
     keys_span_t keys(keys_buffer_.data(), bulk_length);
     for (size_t i = 0; i < bulk_length; ++i) {
         key_t key = insert_key_sequence_generator->generate();

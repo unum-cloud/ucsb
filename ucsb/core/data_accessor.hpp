@@ -57,21 +57,10 @@ struct data_accessor_t {
     virtual operation_result_t batch_read(keys_spanc_t keys, values_span_t values) const = 0;
 
     /**
-     * @brief Prepares data for bulk import, returns metadata
-     *
-     * @param keys Keys are in strict ascending order
-     * @param values Values are written in continuous form
-     * @param sizes Value sizes
-     */
-    virtual bulk_metadata_t prepare_bulk_import_data(keys_spanc_t keys,
-                                                     values_spanc_t values,
-                                                     value_lengths_spanc_t sizes) const = 0;
-
-    /**
-     * @brief Performs bulk import from external prepared data.
-     *
+     * @brief Performs bulk insert
+     * Used to initialize DB (see Init workload)
      * */
-    virtual operation_result_t bulk_import(bulk_metadata_t const& metadata) = 0;
+    virtual operation_result_t bulk_insert(keys_spanc_t keys, values_spanc_t values, value_lengths_spanc_t sizes) = 0;
 
     /**
      * @brief Performs many reads at once in an ordered fashion,

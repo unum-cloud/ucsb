@@ -95,10 +95,7 @@ struct rocksdb_gt : public ucsb::db_t {
     operation_result_t batch_insert(keys_spanc_t keys, values_spanc_t values, value_lengths_spanc_t sizes) override;
     operation_result_t batch_read(keys_spanc_t keys, values_span_t values) const override;
 
-    bulk_metadata_t prepare_bulk_import_data(keys_spanc_t keys,
-                                             values_spanc_t values,
-                                             value_lengths_spanc_t sizes) const override;
-    operation_result_t bulk_import(bulk_metadata_t const& metadata) override;
+    operation_result_t bulk_insert(keys_spanc_t keys, values_spanc_t values, value_lengths_spanc_t sizes) override;
 
     operation_result_t range_select(key_t key, size_t length, values_span_t values) const override;
     operation_result_t scan(key_t key, size_t length, value_span_t single_value) const override;
@@ -317,7 +314,7 @@ operation_result_t rocksdb_gt<mode_ak>::batch_read(keys_spanc_t keys, values_spa
 }
 
 template <db_mode_t mode_ak>
-bulk_metadata_t rocksdb_gt<mode_ak>::prepare_bulk_import_data(keys_spanc_t keys,
+bulk_metadata_t rocksdb_gt<mode_ak>::prepare_bulk_insert_data(keys_spanc_t keys,
                                                               values_spanc_t values,
                                                               value_lengths_spanc_t sizes) const {
     size_t data_idx = 0;
@@ -363,7 +360,9 @@ bulk_metadata_t rocksdb_gt<mode_ak>::prepare_bulk_import_data(keys_spanc_t keys,
 }
 
 template <db_mode_t mode_ak>
-operation_result_t rocksdb_gt<mode_ak>::bulk_import(bulk_metadata_t const& metadata) {
+operation_result_t rocksdb_gt<mode_ak>::bulk_insert(keys_spanc_t keys,
+                                                    values_spanc_t values,
+                                                    value_lengths_spanc_t sizes) {
 
     rocksdb::IngestExternalFileOptions ingest_options;
     ingest_options.move_files = true;
