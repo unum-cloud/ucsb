@@ -300,7 +300,7 @@ operation_result_t lmdb_t::batch_insert(keys_spanc_t keys, values_spanc_t values
     }
 
     res = mdb_txn_commit(txn);
-    return {1, res == 0 ? operation_status_t::ok_k : operation_status_t::error_k};
+    return {keys.size(), res == 0 ? operation_status_t::ok_k : operation_status_t::error_k};
 }
 
 operation_result_t lmdb_t::batch_read(keys_spanc_t keys, values_span_t values) const {
