@@ -54,7 +54,7 @@ struct mongodb_t : public ucsb::db_t {
     operation_result_t batch_insert(keys_spanc_t keys, values_spanc_t values, value_lengths_spanc_t sizes) override;
     operation_result_t batch_read(keys_spanc_t keys, values_span_t values) const override;
 
-    operation_result_t bulk_insert(keys_spanc_t keys, values_spanc_t values, value_lengths_spanc_t sizes) override;
+    operation_result_t bulk_load(keys_spanc_t keys, values_spanc_t values, value_lengths_spanc_t sizes) override;
     operation_result_t range_select(key_t key, size_t length, values_span_t values) const override;
     operation_result_t scan(key_t key, size_t length, value_span_t single_value) const override;
 
@@ -149,8 +149,8 @@ operation_result_t mongodb_t::batch_read(keys_spanc_t keys, values_span_t values
     return {0, operation_status_t::not_implemented_k};
 }
 
-// TODO: `prepare_bulk_insert_data` is removed
-// bulk_metadata_t mongodb_t::prepare_bulk_insert_data(keys_spanc_t keys,
+// TODO: `prepare_bulk_load_data` is removed
+// bulk_metadata_t mongodb_t::prepare_bulk_load_data(keys_spanc_t keys,
 //                                                     values_spanc_t values,
 //                                                     value_lengths_spanc_t sizes) const {
 //     bulk_metadata_t metadata;
@@ -170,7 +170,7 @@ operation_result_t mongodb_t::batch_read(keys_spanc_t keys, values_span_t values
 //     return metadata;
 // }
 
-operation_result_t mongodb_t::bulk_insert(keys_spanc_t keys, values_spanc_t values, value_lengths_spanc_t sizes) {
+operation_result_t mongodb_t::bulk_load(keys_spanc_t keys, values_spanc_t values, value_lengths_spanc_t sizes) {
     // TODO: Need to reimplement
     // if (metadata.data == nullptr)
     //     return {0, operation_status_t::error_k};

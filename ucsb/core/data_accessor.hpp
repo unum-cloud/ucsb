@@ -54,13 +54,13 @@ struct data_accessor_t {
      * @brief Performs many insert at once.
      * In contrast to `batch_insert` this interface used to initialize DB,
      * asume that after every `batch_insert` DB flushes, but in thiscase
-     * DB shuld do many `bulk_insert`s and periodically flushs
+     * DB shuld do many `bulk_load`s and periodically flushs
      *
      * @param keys Keys are in strict ascending order
      * @param values Values are written in continuous form
      * @param sizes Value sizes
      */
-    virtual operation_result_t bulk_insert(keys_spanc_t keys, values_spanc_t values, value_lengths_spanc_t sizes) = 0;
+    virtual operation_result_t bulk_load(keys_spanc_t keys, values_spanc_t values, value_lengths_spanc_t sizes) = 0;
 
     /**
      * @brief Performs many reads at once in an ordered fashion,

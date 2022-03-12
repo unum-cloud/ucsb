@@ -4,9 +4,9 @@
         "records_count": 1000000000,
         "operations_count": 10000,
         "value_length": 1024,
-        "bulk_insert_proportion": 1.0,
-        "bulk_insert_min_length": 100000,
-        "bulk_insert_max_length": 100000
+        "bulk_load_proportion": 1.0,
+        "bulk_load_min_length": 100000,
+        "bulk_load_max_length": 100000
     },
     {
         "name": "Read",

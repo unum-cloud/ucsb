@@ -78,7 +78,7 @@ struct rocksdb_gt : public ucsb::db_t {
     operation_result_t batch_insert(keys_spanc_t keys, values_spanc_t values, value_lengths_spanc_t sizes) override;
     operation_result_t batch_read(keys_spanc_t keys, values_span_t values) const override;
 
-    operation_result_t bulk_insert(keys_spanc_t keys, values_spanc_t values, value_lengths_spanc_t sizes) override;
+    operation_result_t bulk_load(keys_spanc_t keys, values_spanc_t values, value_lengths_spanc_t sizes) override;
 
     operation_result_t range_select(key_t key, size_t length, values_span_t values) const override;
     operation_result_t scan(key_t key, size_t length, value_span_t single_value) const override;
@@ -291,9 +291,9 @@ operation_result_t rocksdb_gt<mode_ak>::batch_read(keys_spanc_t keys, values_spa
 }
 
 template <db_mode_t mode_ak>
-operation_result_t rocksdb_gt<mode_ak>::bulk_insert(keys_spanc_t keys,
-                                                    values_spanc_t values,
-                                                    value_lengths_spanc_t sizes) {
+operation_result_t rocksdb_gt<mode_ak>::bulk_load(keys_spanc_t keys,
+                                                  values_spanc_t values,
+                                                  value_lengths_spanc_t sizes) {
 
     std::string sst_file_path("/tmp/rocksdb_tmp.sst");
     rocksdb::SstFileWriter sst_file_writer(rocksdb::EnvOptions(), options_, options_.comparator);
