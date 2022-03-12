@@ -297,8 +297,8 @@ operation_result_t rocksdb_gt<mode_ak>::bulk_load(keys_spanc_t keys,
     size_t data_idx = 0;
     size_t data_offset = 0;
     std::vector<std::string> files;
-    for (size_t i = 0; true; ++i) {
-        std::string sst_file_path = fmt::format("/tmp/rocksdb_tmp_{}.sst", i);
+    while (true) {
+        std::string sst_file_path = fmt::format("/tmp/rocksdb_tmp_{}.sst", files.size());
         files.push_back(sst_file_path);
 
         rocksdb::SstFileWriter sst_file_writer(rocksdb::EnvOptions(), options_, options_.comparator);
@@ -307,13 +307,7 @@ operation_result_t rocksdb_gt<mode_ak>::bulk_load(keys_spanc_t keys,
             break;
 
         for (; data_idx < keys.size(); ++data_idx) {
-            auto key = keys[data_idx];
-
-            // Warning: if not using custom comparator need to swap little endian to big endian
-            if (options_.comparator != &key_cmp_)
-                key = __builtin_bswap64(key);
-
-            rocksdb::Slice slice {reinterpret_cast<char const*>(&key), sizeof(key)};
+            rocksdb::Slice slice {reinterpret_cast<char const*>(&keys[data_idx]), sizeof(key_t)};
             rocksdb::Slice data_slice {reinterpret_cast<char const*>(values.data() + data_offset), sizes[data_idx]};
             status = sst_file_writer.Add(slice, data_slice);
             if (status.ok())
