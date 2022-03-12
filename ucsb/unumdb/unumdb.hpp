@@ -307,7 +307,6 @@ operation_result_t unumdb_t::scan(key_t key, size_t length, value_span_t single_
 void unumdb_t::flush() {
     if (loaded_files_.empty()) {
         region_.flush();
-        return;
     }
     else {
         region_.import(loaded_files_.view());
