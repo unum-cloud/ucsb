@@ -3,8 +3,10 @@
         "name": "Init",
         "records_count": 1000000000,
         "operations_count": 1000000000,
-        "insert_proportion": 1.0,
-        "value_length": 1024
+        "value_length": 1024,
+        "bulk_insert_proportion": 1.0,
+        "bulk_insert_min_length": 100000,
+        "bulk_insert_max_length": 100000
     },
     {
         "name": "Read",
@@ -66,8 +68,8 @@
         "name": "BatchInsert",
         "records_count": 1000000000,
         "operations_count": 10000,
-        "batch_insert_proportion": 1.0,
         "value_length": 1024,
+        "batch_insert_proportion": 1.0,
         "batch_insert_min_length": 10000,
         "batch_insert_max_length": 10000
     },
