@@ -199,7 +199,7 @@ operation_result_t leveldb_t::batch_insert(keys_spanc_t keys, values_spanc_t val
     leveldb::WriteBatch batch;
     for (size_t idx = 0; idx < keys.size(); ++idx) {
         leveldb::Slice key_slice {reinterpret_cast<char const*>(&keys[idx]), sizeof(key_t)};
-        leveldb::Slice value_slice {reinterpret_cast<char const*>(&values[offset]), sizes[idx]};
+        leveldb::Slice value_slice {reinterpret_cast<char const*>(values.data() + offset), sizes[idx]};
         batch.Put(key_slice, value_slice);
         offset += sizes[idx];
     }

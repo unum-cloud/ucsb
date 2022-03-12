@@ -272,7 +272,7 @@ operation_result_t rocksdb_gt<mode_ak>::batch_insert(keys_spanc_t keys,
     size_t offset = 0;
     for (size_t idx = 0; idx < keys.size(); ++idx) {
         rocksdb::Slice slice {reinterpret_cast<char const*>(&keys[idx]), sizeof(key_t)};
-        rocksdb::Slice data_slice {reinterpret_cast<char const*>(&values[offset]), sizes[idx]};
+        rocksdb::Slice data_slice {reinterpret_cast<char const*>(values.data() + offset), sizes[idx]};
         rocksdb::Status status = db_->Put(write_options_, slice, data_slice);
         if (!status.ok())
             return {0, operation_status_t::error_k};
@@ -313,52 +313,6 @@ operation_result_t rocksdb_gt<mode_ak>::batch_read(keys_spanc_t keys, values_spa
     }
 
     return {found_cnt, operation_status_t::ok_k};
-}
-
-template <db_mode_t mode_ak>
-bulk_metadata_t rocksdb_gt<mode_ak>::prepare_bulk_insert_data(keys_spanc_t keys,
-                                                              values_spanc_t values,
-                                                              value_lengths_spanc_t sizes) const {
-    size_t data_idx = 0;
-    size_t data_offset = 0;
-    bulk_metadata_t metadata;
-    for (size_t i = 0; true; ++i) {
-        std::string sst_file_path = fmt::format("/tmp/rocksdb_tmp_{}.sst", i);
-        metadata.files.insert(sst_file_path);
-
-        rocksdb::SstFileWriter sst_file_writer(rocksdb::EnvOptions(), options_, options_.comparator);
-        rocksdb::Status status = sst_file_writer.Open(sst_file_path);
-        if (!status.ok())
-            break;
-
-        for (; data_idx < keys.size(); ++data_idx) {
-            auto key = keys[data_idx];
-
-            // Warning: if not using custom comparator need to swap little endian to big endian
-            if (options_.comparator != &key_cmp_)
-                key = __builtin_bswap64(key);
-
-            rocksdb::Slice slice {reinterpret_cast<char const*>(&key), sizeof(key_t)};
-            rocksdb::Slice data_slice {reinterpret_cast<char const*>(values.data() + data_offset), sizes[data_idx]};
-            status = sst_file_writer.Add(slice, data_slice);
-            if (status.ok())
-                data_offset += sizes[data_idx];
-            else
-                break;
-        }
-        status = sst_file_writer.Finish();
-        if (!status.ok() || data_idx == keys.size())
-            break;
-    }
-
-    if (data_idx != keys.size()) {
-        for (auto const& file_path : metadata.files)
-            fs::remove(file_path);
-        return bulk_metadata_t();
-    }
-    metadata.records_count = keys.size();
-
-    return metadata;
 }
 
 template <db_mode_t mode_ak>

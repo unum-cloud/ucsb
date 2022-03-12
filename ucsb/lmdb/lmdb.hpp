@@ -288,7 +288,7 @@ operation_result_t lmdb_t::batch_insert(keys_spanc_t keys, values_spanc_t values
         MDB_val key_slice, val_slice;
         key_slice.mv_data = &keys[idx];
         key_slice.mv_size = sizeof(key_t);
-        val_slice.mv_data = const_cast<void*>(reinterpret_cast<void const*>(&values[idx]));
+        val_slice.mv_data = const_cast<void*>(reinterpret_cast<void const*>(values.data() + offset));
         val_slice.mv_size = sizes[idx];
 
         res = mdb_put(txn, dbi_, &key_slice, &val_slice, 0);
