@@ -214,55 +214,49 @@ operation_result_t unumdb_t::batch_read(keys_spanc_t keys, values_span_t values)
     return {found_cnt, operation_status_t::ok_k};
 }
 
-// bulk_metadata_t unumdb_t::prepare_bulk_insert_data(keys_spanc_t keys,
-//                                                    values_spanc_t values,
-//                                                    value_lengths_spanc_t sizes) const {
-//     size_t data_offset = 0;
-//     bulk_metadata_t metadata;
-//     size_t const migration_capacity = config_.region_config.country.migration_max_cnt;
-//     for (size_t i = 0; i < keys.size(); i += migration_capacity) {
-//         std::string file_name = fmt::format("udb_building_{}", i / migration_capacity);
-
-//         size_t next_data_idx = i + migration_capacity;
-//         if (next_data_idx > keys.size())
-//             next_data_idx = keys.size();
-
-//         size_t next_data_offset = data_offset;
-//         for (size_t j = 0; j < next_data_idx; ++j)
-//             next_data_offset += sizes[j];
-
-//         // TODO: Remove const casts later
-//         span_gt<fingerprint_t> fingerprints {
-//             const_cast<fingerprint_t*>(reinterpret_cast<fingerprint_t const*>(keys.data() + i)),
-//             next_data_idx - i};
-// #ifdef DEV_BUILD
-//         auto building =
-//             region_t::building_constructor_t::build({file_name.data(), file_name.size()},
-//                                                     {},
-//                                                     fingerprints,
-//                                                     {reinterpret_cast<byte_t const*>(values.data()), values.size()},
-//                                                     {sizes.data(), sizes.size()},
-//                                                     ds_info_t::sorted_k);
-// #else
-//         auto building =
-//             region_t::building_constructor_t::build({},
-//                                                     fingerprints,
-//                                                     {reinterpret_cast<byte_t const*>(values.data()), values.size()},
-//                                                     {sizes.data(), sizes.size()},
-//                                                     ds_info_t::sorted_k);
-// #endif
-//         metadata.files.insert({building.schema().file_name.c_str()});
-//     }
-//     metadata.records_count = keys.size();
-
-//     return metadata;
-// }
-
 operation_result_t unumdb_t::bulk_insert(keys_spanc_t keys, values_spanc_t values, value_lengths_spanc_t sizes) {
-    for (auto const& file_path : metadata.files)
+
+    darray_gt<string_t> files;
+    size_t data_offset = 0;
+    size_t const migration_capacity = config_.region_config.country.migration_max_cnt;
+    for (size_t i = 0; i < keys.size(); i += migration_capacity) {
+        std::string file_name = fmt::format("udb_building_{}", i / migration_capacity);
+
+        size_t next_data_idx = i + migration_capacity;
+        if (next_data_idx > keys.size())
+            next_data_idx = keys.size();
+
+        size_t next_data_offset = data_offset;
+        for (size_t j = 0; j < next_data_idx; ++j)
+            next_data_offset += sizes[j];
+
+        // TODO: Remove const casts later
+        span_gt<fingerprint_t> fingerprints {
+            const_cast<fingerprint_t*>(reinterpret_cast<fingerprint_t const*>(keys.data() + i)),
+            next_data_idx - i};
+#ifdef DEV_BUILD
+        auto building =
+            region_t::building_constructor_t::build({file_name.data(), file_name.size()},
+                                                    {},
+                                                    fingerprints,
+                                                    {reinterpret_cast<byte_t const*>(values.data()), values.size()},
+                                                    {sizes.data(), sizes.size()},
+                                                    ds_info_t::sorted_k);
+#else
+        auto building =
+            region_t::building_constructor_t::build({},
+                                                    fingerprints,
+                                                    {reinterpret_cast<byte_t const*>(values.data()), values.size()},
+                                                    {sizes.data(), sizes.size()},
+                                                    ds_info_t::sorted_k);
+#endif
+        files.insert({building.schema().file_name.c_str()});
+    }
+
+    for (auto const& file_path : files)
         region_.import({file_path.data(), file_path.size()});
 
-    return {metadata.records_count, operation_status_t::ok_k};
+    return {keys.size(), operation_status_t::ok_k};
 }
 
 operation_result_t unumdb_t::range_select(key_t key, size_t length, values_span_t values) const {
