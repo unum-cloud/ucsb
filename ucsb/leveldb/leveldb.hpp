@@ -194,14 +194,17 @@ operation_result_t leveldb_t::read(key_t key, value_span_t value) const {
 }
 
 operation_result_t leveldb_t::batch_insert(keys_spanc_t keys, values_spanc_t values, value_lengths_spanc_t sizes) {
+
+    size_t offset = 0;
     leveldb::WriteBatch batch;
     for (size_t idx = 0; idx < keys.size(); ++idx) {
         auto key = keys[idx];
         auto value = values[idx];
 
         leveldb::Slice key_slice {reinterpret_cast<char const*>(&key), sizeof(key_t)};
-        leveldb::Slice value_slice {reinterpret_cast<char const*>(&value), sizes[idx]};
+        leveldb::Slice value_slice {reinterpret_cast<char const*>(&values[offset]), sizes[idx]};
         batch.Put(key_slice, value_slice);
+        offset += sizes[idx];
     }
 
     leveldb::Status status = db_->Write(leveldb::WriteOptions(), &batch);
