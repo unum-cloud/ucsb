@@ -306,9 +306,7 @@ operation_result_t rocksdb_gt<mode_ak>::bulk_load(keys_spanc_t keys,
     size_t idx = 0;
     size_t offset = 0;
     for (; idx < keys.size(); ++idx) {
-        auto key = keys[idx];
-
-        rocksdb::Slice key_slice {reinterpret_cast<char const*>(&key), sizeof(key)};
+        rocksdb::Slice key_slice {reinterpret_cast<char const*>(&keys[idx]), sizeof(key_t)};
         rocksdb::Slice value_slice {reinterpret_cast<char const*>(values.data() + offset), sizes[idx]};
         status = sst_file_writer.Add(key_slice, value_slice);
         if (!status.ok())
