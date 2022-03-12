@@ -81,12 +81,12 @@ inline rocksdb_transaction_t::~rocksdb_transaction_t() {
 operation_result_t rocksdb_transaction_t::insert(key_t key, value_spanc_t value) {
     rocksdb::Slice key_slice {reinterpret_cast<char const*>(&key), sizeof(key)};
     rocksdb::Slice value_slice {reinterpret_cast<char const*>(value.data()), value.size()};
-    rocksdb::Status status = transaction_->Put(slice, value_slice);
+    rocksdb::Status status = transaction_->Put(key_slice, value_slice);
     if (!status.ok()) {
         assert(status.IsTryAgain());
         status = transaction_->Commit();
         assert(status.ok());
-        status = transaction_->Put(slice, value_slice);
+        status = transaction_->Put(key_slice, value_slice);
         assert(status.ok());
     }
     return {1, operation_status_t::ok_k};
@@ -96,19 +96,19 @@ operation_result_t rocksdb_transaction_t::update(key_t key, value_spanc_t value)
 
     std::string data;
     rocksdb::Slice key_slice {reinterpret_cast<char const*>(&key), sizeof(key)};
-    rocksdb::Status status = transaction_->Get(read_options_, slice, &data);
+    rocksdb::Status status = transaction_->Get(read_options_, key_slice, &data);
     if (status.IsNotFound())
         return {1, operation_status_t::not_found_k};
     else if (!status.ok())
         return {0, operation_status_t::error_k};
 
     rocksdb::Slice value_slice {reinterpret_cast<char const*>(value.data()), value.size()};
-    status = transaction_->Put(slice, value_slice);
+    status = transaction_->Put(key_slice, value_slice);
     if (!status.ok()) {
         assert(status.IsTryAgain());
         status = transaction_->Commit();
         assert(status.ok());
-        status = transaction_->Put(slice, value_slice);
+        status = transaction_->Put(key_slice, value_slice);
         assert(status.ok());
     }
     return {1, operation_status_t::ok_k};
@@ -116,12 +116,12 @@ operation_result_t rocksdb_transaction_t::update(key_t key, value_spanc_t value)
 
 operation_result_t rocksdb_transaction_t::remove(key_t key) {
     rocksdb::Slice key_slice {reinterpret_cast<char const*>(&key), sizeof(key)};
-    rocksdb::Status status = transaction_->Delete(slice);
+    rocksdb::Status status = transaction_->Delete(key_slice);
     if (!status.ok()) {
         assert(status.IsTryAgain());
         status = transaction_->Commit();
         assert(status.ok());
-        status = transaction_->Delete(slice);
+        status = transaction_->Delete(key_slice);
         assert(status.ok());
     }
 
@@ -131,7 +131,7 @@ operation_result_t rocksdb_transaction_t::remove(key_t key) {
 operation_result_t rocksdb_transaction_t::read(key_t key, value_span_t value) const {
     std::string data;
     rocksdb::Slice key_slice {reinterpret_cast<char const*>(&key), sizeof(key)};
-    rocksdb::Status status = transaction_->Get(read_options_, slice, &data);
+    rocksdb::Status status = transaction_->Get(read_options_, key_slice, &data);
     if (status.IsNotFound())
         return {1, operation_status_t::not_found_k};
     else if (!status.ok())
@@ -157,7 +157,7 @@ operation_result_t rocksdb_transaction_t::batch_read(keys_spanc_t keys, values_s
 
     for (size_t idx = 0; idx < keys.size(); ++idx) {
         rocksdb::Slice key_slice {reinterpret_cast<char const*>(&keys[idx]), sizeof(keys[idx])};
-        transaction_key_slices[idx] = slice;
+        transaction_key_slices[idx] = key_slice;
     }
 
     transaction_->MultiGet(read_options_,
@@ -190,7 +190,7 @@ operation_result_t rocksdb_transaction_t::range_select(key_t key, size_t length,
 
     rocksdb::Iterator* db_iter = transaction_->GetIterator(read_options_);
     rocksdb::Slice key_slice {reinterpret_cast<char const*>(&key), sizeof(key)};
-    db_iter->Seek(slice);
+    db_iter->Seek(key_slice);
     size_t offset = 0;
     size_t selected_records_count = 0;
     for (size_t i = 0; db_iter->Valid() && i < length; i++) {
@@ -208,7 +208,7 @@ operation_result_t rocksdb_transaction_t::scan(key_t key, size_t length, value_s
 
     rocksdb::Iterator* db_iter = transaction_->GetIterator(read_options_);
     rocksdb::Slice key_slice {reinterpret_cast<char const*>(&key), sizeof(key)};
-    db_iter->Seek(slice);
+    db_iter->Seek(key_slice);
     size_t scanned_records_count = 0;
     for (size_t i = 0; db_iter->Valid() && i < length; i++) {
         std::string data = db_iter->value().ToString();

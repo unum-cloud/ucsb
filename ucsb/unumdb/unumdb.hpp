@@ -23,7 +23,6 @@ using value_spanc_t = ucsb::value_spanc_t;
 using values_span_t = ucsb::values_span_t;
 using values_spanc_t = ucsb::values_spanc_t;
 using value_lengths_spanc_t = ucsb::value_lengths_spanc_t;
-using bulk_metadata_t = ucsb::bulk_metadata_t;
 using operation_status_t = ucsb::operation_status_t;
 using operation_result_t = ucsb::operation_result_t;
 using transaction_t = ucsb::transaction_t;
@@ -217,8 +216,9 @@ operation_result_t unumdb_t::batch_read(keys_spanc_t keys, values_span_t values)
 operation_result_t unumdb_t::bulk_insert(keys_spanc_t keys, values_spanc_t values, value_lengths_spanc_t sizes) {
 
     darray_gt<string_t> files;
-    size_t offset = 0;
     size_t const migration_max_cnt = config_.region_config.country.migration_max_cnt;
+    files.reserve(keys.size() / migration_max_cnt + 1);
+    size_t offset = 0;
     for (size_t idx = 0; idx < keys.size(); idx += migration_max_cnt) {
         std::string file_name = fmt::format("udb_building_{}", idx / migration_max_cnt);
 
@@ -229,8 +229,8 @@ operation_result_t unumdb_t::bulk_insert(keys_spanc_t keys, values_spanc_t value
 
         // TODO: Remove const casts later
         span_gt<fingerprint_t> fingerprints {
-            const_cast<fingerprint_t*>(reinterpret_cast<fingerprint_t const*>(keys.data() + i)),
-            next_data_idx - i};
+            const_cast<fingerprint_t*>(reinterpret_cast<fingerprint_t const*>(keys.data() + idx)),
+            count};
 #ifdef DEV_BUILD
         auto building =
             region_t::building_constructor_t::build({file_name.data(), file_name.size()},
@@ -247,7 +247,7 @@ operation_result_t unumdb_t::bulk_insert(keys_spanc_t keys, values_spanc_t value
                                                     {sizes.data(), sizes.size()},
                                                     ds_info_t::sorted_k);
 #endif
-        files.insert({building.schema().file_name.c_str()});
+        files.push_back({building.schema().file_name.c_str()});
         offset += size;
     }
 

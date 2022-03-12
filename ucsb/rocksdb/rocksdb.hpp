@@ -223,7 +223,7 @@ template <db_mode_t mode_ak>
 operation_result_t rocksdb_gt<mode_ak>::insert(key_t key, value_spanc_t value) {
     rocksdb::Slice key_slice {reinterpret_cast<char const*>(&key), sizeof(key_t)};
     rocksdb::Slice value_slice {reinterpret_cast<char const*>(value.data()), value.size()};
-    rocksdb::Status status = db_->Put(write_options_, slice, value_slice);
+    rocksdb::Status status = db_->Put(write_options_, key_slice, value_slice);
     return {1, status.ok() ? operation_status_t::ok_k : operation_status_t::error_k};
 }
 
@@ -232,21 +232,21 @@ operation_result_t rocksdb_gt<mode_ak>::update(key_t key, value_spanc_t value) {
 
     std::string data;
     rocksdb::Slice key_slice {reinterpret_cast<char const*>(&key), sizeof(key_t)};
-    rocksdb::Status status = db_->Get(read_options_, slice, &data);
+    rocksdb::Status status = db_->Get(read_options_, key_slice, &data);
     if (status.IsNotFound())
         return {1, operation_status_t::not_found_k};
     else if (!status.ok())
         return {0, operation_status_t::error_k};
 
     rocksdb::Slice value_slice {reinterpret_cast<char const*>(value.data()), value.size()};
-    status = db_->Put(write_options_, slice, value_slice);
+    status = db_->Put(write_options_, key_slice, value_slice);
     return {1, status.ok() ? operation_status_t::ok_k : operation_status_t::error_k};
 }
 
 template <db_mode_t mode_ak>
 operation_result_t rocksdb_gt<mode_ak>::remove(key_t key) {
     rocksdb::Slice key_slice {reinterpret_cast<char const*>(&key), sizeof(key_t)};
-    rocksdb::Status status = db_->Delete(write_options_, slice);
+    rocksdb::Status status = db_->Delete(write_options_, key_slice);
     return {1, status.ok() ? operation_status_t::ok_k : operation_status_t::error_k};
 }
 
@@ -254,7 +254,7 @@ template <db_mode_t mode_ak>
 operation_result_t rocksdb_gt<mode_ak>::read(key_t key, value_span_t value) const {
     std::string data;
     rocksdb::Slice key_slice {reinterpret_cast<char const*>(&key), sizeof(key_t)};
-    rocksdb::Status status = db_->Get(read_options_, slice, &data);
+    rocksdb::Status status = db_->Get(read_options_, key_slice, &data);
     if (status.IsNotFound())
         return {1, operation_status_t::not_found_k};
     else if (!status.ok())
@@ -273,7 +273,7 @@ operation_result_t rocksdb_gt<mode_ak>::batch_insert(keys_spanc_t keys,
     for (size_t idx = 0; idx < keys.size(); ++idx) {
         rocksdb::Slice key_slice {reinterpret_cast<char const*>(&keys[idx]), sizeof(key_t)};
         rocksdb::Slice value_slice {reinterpret_cast<char const*>(values.data() + offset), sizes[idx]};
-        rocksdb::Status status = db_->Put(write_options_, slice, value_slice);
+        rocksdb::Status status = db_->Put(write_options_, key_slice, value_slice);
         if (!status.ok())
             return {0, operation_status_t::error_k};
         offset += sizes[idx];
@@ -292,7 +292,7 @@ operation_result_t rocksdb_gt<mode_ak>::batch_read(keys_spanc_t keys, values_spa
 
     for (size_t idx = 0; idx < keys.size(); ++idx) {
         rocksdb::Slice key_slice {reinterpret_cast<char const*>(&keys[idx]), sizeof(keys[idx])};
-        key_slices[idx] = slice;
+        key_slices[idx] = key_slice;
     }
 
     db_->MultiGet(read_options_,
@@ -339,7 +339,7 @@ operation_result_t rocksdb_gt<mode_ak>::bulk_insert(keys_spanc_t keys,
 
         rocksdb::Slice key_slice {reinterpret_cast<char const*>(&key), sizeof(key)};
         rocksdb::Slice value_slice {reinterpret_cast<char const*>(values.data() + offset), sizes[idx]};
-        status = sst_file_writer.Add(slice, value_slice);
+        status = sst_file_writer.Add(key_slice, value_slice);
         if (!status.ok())
             break;
         offset += sizes[idx];
@@ -366,7 +366,7 @@ operation_result_t rocksdb_gt<mode_ak>::range_select(key_t key, size_t length, v
 
     rocksdb::Iterator* db_iter = db_->NewIterator(read_options_);
     rocksdb::Slice key_slice {reinterpret_cast<char const*>(&key), sizeof(key_t)};
-    db_iter->Seek(slice);
+    db_iter->Seek(key_slice);
     size_t offset = 0;
     size_t selected_records_count = 0;
     for (size_t i = 0; db_iter->Valid() && i < length; i++) {
@@ -385,7 +385,7 @@ operation_result_t rocksdb_gt<mode_ak>::scan(key_t key, size_t length, value_spa
 
     rocksdb::Iterator* db_iter = db_->NewIterator(read_options_);
     rocksdb::Slice key_slice {reinterpret_cast<char const*>(&key), sizeof(key_t)};
-    db_iter->Seek(slice);
+    db_iter->Seek(key_slice);
     size_t scanned_records_count = 0;
     for (size_t i = 0; db_iter->Valid() && i < length; i++) {
         std::string data = db_iter->value().ToString();

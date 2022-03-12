@@ -202,7 +202,7 @@ operation_result_t wiredtiger_t::batch_insert(keys_spanc_t keys, values_spanc_t 
     for (size_t idx = 0; idx < keys.size(); ++idx) {
         cursor_->set_key(cursor_, &keys[idx]);
         WT_ITEM db_value;
-        db_value.data = value.data() + offset;
+        db_value.data = values.data() + offset;
         db_value.size = sizes[idx];
         cursor_->set_value(cursor_, &db_value);
         int res = cursor_->insert(cursor_);

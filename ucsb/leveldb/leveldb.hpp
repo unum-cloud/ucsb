@@ -161,7 +161,7 @@ operation_result_t leveldb_t::update(key_t key, value_spanc_t value) {
 
     std::string data;
     leveldb::Slice key_slice {reinterpret_cast<char const*>(&key), sizeof(key_t)};
-    leveldb::Status status = db_->Get(leveldb::ReadOptions(), slice, &data);
+    leveldb::Status status = db_->Get(leveldb::ReadOptions(), key_slice, &data);
     if (status.IsNotFound())
         return {1, operation_status_t::not_found_k};
     else if (!status.ok())
@@ -169,21 +169,21 @@ operation_result_t leveldb_t::update(key_t key, value_spanc_t value) {
 
     leveldb::Slice value_slice {reinterpret_cast<char const*>(value.data()), value.size()};
     leveldb::WriteOptions wopt;
-    status = db_->Put(wopt, slice, value_slice);
+    status = db_->Put(wopt, key_slice, value_slice);
     return {1, status.ok() ? operation_status_t::ok_k : operation_status_t::error_k};
 }
 
 operation_result_t leveldb_t::remove(key_t key) {
     leveldb::WriteOptions wopt;
     leveldb::Slice key_slice {reinterpret_cast<char const*>(&key), sizeof(key_t)};
-    leveldb::Status status = db_->Delete(wopt, slice);
+    leveldb::Status status = db_->Delete(wopt, key_slice);
     return {1, status.ok() ? operation_status_t::ok_k : operation_status_t::error_k};
 }
 
 operation_result_t leveldb_t::read(key_t key, value_span_t value) const {
     std::string data;
     leveldb::Slice key_slice {reinterpret_cast<char const*>(&key), sizeof(key_t)};
-    leveldb::Status status = db_->Get(leveldb::ReadOptions(), slice, &data);
+    leveldb::Status status = db_->Get(leveldb::ReadOptions(), key_slice, &data);
     if (status.IsNotFound())
         return {1, operation_status_t::not_found_k};
     else if (!status.ok())
@@ -216,7 +216,7 @@ operation_result_t leveldb_t::batch_read(keys_spanc_t keys, values_span_t values
     for (auto key : keys) {
         std::string data;
         leveldb::Slice key_slice {reinterpret_cast<char const*>(&key), sizeof(key_t)};
-        leveldb::Status status = db_->Get(leveldb::ReadOptions(), slice, &data);
+        leveldb::Status status = db_->Get(leveldb::ReadOptions(), key_slice, &data);
         if (status.ok()) {
             memcpy(values.data() + offset, data.data(), data.size());
             offset += data.size();
@@ -235,7 +235,7 @@ operation_result_t leveldb_t::range_select(key_t key, size_t length, values_span
 
     leveldb::Iterator* db_iter = db_->NewIterator(leveldb::ReadOptions());
     leveldb::Slice key_slice {reinterpret_cast<char const*>(&key), sizeof(key_t)};
-    db_iter->Seek(slice);
+    db_iter->Seek(key_slice);
     size_t offset = 0;
     size_t selected_records_count = 0;
     for (size_t i = 0; db_iter->Valid() && i < length; i++) {
@@ -253,7 +253,7 @@ operation_result_t leveldb_t::scan(key_t key, size_t length, value_span_t single
 
     leveldb::Iterator* db_iter = db_->NewIterator(leveldb::ReadOptions());
     leveldb::Slice key_slice {reinterpret_cast<char const*>(&key), sizeof(key_t)};
-    db_iter->Seek(slice);
+    db_iter->Seek(key_slice);
     size_t scanned_records_count = 0;
     for (size_t i = 0; db_iter->Valid() && i < length; i++) {
         std::string data = db_iter->value().ToString();
