@@ -229,29 +229,6 @@
       "mem_avg,bytes": 8.7127186000000000e+07,
       "mem_max,bytes": 8.7248896000000000e+07,
       "operations/s": 3.9655295110225759e+05
-    },
-    {
-      "name": "BatchInsert/iterations:100/real_time/threads:1",
-      "family_index": 1,
-      "per_family_instance_index": 0,
-      "run_name": "BatchInsert/iterations:100/real_time/threads:1",
-      "run_type": "iteration",
-      "repetitions": 1,
-      "repetition_index": 0,
-      "threads": 1,
-      "iterations": 100,
-      "real_time": 43376.873986562714,
-      "cpu_time": 16071.264620000005,
-      "time_unit": "us",
-      "bytes_per_second": 236070492.382004,
-      "cpu_avg,%": 139.19354248046875,
-      "cpu_max,%": 200.0,
-      "disk,bytes": 2130845061.0,
-      "fails,%": 0.0,
-      "mem_avg,bytes": 333512559.0,
-      "mem_max,bytes": 1009025024.0,
-      "operations/s": 230537.59021680077,
-      "processed,bytes": 1024000000.0
     }
   ]
 }

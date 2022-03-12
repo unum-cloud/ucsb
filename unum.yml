@@ -9,7 +9,7 @@ dependencies:
     - fmt/8.1.1
     - benchmark/1.6.0
     - nlohmann_json/3.10.4
-    - rocksdb/6.20.3
+    # - rocksdb/6.20.3
     - leveldb/1.23
     - lmdb/0.9.29
     - snappy/1.1.9
@@ -19,8 +19,8 @@ dependencies:
     pkg-config:
       - wiredtiger
 
-  # cpp-library:
-  #   - librocksdb
+  cpp-library:
+    - librocksdb
 
 build:
   cpu-isa: lzcnt

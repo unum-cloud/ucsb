@@ -216,29 +216,6 @@
       "processed,bytes": 786543616.0
     },
     {
-      "name": "Remove/iterations:500000/real_time",
-      "family_index": 1,
-      "per_family_instance_index": 0,
-      "run_name": "Remove/iterations:500000/real_time",
-      "run_type": "iteration",
-      "repetitions": 1,
-      "repetition_index": 0,
-      "threads": 1,
-      "iterations": 500000,
-      "real_time": 0.8013700659945607,
-      "cpu_time": 0.8013051720000001,
-      "time_unit": "us",
-      "bytes_per_second": 1269132529.32161,
-      "cpu_avg,%": 80.0,
-      "cpu_max,%": 80.0,
-      "disk,bytes": 10926416281.0,
-      "fails,%": 0.0,
-      "mem_avg,bytes": 27623424.0,
-      "mem_max,bytes": 33734656.0,
-      "operations/s": 1239387.377950791,
-      "processed,bytes": 512000000.0
-    },
-    {
       "name": "BatchInsert/iterations:100/real_time/threads:1",
       "family_index": 1,
       "per_family_instance_index": 0,
@@ -260,6 +237,29 @@
       "mem_max,bytes": 279666688.0,
       "operations/s": 1009825.9883961108,
       "processed,bytes": 1024000000.0
+    },
+    {
+      "name": "Remove/iterations:500000/real_time",
+      "family_index": 1,
+      "per_family_instance_index": 0,
+      "run_name": "Remove/iterations:500000/real_time",
+      "run_type": "iteration",
+      "repetitions": 1,
+      "repetition_index": 0,
+      "threads": 1,
+      "iterations": 500000,
+      "real_time": 0.8013700659945607,
+      "cpu_time": 0.8013051720000001,
+      "time_unit": "us",
+      "bytes_per_second": 1269132529.32161,
+      "cpu_avg,%": 80.0,
+      "cpu_max,%": 80.0,
+      "disk,bytes": 10926416281.0,
+      "fails,%": 0.0,
+      "mem_avg,bytes": 27623424.0,
+      "mem_max,bytes": 33734656.0,
+      "operations/s": 1239387.377950791,
+      "processed,bytes": 512000000.0
     }
   ]
 }
