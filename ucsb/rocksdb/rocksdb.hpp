@@ -221,19 +221,17 @@ void rocksdb_gt<mode_ak>::destroy() {
 
 template <db_mode_t mode_ak>
 operation_result_t rocksdb_gt<mode_ak>::insert(key_t key, value_spanc_t value) {
-    rocksdb::Slice slice {reinterpret_cast<char const*>(&key), sizeof(key)};
+    rocksdb::Slice slice {reinterpret_cast<char const*>(&key), sizeof(key_t)};
     rocksdb::Slice data_slice {reinterpret_cast<char const*>(value.data()), value.size()};
     rocksdb::Status status = db_->Put(write_options_, slice, data_slice);
-    if (!status.ok())
-        return {0, operation_status_t::error_k};
-    return {1, operation_status_t::ok_k};
+    return {1, status.ok() ? operation_status_t::ok_k : operation_status_t::error_k};
 }
 
 template <db_mode_t mode_ak>
 operation_result_t rocksdb_gt<mode_ak>::update(key_t key, value_spanc_t value) {
 
     std::string data;
-    rocksdb::Slice slice {reinterpret_cast<char const*>(&key), sizeof(key)};
+    rocksdb::Slice slice {reinterpret_cast<char const*>(&key), sizeof(key_t)};
     rocksdb::Status status = db_->Get(read_options_, slice, &data);
     if (status.IsNotFound())
         return {1, operation_status_t::not_found_k};
@@ -242,25 +240,20 @@ operation_result_t rocksdb_gt<mode_ak>::update(key_t key, value_spanc_t value) {
 
     rocksdb::Slice data_slice {reinterpret_cast<char const*>(value.data()), value.size()};
     status = db_->Put(write_options_, slice, data_slice);
-    if (!status.ok())
-        return {0, operation_status_t::error_k};
-    return {1, operation_status_t::ok_k};
+    return {1, status.ok() ? operation_status_t::ok_k : operation_status_t::error_k};
 }
 
 template <db_mode_t mode_ak>
 operation_result_t rocksdb_gt<mode_ak>::remove(key_t key) {
-    rocksdb::Slice slice {reinterpret_cast<char const*>(&key), sizeof(key)};
+    rocksdb::Slice slice {reinterpret_cast<char const*>(&key), sizeof(key_t)};
     rocksdb::Status status = db_->Delete(write_options_, slice);
-    if (!status.ok())
-        return {0, operation_status_t::error_k};
-
-    return {1, operation_status_t::ok_k};
+    return {1, status.ok() ? operation_status_t::ok_k : operation_status_t::error_k};
 }
 
 template <db_mode_t mode_ak>
 operation_result_t rocksdb_gt<mode_ak>::read(key_t key, value_span_t value) const {
     std::string data;
-    rocksdb::Slice slice {reinterpret_cast<char const*>(&key), sizeof(key)};
+    rocksdb::Slice slice {reinterpret_cast<char const*>(&key), sizeof(key_t)};
     rocksdb::Status status = db_->Get(read_options_, slice, &data);
     if (status.IsNotFound())
         return {1, operation_status_t::not_found_k};
@@ -275,7 +268,17 @@ template <db_mode_t mode_ak>
 operation_result_t rocksdb_gt<mode_ak>::batch_insert(keys_spanc_t keys,
                                                      values_spanc_t values,
                                                      value_lengths_spanc_t sizes) {
-    return {0, operation_status_t::not_implemented_k};
+
+    size_t offset = 0;
+    for (size_t idx = 0; idx < keys.size(); ++idx) {
+        rocksdb::Slice slice {reinterpret_cast<char const*>(&keys[idx]), sizeof(key_t)};
+        rocksdb::Slice data_slice {reinterpret_cast<char const*>(&values[offset]), sizes[idx]};
+        rocksdb::Status status = db_->Put(write_options_, slice, data_slice);
+        if (!status.ok())
+            return {0, operation_status_t::error_k};
+        offset += sizes[idx];
+    }
+    return {keys.size(), operation_status_t::ok_k};
 }
 
 template <db_mode_t mode_ak>
@@ -335,7 +338,7 @@ bulk_metadata_t rocksdb_gt<mode_ak>::prepare_bulk_insert_data(keys_spanc_t keys,
             if (options_.comparator != &key_cmp_)
                 key = __builtin_bswap64(key);
 
-            rocksdb::Slice slice {reinterpret_cast<char const*>(&key), sizeof(key)};
+            rocksdb::Slice slice {reinterpret_cast<char const*>(&key), sizeof(key_t)};
             rocksdb::Slice data_slice {reinterpret_cast<char const*>(values.data() + data_offset), sizes[data_idx]};
             status = sst_file_writer.Add(slice, data_slice);
             if (status.ok())
@@ -363,26 +366,52 @@ operation_result_t rocksdb_gt<mode_ak>::bulk_insert(keys_spanc_t keys,
                                                     values_spanc_t values,
                                                     value_lengths_spanc_t sizes) {
 
-    rocksdb::IngestExternalFileOptions ingest_options;
-    ingest_options.move_files = true;
-    for (auto file_it = metadata.files.cbegin(); file_it != metadata.files.cend(); ++file_it) {
-        rocksdb::Status status = db_->IngestExternalFile({*file_it}, ingest_options);
-        if (!status.ok()) {
-            for (; file_it != metadata.files.cend(); ++file_it)
-                fs::remove(*file_it);
-            return {0, operation_status_t::error_k};
-        }
-        do_compaction_on_flush.store(true);
+    std::string sst_file_path("/tmp/rocksdb_tmp.sst");
+    rocksdb::SstFileWriter sst_file_writer(rocksdb::EnvOptions(), options_, options_.comparator);
+    rocksdb::Status status = sst_file_writer.Open(sst_file_path);
+    if (!status.ok()) {
+        fs::remove(sst_file_path);
+        return {0, operation_status_t::error_k};
     }
 
-    return {metadata.records_count, operation_status_t::ok_k};
+    size_t idx = 0;
+    size_t offset = 0;
+    for (; idx < keys.size(); ++idx) {
+        auto key = keys[idx];
+
+        // Warning: if not using custom comparator need to swap little endian to big endian
+        if (options_.comparator != &key_cmp_)
+            key = __builtin_bswap64(key);
+
+        rocksdb::Slice slice {reinterpret_cast<char const*>(&key), sizeof(key)};
+        rocksdb::Slice data_slice {reinterpret_cast<char const*>(values.data() + offset), sizes[idx]};
+        status = sst_file_writer.Add(slice, data_slice);
+        if (!status.ok())
+            break;
+        offset += sizes[idx];
+    }
+    status = sst_file_writer.Finish();
+    if (!status.ok()) {
+        fs::remove(sst_file_path);
+        return {0, operation_status_t::error_k};
+    }
+
+    rocksdb::IngestExternalFileOptions ingest_options;
+    ingest_options.move_files = true;
+    status = db_->IngestExternalFile({sst_file_path}, ingest_options);
+    fs::remove(sst_file_path);
+    if (!status.ok())
+        return {0, operation_status_t::error_k};
+    do_compaction_on_flush.store(true);
+
+    return {idx, operation_status_t::ok_k};
 }
 
 template <db_mode_t mode_ak>
 operation_result_t rocksdb_gt<mode_ak>::range_select(key_t key, size_t length, values_span_t values) const {
 
     rocksdb::Iterator* db_iter = db_->NewIterator(read_options_);
-    rocksdb::Slice slice {reinterpret_cast<char const*>(&key), sizeof(key)};
+    rocksdb::Slice slice {reinterpret_cast<char const*>(&key), sizeof(key_t)};
     db_iter->Seek(slice);
     size_t offset = 0;
     size_t selected_records_count = 0;
@@ -401,7 +430,7 @@ template <db_mode_t mode_ak>
 operation_result_t rocksdb_gt<mode_ak>::scan(key_t key, size_t length, value_span_t single_value) const {
 
     rocksdb::Iterator* db_iter = db_->NewIterator(read_options_);
-    rocksdb::Slice slice {reinterpret_cast<char const*>(&key), sizeof(key)};
+    rocksdb::Slice slice {reinterpret_cast<char const*>(&key), sizeof(key_t)};
     db_iter->Seek(slice);
     size_t scanned_records_count = 0;
     for (size_t i = 0; db_iter->Valid() && i < length; i++) {
