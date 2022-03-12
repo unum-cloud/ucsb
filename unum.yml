@@ -9,7 +9,6 @@ dependencies:
     - fmt/8.1.1
     - benchmark/1.6.0
     - nlohmann_json/3.10.4
-    - leveldb/1.23
     - lmdb/0.9.29
     - snappy/1.1.9
     - mongo-cxx-driver/3.6.6
@@ -20,6 +19,7 @@ dependencies:
 
   cpp-library:
     - librocksdb
+    - libleveldb
 
 build:
   cpu-isa: lzcnt
