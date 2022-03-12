@@ -161,12 +161,6 @@ operation_result_t unumdb_transaction_t::batch_read(keys_spanc_t keys, values_sp
     return {found_cnt, operation_status_t::ok_k};
 }
 
-bulk_metadata_t unumdb_transaction_t::prepare_bulk_insert_data(keys_spanc_t keys,
-                                                               values_spanc_t values,
-                                                               value_lengths_spanc_t sizes) const {
-    return {};
-}
-
 operation_result_t unumdb_transaction_t::bulk_insert(keys_spanc_t keys,
                                                      values_spanc_t values,
                                                      value_lengths_spanc_t sizes) {

@@ -6,12 +6,6 @@
 
 namespace ucsb {
 
-struct bulk_metadata_t {
-    std::set<std::string> files;
-    size_t records_count = 0;
-    void* data = nullptr;
-};
-
 /**
  * @brief A base class for data accessing: on DBs and Transactions state.
  *

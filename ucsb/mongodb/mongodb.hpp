@@ -23,7 +23,6 @@ using value_spanc_t = ucsb::value_spanc_t;
 using values_span_t = ucsb::values_span_t;
 using values_spanc_t = ucsb::values_spanc_t;
 using value_lengths_spanc_t = ucsb::value_lengths_spanc_t;
-using bulk_metadata_t = ucsb::bulk_metadata_t;
 using operation_status_t = ucsb::operation_status_t;
 using operation_result_t = ucsb::operation_result_t;
 using transaction_t = ucsb::transaction_t;
@@ -150,35 +149,38 @@ operation_result_t mongodb_t::batch_read(keys_spanc_t keys, values_span_t values
     return {0, operation_status_t::not_implemented_k};
 }
 
-bulk_metadata_t mongodb_t::prepare_bulk_insert_data(keys_spanc_t keys,
-                                                    values_spanc_t values,
-                                                    value_lengths_spanc_t sizes) const {
-    bulk_metadata_t metadata;
-    auto client = pool_.acquire();
-    mongocxx::collection coll = mongocxx::collection((*client)["mongodb"][coll_name]);
-    mongocxx::bulk_write* bulk = new mongocxx::bulk_write(coll.create_bulk_write());
-    metadata.records_count = keys.size();
-    size_t data_offset = 0;
-    for (size_t index = 0; index < keys.size(); ++index) {
-        bsoncxx::stdx::string_view val(reinterpret_cast<char const*>(values.data() + data_offset), sizes[index]);
-        data_offset += sizes[index];
-        bsoncxx::document::value doc = make_document(kvp("_id", int(keys[index])), kvp("key", val));
-        mongocxx::model::insert_one insert_op {doc.view()};
-        bulk->append(insert_op);
-    }
-    metadata.data = bulk;
-    return metadata;
-}
+// TODO: `prepare_bulk_insert_data` is removed
+// bulk_metadata_t mongodb_t::prepare_bulk_insert_data(keys_spanc_t keys,
+//                                                     values_spanc_t values,
+//                                                     value_lengths_spanc_t sizes) const {
+//     bulk_metadata_t metadata;
+//     auto client = pool_.acquire();
+//     mongocxx::collection coll = mongocxx::collection((*client)["mongodb"][coll_name]);
+//     mongocxx::bulk_write* bulk = new mongocxx::bulk_write(coll.create_bulk_write());
+//     metadata.records_count = keys.size();
+//     size_t data_offset = 0;
+//     for (size_t index = 0; index < keys.size(); ++index) {
+//         bsoncxx::stdx::string_view val(reinterpret_cast<char const*>(values.data() + data_offset), sizes[index]);
+//         data_offset += sizes[index];
+//         bsoncxx::document::value doc = make_document(kvp("_id", int(keys[index])), kvp("key", val));
+//         mongocxx::model::insert_one insert_op {doc.view()};
+//         bulk->append(insert_op);
+//     }
+//     metadata.data = bulk;
+//     return metadata;
+// }
 
 operation_result_t mongodb_t::bulk_insert(keys_spanc_t keys, values_spanc_t values, value_lengths_spanc_t sizes) {
-    if (metadata.data == nullptr)
-        return {0, operation_status_t::error_k};
-    mongocxx::bulk_write* bulk = reinterpret_cast<mongocxx::bulk_write*>(metadata.data);
-    size_t inserted_count = bulk->execute()->inserted_count();
-    delete bulk;
-    if (inserted_count == metadata.records_count)
-        return {metadata.records_count, operation_status_t::ok_k};
-    return {inserted_count, operation_status_t::error_k};
+    // TODO: Need to reimplement
+    // if (metadata.data == nullptr)
+    //     return {0, operation_status_t::error_k};
+    // mongocxx::bulk_write* bulk = reinterpret_cast<mongocxx::bulk_write*>(metadata.data);
+    // size_t inserted_count = bulk->execute()->inserted_count();
+    // delete bulk;
+    // if (inserted_count == metadata.records_count)
+    //     return {metadata.records_count, operation_status_t::ok_k};
+    // return {inserted_count, operation_status_t::error_k};
+    return {0, operation_status_t::not_implemented_k};
 }
 
 operation_result_t mongodb_t::range_select(key_t key, size_t length, values_span_t values) const {
