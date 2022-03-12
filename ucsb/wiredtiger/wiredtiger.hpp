@@ -33,7 +33,8 @@ using transaction_t = ucsb::transaction_t;
 struct wiredtiger_t : public ucsb::db_t {
 
     inline wiredtiger_t()
-        : conn_(nullptr), session_(nullptr), cursor_(nullptr), table_name_("table:access"), key_buffer_(100) {}
+        : conn_(nullptr), session_(nullptr), cursor_(nullptr), batch_insert_cursor_(nullptr),
+          table_name_("table:access") {}
     inline ~wiredtiger_t() override = default;
 
     void set_config(fs::path const& config_path, fs::path const& dir_path) override;
@@ -66,8 +67,8 @@ struct wiredtiger_t : public ucsb::db_t {
     WT_CONNECTION* conn_;
     WT_SESSION* session_;
     mutable WT_CURSOR* cursor_;
+    WT_CURSOR* batch_insert_cursor_;
     std::string table_name_;
-    std::vector<char> key_buffer_;
 };
 
 inline int compare_keys(
@@ -106,7 +107,8 @@ bool wiredtiger_t::open() {
     //     return false;
     // }
 
-    res = session_->create(session_, table_name_.c_str(), "key_format=S,value_format=u");
+    static_assert(sizeof(key_t) == sizeof(uint64_t), "Need to change `key_format` below");
+    res = session_->create(session_, table_name_.c_str(), "key_format=Q,value_format=u");
     if (res) {
         close();
         return false;
@@ -130,6 +132,7 @@ bool wiredtiger_t::close() {
         return false;
 
     cursor_ = nullptr;
+    batch_insert_cursor_ = nullptr;
     session_ = nullptr;
     conn_ = nullptr;
     return true;
@@ -137,7 +140,7 @@ bool wiredtiger_t::close() {
 
 void wiredtiger_t::destroy() {
     if (session_)
-        session_->drop(session_, table_name_.c_str(), "key_format=S,value_format=u");
+        session_->drop(session_, table_name_.c_str(), "key_format=Q,value_format=u");
 
     bool ok = close();
     assert(ok);
@@ -147,7 +150,7 @@ void wiredtiger_t::destroy() {
 
 operation_result_t wiredtiger_t::insert(key_t key, value_spanc_t value) {
 
-    cursor_->set_key(cursor_, &key);
+    cursor_->set_key(cursor_, key);
     WT_ITEM db_value;
     db_value.data = value.data();
     db_value.size = value.size();
@@ -159,7 +162,7 @@ operation_result_t wiredtiger_t::insert(key_t key, value_spanc_t value) {
 
 operation_result_t wiredtiger_t::update(key_t key, value_spanc_t value) {
 
-    cursor_->set_key(cursor_, &key);
+    cursor_->set_key(cursor_, key);
     WT_ITEM db_value;
     db_value.data = value.data();
     db_value.size = value.size();
@@ -171,7 +174,7 @@ operation_result_t wiredtiger_t::update(key_t key, value_spanc_t value) {
 
 operation_result_t wiredtiger_t::remove(key_t key) {
 
-    cursor_->set_key(cursor_, &key);
+    cursor_->set_key(cursor_, key);
     int res = cursor_->remove(cursor_);
     cursor_->reset(cursor_);
     return {1, res == 0 ? operation_status_t::ok_k : operation_status_t::error_k};
@@ -179,7 +182,7 @@ operation_result_t wiredtiger_t::remove(key_t key) {
 
 operation_result_t wiredtiger_t::read(key_t key, value_span_t value) const {
 
-    cursor_->set_key(cursor_, &key);
+    cursor_->set_key(cursor_, key);
     int res = cursor_->search(cursor_);
     if (res)
         return {0, operation_status_t::error_k};
@@ -218,7 +221,7 @@ operation_result_t wiredtiger_t::batch_read(keys_spanc_t keys, values_span_t val
     size_t found_cnt = 0;
     for (auto key : keys) {
         WT_ITEM db_value;
-        cursor_->set_key(cursor_, &key);
+        cursor_->set_key(cursor_, key);
         int res = cursor_->search(cursor_);
         if (res == 0) {
             res = cursor_->get_value(cursor_, &db_value);
@@ -234,12 +237,39 @@ operation_result_t wiredtiger_t::batch_read(keys_spanc_t keys, values_span_t val
 }
 
 operation_result_t wiredtiger_t::bulk_insert(keys_spanc_t keys, values_spanc_t values, value_lengths_spanc_t sizes) {
-    return {0, operation_status_t::not_implemented_k};
+    // Warnings:
+    //   DB must be empty
+    //   No other cursors while doing batch insert
+
+    if (cursor_) {
+        cursor_->close(cursor_);
+        cursor_ = nullptr;
+    }
+
+    if (batch_insert_cursor_ == nullptr) {
+        // Batch cursor will be closed in flush()
+        auto res = session_->open_cursor(session_, table_name_.c_str(), NULL, "bulk", &batch_insert_cursor_);
+        if (res)
+            return {0, operation_status_t::error_k};
+    }
+
+    size_t offset = 0;
+    for (size_t idx = 0; idx < keys.size(); ++idx) {
+        batch_insert_cursor_->set_key(batch_insert_cursor_, keys[idx]);
+        WT_ITEM db_value;
+        db_value.data = &values[offset];
+        db_value.size = sizes[idx];
+        batch_insert_cursor_->set_value(batch_insert_cursor_, &db_value);
+        batch_insert_cursor_->insert(batch_insert_cursor_);
+        offset += sizes[idx];
+    }
+
+    return {keys.size(), operation_status_t::ok_k};
 }
 
 operation_result_t wiredtiger_t::range_select(key_t key, size_t length, values_span_t values) const {
 
-    cursor_->set_key(cursor_, &key);
+    cursor_->set_key(cursor_, key);
     int res = cursor_->search(cursor_);
     if (res)
         return {0, operation_status_t::error_k};
@@ -263,7 +293,7 @@ operation_result_t wiredtiger_t::range_select(key_t key, size_t length, values_s
 
 operation_result_t wiredtiger_t::scan(key_t key, size_t length, value_span_t single_value) const {
 
-    cursor_->set_key(cursor_, &key);
+    cursor_->set_key(cursor_, key);
     int res = cursor_->search(cursor_);
     if (res)
         return {0, operation_status_t::error_k};
@@ -284,7 +314,10 @@ operation_result_t wiredtiger_t::scan(key_t key, size_t length, value_span_t sin
 }
 
 void wiredtiger_t::flush() {
-    // Nothing to do
+    if (batch_insert_cursor_) {
+        batch_insert_cursor_->close(batch_insert_cursor_);
+        batch_insert_cursor_ = nullptr;
+    }
 }
 
 size_t wiredtiger_t::size_on_disk() const {
