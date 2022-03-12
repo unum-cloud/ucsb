@@ -155,9 +155,7 @@ operation_result_t leveldb_t::insert(key_t key, value_spanc_t value) {
     leveldb::Slice data_slice {reinterpret_cast<char const*>(value.data()), value.size()};
     leveldb::WriteOptions wopt;
     leveldb::Status status = db_->Put(wopt, slice, data_slice);
-    if (!status.ok())
-        return {0, operation_status_t::error_k};
-    return {1, operation_status_t::ok_k};
+    return {1, status.ok() ? operation_status_t::ok_k : operation_status_t::error_k};
 }
 
 operation_result_t leveldb_t::update(key_t key, value_spanc_t value) {
@@ -168,24 +166,19 @@ operation_result_t leveldb_t::update(key_t key, value_spanc_t value) {
     if (status.IsNotFound())
         return {1, operation_status_t::not_found_k};
     else if (!status.ok())
-        return {0, operation_status_t::error_k};
+        return {1, operation_status_t::error_k};
 
     leveldb::Slice data_slice {reinterpret_cast<char const*>(value.data()), value.size()};
     leveldb::WriteOptions wopt;
     status = db_->Put(wopt, slice, data_slice);
-    if (!status.ok())
-        return {0, operation_status_t::error_k};
-    return {1, operation_status_t::ok_k};
+    return {1, status.ok() ? operation_status_t::ok_k : operation_status_t::error_k};
 }
 
 operation_result_t leveldb_t::remove(key_t key) {
     leveldb::WriteOptions wopt;
     leveldb::Slice slice {reinterpret_cast<char const*>(&key), sizeof(key)};
     leveldb::Status status = db_->Delete(wopt, slice);
-    if (!status.ok())
-        return {0, operation_status_t::error_k};
-
-    return {1, operation_status_t::ok_k};
+    return {1, status.ok() ? operation_status_t::ok_k : operation_status_t::error_k};
 }
 
 operation_result_t leveldb_t::read(key_t key, value_span_t value) const {
@@ -235,7 +228,8 @@ operation_result_t leveldb_t::batch_read(keys_spanc_t keys, values_span_t values
 }
 
 operation_result_t leveldb_t::bulk_insert(keys_spanc_t keys, values_spanc_t values, value_lengths_spanc_t sizes) {
-    return {0, operation_status_t::not_implemented_k};
+    // Currently this DB doesn't have bulk insert so instead we do batch insert
+    return batch_insert(keys, values, sizes);
 }
 
 operation_result_t leveldb_t::range_select(key_t key, size_t length, values_span_t values) const {
