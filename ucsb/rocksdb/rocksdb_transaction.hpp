@@ -1,7 +1,5 @@
 #pragma once
 
-#ifdef build_transaction_m
-
 #include <memory>
 #include <vector>
 #include <fmt/format.h>
@@ -221,5 +219,3 @@ operation_result_t rocksdb_transaction_t::scan(key_t key, size_t length, value_s
 }
 
 } // namespace facebook
-
-#endif
