@@ -72,11 +72,13 @@ struct unumdb_t : public ucsb::db_t {
 
     bool load_config();
 
+  private:
     fs::path config_path_;
     fs::path dir_path_;
     db_config_t config_;
 
     region_t region_;
+    darray_gt<string_t> loaded_files_;
 };
 
 void unumdb_t::set_config(fs::path const& config_path, fs::path const& dir_path) {
@@ -215,9 +217,7 @@ operation_result_t unumdb_t::batch_read(keys_spanc_t keys, values_span_t values)
 
 operation_result_t unumdb_t::bulk_load(keys_spanc_t keys, values_spanc_t values, value_lengths_spanc_t sizes) {
 
-    darray_gt<string_t> files;
     size_t const migration_max_cnt = config_.region_config.country.migration_max_cnt;
-    files.reserve(keys.size() / migration_max_cnt + 1);
     size_t offset = 0;
     for (size_t idx = 0; idx < keys.size(); idx += migration_max_cnt) {
         std::string file_name = fmt::format("udb_building_{}", idx / migration_max_cnt);
@@ -247,12 +247,9 @@ operation_result_t unumdb_t::bulk_load(keys_spanc_t keys, values_spanc_t values,
                                                     {sizes.data(), sizes.size()},
                                                     ds_info_t::sorted_k);
 #endif
-        files.push_back({building.schema().file_name.c_str()});
+        loaded_files_.push_back({building.schema().file_name.c_str()});
         offset += size;
     }
-
-    for (auto const& file_path : files)
-        region_.import({file_path.data(), file_path.size()});
 
     return {keys.size(), operation_status_t::ok_k};
 }
@@ -308,7 +305,9 @@ operation_result_t unumdb_t::scan(key_t key, size_t length, value_span_t single_
 }
 
 void unumdb_t::flush() {
-    region_.flush();
+    region_.import(loaded_files_.view());
+    loaded_files_.clear();
+    // region_.flush();
 }
 
 size_t unumdb_t::size_on_disk() const {
