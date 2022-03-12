@@ -217,18 +217,15 @@ operation_result_t unumdb_t::batch_read(keys_spanc_t keys, values_span_t values)
 operation_result_t unumdb_t::bulk_insert(keys_spanc_t keys, values_spanc_t values, value_lengths_spanc_t sizes) {
 
     darray_gt<string_t> files;
-    size_t data_offset = 0;
-    size_t const migration_capacity = config_.region_config.country.migration_max_cnt;
-    for (size_t i = 0; i < keys.size(); i += migration_capacity) {
-        std::string file_name = fmt::format("udb_building_{}", i / migration_capacity);
+    size_t offset = 0;
+    size_t const migration_max_cnt = config_.region_config.country.migration_max_cnt;
+    for (size_t idx = 0; idx < keys.size(); idx += migration_max_cnt) {
+        std::string file_name = fmt::format("udb_building_{}", idx / migration_max_cnt);
 
-        size_t next_data_idx = i + migration_capacity;
-        if (next_data_idx > keys.size())
-            next_data_idx = keys.size();
-
-        size_t next_data_offset = data_offset;
-        for (size_t j = 0; j < next_data_idx; ++j)
-            next_data_offset += sizes[j];
+        size_t count = std::min(migration_max_cnt, keys.size() - idx);
+        size_t size = 0;
+        for (size_t i = 0; i < count; ++i)
+            size += sizes[idx + i];
 
         // TODO: Remove const casts later
         span_gt<fingerprint_t> fingerprints {
@@ -239,18 +236,19 @@ operation_result_t unumdb_t::bulk_insert(keys_spanc_t keys, values_spanc_t value
             region_t::building_constructor_t::build({file_name.data(), file_name.size()},
                                                     {},
                                                     fingerprints,
-                                                    {reinterpret_cast<byte_t const*>(values.data()), values.size()},
+                                                    {reinterpret_cast<byte_t const*>(values.data() + offset), size},
                                                     {sizes.data(), sizes.size()},
                                                     ds_info_t::sorted_k);
 #else
         auto building =
             region_t::building_constructor_t::build({},
                                                     fingerprints,
-                                                    {reinterpret_cast<byte_t const*>(values.data()), values.size()},
+                                                    {reinterpret_cast<byte_t const*>(values.data() + offset), size},
                                                     {sizes.data(), sizes.size()},
                                                     ds_info_t::sorted_k);
 #endif
         files.insert({building.schema().file_name.c_str()});
+        offset += size;
     }
 
     for (auto const& file_path : files)
