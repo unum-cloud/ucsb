@@ -151,7 +151,7 @@ bool rocksdb_gt<mode_ak>::open() {
     table_options.cache_index_and_filter_blocks_with_high_priority = true;
     table_options.filter_policy.reset(rocksdb::NewBloomFilterPolicy(10));
     options_.table_factory.reset(rocksdb::NewBlockBasedTableFactory(table_options));
-    options_.comparator = &key_cmp_;
+    // options_.comparator = &key_cmp_;
 
     read_options_.verify_checksums = false;
     write_options_.disableWAL = true;

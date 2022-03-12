@@ -115,7 +115,7 @@ bool leveldb_t::open() {
 
     options_ = leveldb::Options();
     options_.create_if_missing = true;
-    options_.comparator = &key_cmp_;
+    // options_.comparator = &key_cmp_;
     if (config.write_buffer_size > 0)
         options_.write_buffer_size = config.write_buffer_size;
     if (config.max_file_size > 0)

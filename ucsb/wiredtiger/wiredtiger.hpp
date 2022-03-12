@@ -101,11 +101,11 @@ bool wiredtiger_t::open() {
         return false;
     }
 
-    res = conn_->add_collator(conn_, "key_comparator", &key_comparator, NULL);
-    if (res) {
-        close();
-        return false;
-    }
+    // res = conn_->add_collator(conn_, "key_comparator", &key_comparator, NULL);
+    // if (res) {
+    //     close();
+    //     return false;
+    // }
 
     static_assert(sizeof(key_t) == sizeof(uint64_t), "Need to change `key_format` below");
     res = session_->create(session_, table_name_.c_str(), "key_format=Q,value_format=u");
