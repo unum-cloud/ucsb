@@ -2,9 +2,11 @@
     {
         "name": "Init",
         "records_count": 1000000,
-        "operations_count": 1000000,
-        "insert_proportion": 1.0,
-        "value_length": 1024
+        "operations_count": 100,
+        "value_length": 1024,
+        "bulk_load_proportion": 1.0,
+        "bulk_load_min_length": 10000,
+        "bulk_load_max_length": 10000
     },
     {
         "name": "Read",
@@ -63,28 +65,19 @@
         "value_length": 1024
     },
     {
-        "name": "Remove",
-        "records_count": 1000000,
-        "operations_count": 50000,
-        "remove_proportion": 1.0,
-        "key_dist": "zipfian"
-    },
-    {
-        "name": "BulkImport",
-        "records_count": 1000000,
-        "operations_count": 100,
-        "bulk_import_proportion": 1.0,
-        "value_length": 1024,
-        "bulk_import_min_length": 10000,
-        "bulk_import_max_length": 10000
-    },
-    {
         "name": "BatchInsert",
         "records_count": 1000000,
         "operations_count": 100,
-        "batch_insert_proportion": 1.0,
         "value_length": 1024,
+        "batch_insert_proportion": 1.0,
         "batch_insert_min_length": 1000,
         "batch_insert_max_length": 1000
+    },
+    {
+        "name": "Remove",
+        "records_count": 1000000,
+        "operations_count": 150000,
+        "remove_proportion": 1.0,
+        "key_dist": "zipfian"
     }
 ]

@@ -30,7 +30,7 @@ struct workload_t {
     float read_modify_write_proportion = 0;
     float batch_insert_proportion = 0;
     float batch_read_proportion = 0;
-    float bulk_import_proportion = 0;
+    float bulk_load_proportion = 0;
     float range_select_proportion = 0;
     float scan_proportion = 0;
 
@@ -48,9 +48,9 @@ struct workload_t {
     size_t batch_read_max_length = 0;
     distribution_kind_t batch_read_length_dist = distribution_kind_t::uniform_k;
 
-    size_t bulk_import_min_length = 0;
-    size_t bulk_import_max_length = 0;
-    distribution_kind_t bulk_import_length_dist = distribution_kind_t::uniform_k;
+    size_t bulk_load_min_length = 0;
+    size_t bulk_load_max_length = 0;
+    distribution_kind_t bulk_load_length_dist = distribution_kind_t::uniform_k;
 
     size_t range_select_min_length = 0;
     size_t range_select_max_length = 0;
@@ -103,7 +103,7 @@ bool load(fs::path const& path, workloads_t& workloads) {
         workload.read_modify_write_proportion = (*j_workload).value("read_modify_write_proportion", 0.0);
         workload.batch_insert_proportion = (*j_workload).value("batch_insert_proportion", 0.0);
         workload.batch_read_proportion = (*j_workload).value("batch_read_proportion", 0.0);
-        workload.bulk_import_proportion = (*j_workload).value("bulk_import_proportion", 0.0);
+        workload.bulk_load_proportion = (*j_workload).value("bulk_load_proportion", 0.0);
         workload.range_select_proportion = (*j_workload).value("range_select_proportion", 0.0);
         workload.scan_proportion = (*j_workload).value("scan_proportion", 0.0);
 
@@ -138,11 +138,10 @@ bool load(fs::path const& path, workloads_t& workloads) {
             return false;
         }
 
-        workload.bulk_import_min_length = (*j_workload).value("bulk_import_min_length", 256);
-        workload.bulk_import_max_length = (*j_workload).value("bulk_import_max_length", 256);
-        workload.bulk_import_length_dist =
-            parse_distribution((*j_workload).value("bulk_import_length_dist", "uniform"));
-        if (workload.bulk_import_length_dist == distribution_kind_t::unknown_k) {
+        workload.bulk_load_min_length = (*j_workload).value("bulk_load_min_length", 256);
+        workload.bulk_load_max_length = (*j_workload).value("bulk_load_max_length", 256);
+        workload.bulk_load_length_dist = parse_distribution((*j_workload).value("bulk_load_length_dist", "uniform"));
+        if (workload.bulk_load_length_dist == distribution_kind_t::unknown_k) {
             workloads.clear();
             return false;
         }

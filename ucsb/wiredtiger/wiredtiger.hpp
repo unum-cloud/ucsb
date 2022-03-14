@@ -21,7 +21,6 @@ using value_spanc_t = ucsb::value_spanc_t;
 using values_span_t = ucsb::values_span_t;
 using values_spanc_t = ucsb::values_spanc_t;
 using value_lengths_spanc_t = ucsb::value_lengths_spanc_t;
-using bulk_metadata_t = ucsb::bulk_metadata_t;
 using operation_status_t = ucsb::operation_status_t;
 using operation_result_t = ucsb::operation_result_t;
 using transaction_t = ucsb::transaction_t;
@@ -51,10 +50,7 @@ struct wiredtiger_t : public ucsb::db_t {
     operation_result_t batch_insert(keys_spanc_t keys, values_spanc_t values, value_lengths_spanc_t sizes) override;
     operation_result_t batch_read(keys_spanc_t keys, values_span_t values) const override;
 
-    bulk_metadata_t prepare_bulk_import_data(keys_spanc_t keys,
-                                             values_spanc_t values,
-                                             value_lengths_spanc_t sizes) const override;
-    operation_result_t bulk_import(bulk_metadata_t const& metadata) override;
+    operation_result_t bulk_load(keys_spanc_t keys, values_spanc_t values, value_lengths_spanc_t sizes) override;
 
     operation_result_t range_select(key_t key, size_t length, values_span_t values) const override;
     operation_result_t scan(key_t key, size_t length, value_span_t single_value) const override;
@@ -161,9 +157,7 @@ operation_result_t wiredtiger_t::insert(key_t key, value_spanc_t value) {
     cursor_->set_value(cursor_, &db_value);
     int res = cursor_->insert(cursor_);
     cursor_->reset(cursor_);
-    if (res)
-        return {0, operation_status_t::error_k};
-    return {1, operation_status_t::ok_k};
+    return {1, res == 0 ? operation_status_t::ok_k : operation_status_t::error_k};
 }
 
 operation_result_t wiredtiger_t::update(key_t key, value_spanc_t value) {
@@ -175,9 +169,7 @@ operation_result_t wiredtiger_t::update(key_t key, value_spanc_t value) {
     cursor_->set_value(cursor_, &db_value);
     int res = cursor_->update(cursor_);
     cursor_->reset(cursor_);
-    if (res)
-        return {0, operation_status_t::error_k};
-    return {1, operation_status_t::ok_k};
+    return {1, res == 0 ? operation_status_t::ok_k : operation_status_t::error_k};
 }
 
 operation_result_t wiredtiger_t::remove(key_t key) {
@@ -185,9 +177,7 @@ operation_result_t wiredtiger_t::remove(key_t key) {
     cursor_->set_key(cursor_, key);
     int res = cursor_->remove(cursor_);
     cursor_->reset(cursor_);
-    if (res)
-        return {0, operation_status_t::error_k};
-    return {1, operation_status_t::ok_k};
+    return {1, res == 0 ? operation_status_t::ok_k : operation_status_t::error_k};
 }
 
 operation_result_t wiredtiger_t::read(key_t key, value_span_t value) const {
@@ -208,6 +198,45 @@ operation_result_t wiredtiger_t::read(key_t key, value_span_t value) const {
 
 operation_result_t wiredtiger_t::batch_insert(keys_spanc_t keys, values_spanc_t values, value_lengths_spanc_t sizes) {
 
+    size_t offset = 0;
+    for (size_t idx = 0; idx < keys.size(); ++idx) {
+        cursor_->set_key(cursor_, &keys[idx]);
+        WT_ITEM db_value;
+        db_value.data = values.data() + offset;
+        db_value.size = sizes[idx];
+        cursor_->set_value(cursor_, &db_value);
+        int res = cursor_->insert(cursor_);
+        cursor_->reset(cursor_);
+        if (res)
+            return {0, operation_status_t::error_k};
+        offset += sizes[idx];
+    }
+    return {keys.size(), operation_status_t::ok_k};
+}
+
+operation_result_t wiredtiger_t::batch_read(keys_spanc_t keys, values_span_t values) const {
+
+    // Note: imitation of batch read!
+    size_t offset = 0;
+    size_t found_cnt = 0;
+    for (auto key : keys) {
+        WT_ITEM db_value;
+        cursor_->set_key(cursor_, key);
+        int res = cursor_->search(cursor_);
+        if (res == 0) {
+            res = cursor_->get_value(cursor_, &db_value);
+            if (res == 0) {
+                memcpy(values.data() + offset, db_value.data, db_value.size);
+                offset += db_value.size;
+                ++found_cnt;
+            }
+        }
+        cursor_->reset(cursor_);
+    }
+    return {found_cnt, operation_status_t::ok_k};
+}
+
+operation_result_t wiredtiger_t::bulk_load(keys_spanc_t keys, values_spanc_t values, value_lengths_spanc_t sizes) {
     // Warnings:
     //   DB must be empty
     //   No other cursors while doing batch insert
@@ -236,38 +265,6 @@ operation_result_t wiredtiger_t::batch_insert(keys_spanc_t keys, values_spanc_t 
     }
 
     return {keys.size(), operation_status_t::ok_k};
-}
-
-operation_result_t wiredtiger_t::batch_read(keys_spanc_t keys, values_span_t values) const {
-
-    // Note: imitation of batch read!
-    size_t offset = 0;
-    size_t found_cnt = 0;
-    for (auto key : keys) {
-        WT_ITEM db_value;
-        cursor_->set_key(cursor_, key);
-        int res = cursor_->search(cursor_);
-        if (res == 0) {
-            res = cursor_->get_value(cursor_, &db_value);
-            if (res == 0) {
-                memcpy(values.data() + offset, db_value.data, db_value.size);
-                offset += db_value.size;
-                ++found_cnt;
-            }
-        }
-        cursor_->reset(cursor_);
-    }
-    return {found_cnt, operation_status_t::ok_k};
-}
-
-bulk_metadata_t wiredtiger_t::prepare_bulk_import_data(keys_spanc_t keys,
-                                                       values_spanc_t values,
-                                                       value_lengths_spanc_t sizes) const {
-    return {};
-}
-
-operation_result_t wiredtiger_t::bulk_import(bulk_metadata_t const& metadata) {
-    return {0, operation_status_t::not_implemented_k};
 }
 
 operation_result_t wiredtiger_t::range_select(key_t key, size_t length, values_span_t values) const {

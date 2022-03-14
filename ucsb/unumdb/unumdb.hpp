@@ -23,13 +23,15 @@ using value_spanc_t = ucsb::value_spanc_t;
 using values_span_t = ucsb::values_span_t;
 using values_spanc_t = ucsb::values_spanc_t;
 using value_lengths_spanc_t = ucsb::value_lengths_spanc_t;
-using bulk_metadata_t = ucsb::bulk_metadata_t;
 using operation_status_t = ucsb::operation_status_t;
 using operation_result_t = ucsb::operation_result_t;
 using transaction_t = ucsb::transaction_t;
 
 using fingerprint_t = key_t;
 using region_t = region_gt<key_t, data_source_t::unfixed_size_k>;
+
+// Note: It is defined outsize of the class because object member can not be thread_local
+thread_local darray_gt<string_t> loaded_files;
 
 /**
  * @brief UnumDB wrapper for the UCSB benchmark.
@@ -52,10 +54,7 @@ struct unumdb_t : public ucsb::db_t {
     operation_result_t batch_insert(keys_spanc_t keys, values_spanc_t values, value_lengths_spanc_t sizes) override;
     operation_result_t batch_read(keys_spanc_t keys, values_span_t values) const override;
 
-    bulk_metadata_t prepare_bulk_import_data(keys_spanc_t keys,
-                                             values_spanc_t values,
-                                             value_lengths_spanc_t sizes) const override;
-    operation_result_t bulk_import(bulk_metadata_t const& metadata) override;
+    operation_result_t bulk_load(keys_spanc_t keys, values_spanc_t values, value_lengths_spanc_t sizes) override;
 
     operation_result_t range_select(key_t key, size_t length, values_span_t values) const override;
     operation_result_t scan(key_t key, size_t length, value_span_t single_value) const override;
@@ -76,6 +75,7 @@ struct unumdb_t : public ucsb::db_t {
 
     bool load_config();
 
+  private:
     fs::path config_path_;
     fs::path dir_path_;
     db_config_t config_;
@@ -217,55 +217,43 @@ operation_result_t unumdb_t::batch_read(keys_spanc_t keys, values_span_t values)
     return {found_cnt, operation_status_t::ok_k};
 }
 
-bulk_metadata_t unumdb_t::prepare_bulk_import_data(keys_spanc_t keys,
-                                                   values_spanc_t values,
-                                                   value_lengths_spanc_t sizes) const {
-    size_t data_offset = 0;
-    bulk_metadata_t metadata;
-    size_t const migration_capacity = config_.region_config.country.migration_max_cnt;
-    for (size_t i = 0; i < keys.size(); i += migration_capacity) {
-        std::string file_name = fmt::format("udb_building_{}", i / migration_capacity);
+operation_result_t unumdb_t::bulk_load(keys_spanc_t keys, values_spanc_t values, value_lengths_spanc_t sizes) {
 
-        size_t next_data_idx = i + migration_capacity;
-        if (next_data_idx > keys.size())
-            next_data_idx = keys.size();
+    size_t const migration_max_cnt = config_.region_config.country.migration_max_cnt;
+    size_t offset = 0;
+    for (size_t idx = 0; idx < keys.size(); idx += migration_max_cnt) {
+        std::string file_name = fmt::format("udb_building_{}", idx / migration_max_cnt);
 
-        size_t next_data_offset = data_offset;
-        for (size_t j = 0; j < next_data_idx; ++j)
-            next_data_offset += sizes[j];
+        size_t count = std::min(migration_max_cnt, keys.size() - idx);
+        size_t size = 0;
+        for (size_t i = 0; i < count; ++i)
+            size += sizes[idx + i];
 
         // TODO: Remove const casts later
         span_gt<fingerprint_t> fingerprints {
-            const_cast<fingerprint_t*>(reinterpret_cast<fingerprint_t const*>(keys.data() + i)),
-            next_data_idx - i};
+            const_cast<fingerprint_t*>(reinterpret_cast<fingerprint_t const*>(keys.data() + idx)),
+            count};
 #ifdef DEV_BUILD
         auto building =
             region_t::building_constructor_t::build({file_name.data(), file_name.size()},
                                                     {},
                                                     fingerprints,
-                                                    {reinterpret_cast<byte_t const*>(values.data()), values.size()},
+                                                    {reinterpret_cast<byte_t const*>(values.data() + offset), size},
                                                     {sizes.data(), sizes.size()},
                                                     ds_info_t::sorted_k);
 #else
         auto building =
             region_t::building_constructor_t::build({},
                                                     fingerprints,
-                                                    {reinterpret_cast<byte_t const*>(values.data()), values.size()},
+                                                    {reinterpret_cast<byte_t const*>(values.data() + offset), size},
                                                     {sizes.data(), sizes.size()},
                                                     ds_info_t::sorted_k);
 #endif
-        metadata.files.insert({building.schema().file_name.c_str()});
+        loaded_files.push_back({building.schema().file_name.c_str()});
+        offset += size;
     }
-    metadata.records_count = keys.size();
 
-    return metadata;
-}
-
-operation_result_t unumdb_t::bulk_import(bulk_metadata_t const& metadata) {
-    for (auto const& file_path : metadata.files)
-        region_.import({file_path.data(), file_path.size()});
-
-    return {metadata.records_count, operation_status_t::ok_k};
+    return {keys.size(), operation_status_t::ok_k};
 }
 
 operation_result_t unumdb_t::range_select(key_t key, size_t length, values_span_t values) const {
@@ -319,7 +307,12 @@ operation_result_t unumdb_t::scan(key_t key, size_t length, value_span_t single_
 }
 
 void unumdb_t::flush() {
-    region_.flush();
+    if (!loaded_files.empty()) {
+        region_.import(loaded_files.view());
+        loaded_files.clear();
+    }
+    else
+        region_.flush();
 }
 
 size_t unumdb_t::size_on_disk() const {

@@ -22,7 +22,7 @@ Our UnumDB is also evaluated with this benchmark, but it was removed from the pu
 * Range Select
 * Full Scan
 * Batch Read
-* *Bulk Import*
+* *Bulk Load*
 
 ### Sizes
 

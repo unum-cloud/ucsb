@@ -23,7 +23,6 @@ using value_spanc_t = ucsb::value_spanc_t;
 using values_span_t = ucsb::values_span_t;
 using values_spanc_t = ucsb::values_spanc_t;
 using value_lengths_spanc_t = ucsb::value_lengths_spanc_t;
-using bulk_metadata_t = ucsb::bulk_metadata_t;
 using operation_status_t = ucsb::operation_status_t;
 using operation_result_t = ucsb::operation_result_t;
 using transaction_t = ucsb::transaction_t;
@@ -50,10 +49,7 @@ struct lmdb_t : public ucsb::db_t {
     operation_result_t batch_insert(keys_spanc_t keys, values_spanc_t values, value_lengths_spanc_t sizes) override;
     operation_result_t batch_read(keys_spanc_t keys, values_span_t values) const override;
 
-    bulk_metadata_t prepare_bulk_import_data(keys_spanc_t keys,
-                                             values_spanc_t values,
-                                             value_lengths_spanc_t sizes) const override;
-    operation_result_t bulk_import(bulk_metadata_t const& metadata) override;
+    operation_result_t bulk_load(keys_spanc_t keys, values_spanc_t values, value_lengths_spanc_t sizes) override;
 
     operation_result_t range_select(key_t key, size_t length, values_span_t values) const override;
     operation_result_t scan(key_t key, size_t length, value_span_t single_value) const override;
@@ -185,7 +181,7 @@ operation_result_t lmdb_t::insert(key_t key, value_spanc_t value) {
     MDB_val key_slice, val_slice;
 
     key_slice.mv_data = &key;
-    key_slice.mv_size = sizeof(key);
+    key_slice.mv_size = sizeof(key_t);
 
     val_slice.mv_data = const_cast<void*>(reinterpret_cast<void const*>(value.data()));
     val_slice.mv_size = value.size();
@@ -200,10 +196,7 @@ operation_result_t lmdb_t::insert(key_t key, value_spanc_t value) {
         return {0, operation_status_t::error_k};
     }
     res = mdb_txn_commit(txn);
-    if (res)
-        return {0, operation_status_t::error_k};
-
-    return {1, operation_status_t::ok_k};
+    return {1, res == 0 ? operation_status_t::ok_k : operation_status_t::error_k};
 }
 
 operation_result_t lmdb_t::update(key_t key, value_spanc_t value) {
@@ -212,7 +205,7 @@ operation_result_t lmdb_t::update(key_t key, value_spanc_t value) {
     MDB_val key_slice, val_slice;
 
     key_slice.mv_data = &key;
-    key_slice.mv_size = sizeof(key);
+    key_slice.mv_size = sizeof(key_t);
 
     int res = mdb_txn_begin(env_, nullptr, MDB_RDONLY, &txn);
     if (res)
@@ -234,10 +227,7 @@ operation_result_t lmdb_t::update(key_t key, value_spanc_t value) {
     }
 
     res = mdb_txn_commit(txn);
-    if (res)
-        return {0, operation_status_t::error_k};
-
-    return {1, operation_status_t::ok_k};
+    return {1, res == 0 ? operation_status_t::ok_k : operation_status_t::error_k};
 }
 
 operation_result_t lmdb_t::remove(key_t key) {
@@ -246,7 +236,7 @@ operation_result_t lmdb_t::remove(key_t key) {
     MDB_val key_slice;
 
     key_slice.mv_data = &key;
-    key_slice.mv_size = sizeof(key);
+    key_slice.mv_size = sizeof(key_t);
 
     int res = mdb_txn_begin(env_, nullptr, 0, &txn);
     if (res)
@@ -258,10 +248,7 @@ operation_result_t lmdb_t::remove(key_t key) {
         return {1, operation_status_t::not_found_k};
     }
     res = mdb_txn_commit(txn);
-    if (res)
-        return {0, operation_status_t::error_k};
-
-    return {1, operation_status_t::ok_k};
+    return {1, res == 0 ? operation_status_t::ok_k : operation_status_t::error_k};
 }
 
 operation_result_t lmdb_t::read(key_t key, value_span_t value) const {
@@ -270,7 +257,7 @@ operation_result_t lmdb_t::read(key_t key, value_span_t value) const {
     MDB_val key_slice, val_slice;
 
     key_slice.mv_data = &key;
-    key_slice.mv_size = sizeof(key);
+    key_slice.mv_size = sizeof(key_t);
 
     int res = mdb_txn_begin(env_, nullptr, MDB_RDONLY, &txn);
     if (res)
@@ -288,7 +275,32 @@ operation_result_t lmdb_t::read(key_t key, value_span_t value) const {
 }
 
 operation_result_t lmdb_t::batch_insert(keys_spanc_t keys, values_spanc_t values, value_lengths_spanc_t sizes) {
-    return {0, operation_status_t::not_implemented_k};
+
+    MDB_txn* txn = nullptr;
+
+    int res = mdb_txn_begin(env_, nullptr, 0, &txn);
+    if (res)
+        return {0, operation_status_t::error_k};
+    // mdb_set_compare(txn, &dbi_, compare_keys);
+
+    size_t offset = 0;
+    for (size_t idx = 0; idx < keys.size(); ++idx) {
+        MDB_val key_slice, val_slice;
+        key_slice.mv_data = &keys[idx];
+        key_slice.mv_size = sizeof(key_t);
+        val_slice.mv_data = const_cast<void*>(reinterpret_cast<void const*>(values.data() + offset));
+        val_slice.mv_size = sizes[idx];
+
+        res = mdb_put(txn, dbi_, &key_slice, &val_slice, 0);
+        if (res) {
+            mdb_txn_abort(txn);
+            return {0, operation_status_t::error_k};
+        }
+        offset += sizes[idx];
+    }
+
+    res = mdb_txn_commit(txn);
+    return {keys.size(), res == 0 ? operation_status_t::ok_k : operation_status_t::error_k};
 }
 
 operation_result_t lmdb_t::batch_read(keys_spanc_t keys, values_span_t values) const {
@@ -306,7 +318,7 @@ operation_result_t lmdb_t::batch_read(keys_spanc_t keys, values_span_t values) c
     size_t found_cnt = 0;
     for (auto key : keys) {
         key_slice.mv_data = &key;
-        key_slice.mv_size = sizeof(key);
+        key_slice.mv_size = sizeof(key_t);
         res = mdb_get(txn, dbi_, &key_slice, &val_slice);
         if (res == 0) {
             memcpy(values.data() + offset, val_slice.mv_data, val_slice.mv_size);
@@ -319,14 +331,9 @@ operation_result_t lmdb_t::batch_read(keys_spanc_t keys, values_span_t values) c
     return {found_cnt, operation_status_t::ok_k};
 }
 
-bulk_metadata_t lmdb_t::prepare_bulk_import_data(keys_spanc_t keys,
-                                                 values_spanc_t values,
-                                                 value_lengths_spanc_t sizes) const {
-    return {};
-}
-
-operation_result_t lmdb_t::bulk_import(bulk_metadata_t const& metadata) {
-    return {0, operation_status_t::not_implemented_k};
+operation_result_t lmdb_t::bulk_load(keys_spanc_t keys, values_spanc_t values, value_lengths_spanc_t sizes) {
+    // Currently this DB doesn't have bulk insert so instead we do batch insert
+    return batch_insert(keys, values, sizes);
 }
 
 operation_result_t lmdb_t::range_select(key_t key, size_t length, values_span_t values) const {
@@ -336,7 +343,7 @@ operation_result_t lmdb_t::range_select(key_t key, size_t length, values_span_t 
     MDB_val key_slice, val_slice;
 
     key_slice.mv_data = &key;
-    key_slice.mv_size = sizeof(key);
+    key_slice.mv_size = sizeof(key_t);
 
     int res = mdb_txn_begin(env_, nullptr, 0, &txn);
     if (res)
@@ -374,7 +381,7 @@ operation_result_t lmdb_t::scan(key_t key, size_t length, value_span_t single_va
     MDB_val key_slice, val_slice;
 
     key_slice.mv_data = &key;
-    key_slice.mv_size = sizeof(key);
+    key_slice.mv_size = sizeof(key_t);
 
     int res = mdb_txn_begin(env_, nullptr, 0, &txn);
     if (res)
