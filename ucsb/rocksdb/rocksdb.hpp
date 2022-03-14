@@ -250,17 +250,17 @@ operation_result_t rocksdb_gt<mode_ak>::batch_insert(keys_spanc_t keys,
                                                      value_lengths_spanc_t sizes) {
 
     size_t offset = 0;
+    rocksdb::WriteBatch batch;
     for (size_t idx = 0; idx < keys.size(); ++idx) {
         auto key = keys[idx];
         key = __builtin_bswap64(key);
         rocksdb::Slice key_slice {reinterpret_cast<char const*>(&key), sizeof(key_t)};
         rocksdb::Slice value_slice {reinterpret_cast<char const*>(values.data() + offset), sizes[idx]};
-        rocksdb::Status status = db_->Put(write_options_, key_slice, value_slice);
-        if (!status.ok())
-            return {0, operation_status_t::error_k};
+        batch.Put(key_slice, value_slice);
         offset += sizes[idx];
     }
-    return {keys.size(), operation_status_t::ok_k};
+    rocksdb::Status status = db_->Write(write_options_, &batch);
+    return {keys.size(), status.ok() ? operation_status_t::ok_k : operation_status_t::error_k};
 }
 
 template <db_mode_t mode_ak>
