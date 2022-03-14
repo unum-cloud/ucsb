@@ -360,13 +360,17 @@ bool unumdb_t::load_config() {
     config_.region_config.country.city.fixed_citizen_size = config_.region_config.country.fixed_citizen_size;
     config_.region_config.country.city.files_size_enlarge_factor = j_config["files_size_enlarge_factor"].get<size_t>();
 
-    config_.region_config.country.city.street.fixed_citizen_size = config_.region_config.country.fixed_citizen_size;
-    config_.region_config.country.city.street.unfixed_citizen_max_size =
+    config_.region_config.country.city.l0_street.fixed_citizen_size = config_.region_config.country.fixed_citizen_size;
+    config_.region_config.country.city.l0_street.unfixed_citizen_max_size =
         config_.region_config.country.unfixed_citizen_max_size;
-    config_.region_config.country.city.street.max_files_cnt = j_config["max_files_cnt"].get<size_t>();
-    config_.region_config.country.city.street.files_count_enlarge_factor =
+    config_.region_config.country.city.l0_street.max_files_cnt = j_config["max_files_cnt"].get<size_t>();
+    config_.region_config.country.city.l0_street.files_count_enlarge_factor =
         j_config["files_count_enlarge_factor"].get<size_t>();
-    config_.region_config.country.city.street.building.fixed_citizen_size =
+    config_.region_config.country.city.l0_street.building.citizens_capacity =
+        config_.region_config.country.migration_capacity;
+    config_.region_config.country.city.l0_street.building.citizens_max_cnt =
+        config_.region_config.country.migration_max_cnt;
+    config_.region_config.country.city.l0_street.building.fixed_citizen_size =
         config_.region_config.country.fixed_citizen_size;
 
     config_.io_device = j_config["io_device"].get<std::string>().c_str();
