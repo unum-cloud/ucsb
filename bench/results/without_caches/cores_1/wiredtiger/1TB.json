@@ -86,7 +86,7 @@
       "repetition_index": 0,
       "threads": 1,
       "iterations": 1000000000,
-      "real_time": 13910.882074041292,
+      "real_time": 54.339383102,
       "cpu_time": 10568.181099599999,
       "time_unit": "us",
       "bytes_per_second": 18844527.51484247,
