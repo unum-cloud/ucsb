@@ -28,10 +28,10 @@ struct fmt::formatter<ucsb::printable_bytes_t> {
             case 'E': suffix_idx = 7; break;
             default: throw format_error("invalid unit");
             }
-            it++;
+            ++it;
         }
         if (it != ctx.end() && *it == 'B')
-            it++;
+            ++it;
         if (it != ctx.end() && *it != '}')
             throw format_error("invalid format");
 

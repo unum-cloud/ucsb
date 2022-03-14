@@ -11,12 +11,14 @@ namespace ucsb {
 enum class operation_kind_t {
     insert_k,
     update_k,
-    read_k,
     remove_k,
+    read_k,
+    read_modify_write_k,
+    batch_insert_k,
     batch_read_k,
+    bulk_load_k,
     range_select_k,
     scan_k,
-    read_modify_write_k,
 };
 
 enum class operation_status_t : int {
