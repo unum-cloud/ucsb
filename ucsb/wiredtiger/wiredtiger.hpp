@@ -239,7 +239,7 @@ operation_result_t wiredtiger_t::batch_read(keys_spanc_t keys, values_span_t val
 operation_result_t wiredtiger_t::bulk_load(keys_spanc_t keys, values_spanc_t values, value_lengths_spanc_t sizes) {
     // Warnings:
     //   DB must be empty
-    //   No other cursors while doing batch insert
+    //   No other cursors while doing bulk load
 
     if (cursor_) {
         cursor_->close(cursor_);
