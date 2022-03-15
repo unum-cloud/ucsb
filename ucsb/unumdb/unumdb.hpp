@@ -81,7 +81,6 @@ struct unumdb_t : public ucsb::db_t {
     db_config_t config_;
 
     region_t region_;
-    darray_gt<string_t> loaded_files_;
 };
 
 void unumdb_t::set_config(fs::path const& config_path, fs::path const& dir_path) {
@@ -250,7 +249,7 @@ operation_result_t unumdb_t::bulk_load(keys_spanc_t keys, values_spanc_t values,
                                                     {sizes.data(), sizes.size()},
                                                     ds_info_t::sorted_k);
 #endif
-        loaded_files_.push_back({building.schema().file_name.c_str()});
+        loaded_files.push_back({building.schema().file_name.c_str()});
         offset += size;
     }
 
@@ -310,7 +309,7 @@ operation_result_t unumdb_t::scan(key_t key, size_t length, value_span_t single_
 void unumdb_t::flush() {
     if (!loaded_files.empty()) {
         region_.import(loaded_files.view());
-        loaded_files_.clear();
+        loaded_files.clear();
     }
     else
         region_.flush();
