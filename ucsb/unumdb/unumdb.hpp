@@ -29,9 +29,10 @@ using transaction_t = ucsb::transaction_t;
 
 using fingerprint_t = key_t;
 using region_t = region_gt<key_t, data_source_t::unfixed_size_k>;
+using building_holder_t = building_holder_gt<fingerprint_t>;
 
 // Note: It is defined outsize of the class because object member can not be thread_local
-thread_local darray_gt<string_t> loaded_files;
+thread_local darray_gt<building_holder_t> import_data;
 
 /**
  * @brief UnumDB wrapper for the UCSB benchmark.
@@ -249,7 +250,8 @@ operation_result_t unumdb_t::bulk_load(keys_spanc_t keys, values_spanc_t values,
                                                     {sizes.data(), sizes.size()},
                                                     ds_info_t::sorted_k);
 #endif
-        loaded_files.push_back({building.schema().file_name.c_str()});
+        auto holder = building.export_and_destroy();
+        import_data.push_back(holder);
         offset += size;
     }
 
@@ -307,9 +309,9 @@ operation_result_t unumdb_t::scan(key_t key, size_t length, value_span_t single_
 }
 
 void unumdb_t::flush() {
-    if (!loaded_files.empty()) {
-        region_.import(loaded_files.view());
-        loaded_files.clear();
+    if (!import_data.empty()) {
+        region_.import(import_data.view());
+        import_data.clear();
     }
     else
         region_.flush();
@@ -352,13 +354,13 @@ bool unumdb_t::load_config() {
 
     config_.region_config.country.city.fixed_citizen_size = config_.region_config.country.fixed_citizen_size;
     config_.region_config.country.city.files_size_enlarge_factor = j_config["files_size_enlarge_factor"].get<size_t>();
+    config_.region_config.country.city.files_count_enlarge_factor =
+        j_config["files_count_enlarge_factor"].get<size_t>();
 
     config_.region_config.country.city.street_0.fixed_citizen_size = config_.region_config.country.fixed_citizen_size;
     config_.region_config.country.city.street_0.unfixed_citizen_max_size =
         config_.region_config.country.unfixed_citizen_max_size;
     config_.region_config.country.city.street_0.max_files_cnt = j_config["max_files_cnt"].get<size_t>();
-    config_.region_config.country.city.street_0.files_count_enlarge_factor =
-        j_config["files_count_enlarge_factor"].get<size_t>();
     config_.region_config.country.city.street_0.building.citizens_capacity =
         config_.region_config.country.migration_capacity;
     config_.region_config.country.city.street_0.building.citizens_max_cnt =
