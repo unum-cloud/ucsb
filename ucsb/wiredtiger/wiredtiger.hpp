@@ -33,8 +33,8 @@ using transaction_t = ucsb::transaction_t;
 struct wiredtiger_t : public ucsb::db_t {
 
     inline wiredtiger_t()
-        : conn_(nullptr), session_(nullptr), cursor_(nullptr), batch_insert_cursor_(nullptr),
-          table_name_("table:access") {}
+        : conn_(nullptr), session_(nullptr), cursor_(nullptr), bulk_load_cursor_(nullptr), table_name_("table:access") {
+    }
     inline ~wiredtiger_t() override = default;
 
     void set_config(fs::path const& config_path, fs::path const& dir_path) override;
@@ -67,7 +67,7 @@ struct wiredtiger_t : public ucsb::db_t {
     WT_CONNECTION* conn_;
     WT_SESSION* session_;
     mutable WT_CURSOR* cursor_;
-    WT_CURSOR* batch_insert_cursor_;
+    WT_CURSOR* bulk_load_cursor_;
     std::string table_name_;
 };
 
@@ -132,7 +132,7 @@ bool wiredtiger_t::close() {
         return false;
 
     cursor_ = nullptr;
-    batch_insert_cursor_ = nullptr;
+    bulk_load_cursor_ = nullptr;
     session_ = nullptr;
     conn_ = nullptr;
     return true;
@@ -246,21 +246,21 @@ operation_result_t wiredtiger_t::bulk_load(keys_spanc_t keys, values_spanc_t val
         cursor_ = nullptr;
     }
 
-    if (batch_insert_cursor_ == nullptr) {
+    if (bulk_load_cursor_ == nullptr) {
         // Batch cursor will be closed in flush()
-        auto res = session_->open_cursor(session_, table_name_.c_str(), NULL, "bulk", &batch_insert_cursor_);
+        auto res = session_->open_cursor(session_, table_name_.c_str(), NULL, "bulk", &bulk_load_cursor_);
         if (res)
             return {0, operation_status_t::error_k};
     }
 
     size_t offset = 0;
     for (size_t idx = 0; idx < keys.size(); ++idx) {
-        batch_insert_cursor_->set_key(batch_insert_cursor_, keys[idx]);
+        bulk_load_cursor_->set_key(bulk_load_cursor_, keys[idx]);
         WT_ITEM db_value;
         db_value.data = &values[offset];
         db_value.size = sizes[idx];
-        batch_insert_cursor_->set_value(batch_insert_cursor_, &db_value);
-        batch_insert_cursor_->insert(batch_insert_cursor_);
+        bulk_load_cursor_->set_value(bulk_load_cursor_, &db_value);
+        bulk_load_cursor_->insert(bulk_load_cursor_);
         offset += sizes[idx];
     }
 
@@ -314,9 +314,9 @@ operation_result_t wiredtiger_t::scan(key_t key, size_t length, value_span_t sin
 }
 
 void wiredtiger_t::flush() {
-    if (batch_insert_cursor_) {
-        batch_insert_cursor_->close(batch_insert_cursor_);
-        batch_insert_cursor_ = nullptr;
+    if (bulk_load_cursor_) {
+        bulk_load_cursor_->close(bulk_load_cursor_);
+        bulk_load_cursor_ = nullptr;
     }
 }
 
