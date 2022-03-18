@@ -51,6 +51,7 @@ enum class db_mode_t {
  * we need to clear them before RocksDB statis objects are destructed
  * https://github.com/facebook/rocksdb/issues/649
  */
+thread_local std::vector<key_t> batch_keys;
 thread_local std::vector<rocksdb::Slice> key_slices;
 thread_local std::vector<rocksdb::PinnableSlice> value_slices;
 thread_local std::vector<rocksdb::Status> statuses;
@@ -169,7 +170,6 @@ bool rocksdb_gt<mode_ak>::open() {
                                               &cf_handles_,
                                               &transaction_db_);
         db_raw = transaction_db_;
-        return false;
     }
     db_.reset(db_raw);
 
@@ -178,6 +178,7 @@ bool rocksdb_gt<mode_ak>::open() {
 
 template <db_mode_t mode_ak>
 bool rocksdb_gt<mode_ak>::close() {
+    batch_keys.clear();
     key_slices.clear();
     value_slices.clear();
     statuses.clear();
@@ -252,8 +253,7 @@ operation_result_t rocksdb_gt<mode_ak>::batch_insert(keys_spanc_t keys,
     size_t offset = 0;
     rocksdb::WriteBatch batch;
     for (size_t idx = 0; idx < keys.size(); ++idx) {
-        auto key = keys[idx];
-        key = __builtin_bswap64(key);
+        auto key = __builtin_bswap64(keys[idx]);
         rocksdb::Slice key_slice {reinterpret_cast<char const*>(&key), sizeof(key_t)};
         rocksdb::Slice value_slice {reinterpret_cast<char const*>(values.data() + offset), sizes[idx]};
         batch.Put(key_slice, value_slice);
@@ -266,16 +266,16 @@ operation_result_t rocksdb_gt<mode_ak>::batch_insert(keys_spanc_t keys,
 template <db_mode_t mode_ak>
 operation_result_t rocksdb_gt<mode_ak>::batch_read(keys_spanc_t keys, values_span_t values) const {
 
-    if (keys.size() > key_slices.size()) {
+    if (keys.size() > batch_keys.size()) {
+        batch_keys = std::vector<key_t>(keys.size());
         key_slices = std::vector<rocksdb::Slice>(keys.size());
         value_slices = std::vector<rocksdb::PinnableSlice>(keys.size());
         statuses = std::vector<rocksdb::Status>(keys.size());
     }
 
     for (size_t idx = 0; idx < keys.size(); ++idx) {
-        auto key = keys[idx];
-        key = __builtin_bswap64(key);
-        rocksdb::Slice key_slice {reinterpret_cast<char const*>(&key), sizeof(keys[idx])};
+        batch_keys[idx] = __builtin_bswap64(keys[idx]);
+        rocksdb::Slice key_slice {reinterpret_cast<char const*>(&batch_keys[idx]), sizeof(key_t)};
         key_slices[idx] = key_slice;
     }
 
@@ -303,7 +303,7 @@ template <db_mode_t mode_ak>
 operation_result_t rocksdb_gt<mode_ak>::bulk_load(keys_spanc_t keys,
                                                   values_spanc_t values,
                                                   value_lengths_spanc_t sizes) {
-    size_t data_idx = 0;
+    size_t idx = 0;
     size_t data_offset = 0;
     std::vector<std::string> files;
     while (true) {
@@ -315,25 +315,24 @@ operation_result_t rocksdb_gt<mode_ak>::bulk_load(keys_spanc_t keys,
         if (!status.ok())
             break;
 
-        for (; data_idx < keys.size(); ++data_idx) {
-            auto key = keys[data_idx];
-            key = __builtin_bswap64(key);
+        for (; idx < keys.size(); ++idx) {
+            auto key = __builtin_bswap64(keys[idx]);
             rocksdb::Slice key_slice {reinterpret_cast<char const*>(&key), sizeof(key_t)};
-            rocksdb::Slice value_slice {reinterpret_cast<char const*>(values.data() + data_offset), sizes[data_idx]};
+            rocksdb::Slice value_slice {reinterpret_cast<char const*>(values.data() + data_offset), sizes[idx]};
             status = sst_file_writer.Add(key_slice, value_slice);
             if (status.ok())
-                data_offset += sizes[data_idx];
+                data_offset += sizes[idx];
             else
                 break;
         }
         if (!status.ok())
             break;
         status = sst_file_writer.Finish();
-        if (!status.ok() || data_idx == keys.size())
+        if (!status.ok() || idx == keys.size())
             break;
     }
 
-    if (data_idx != keys.size()) {
+    if (idx != keys.size()) {
         for (auto const& file_path : files)
             fs::remove(file_path);
         return {keys.size(), operation_status_t::error_k};

@@ -126,7 +126,20 @@ operation_result_t unumdb_transaction_t::read(key_t key, value_span_t value) con
 operation_result_t unumdb_transaction_t::batch_insert(keys_spanc_t keys,
                                                       values_spanc_t values,
                                                       value_lengths_spanc_t sizes) {
-    return {0, operation_status_t::not_implemented_k};
+    size_t offset = 0;
+    for (size_t idx = 0; idx < keys.size(); ++idx) {
+        citizen_view_t citizen {reinterpret_cast<byte_t const*>(values.data() + offset), sizes[idx]};
+        auto status = transaction_->insert(keys[idx], citizen);
+        if (status != status_t::ok_k) {
+            assert(status == status_t::not_enough_ram_k);
+            status = transaction_->commit();
+            assert(status == status_t::ok_k);
+            status = transaction_->insert(keys[idx], citizen);
+            assert(status == status_t::ok_k);
+        }
+        offset += sizes[idx];
+    }
+    return {keys.size(), operation_status_t::ok_k};
 }
 
 operation_result_t unumdb_transaction_t::batch_read(keys_spanc_t keys, values_span_t values) const {
@@ -163,7 +176,7 @@ operation_result_t unumdb_transaction_t::batch_read(keys_spanc_t keys, values_sp
 operation_result_t unumdb_transaction_t::bulk_load(keys_spanc_t keys,
                                                    values_spanc_t values,
                                                    value_lengths_spanc_t sizes) {
-    return {0, operation_status_t::not_implemented_k};
+    return batch_insert(keys, values, sizes);
 }
 
 operation_result_t unumdb_transaction_t::range_select(key_t key, size_t length, values_span_t values) const {
