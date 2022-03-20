@@ -313,8 +313,9 @@ void unumdb_t::flush() {
         region_.import(import_data.view());
         import_data.clear();
     }
-    else
+    else {
         region_.flush();
+    }
 }
 
 size_t unumdb_t::size_on_disk() const {
