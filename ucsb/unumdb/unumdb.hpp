@@ -220,40 +220,30 @@ operation_result_t unumdb_t::batch_read(keys_spanc_t keys, values_span_t values)
 
 operation_result_t unumdb_t::bulk_load(keys_spanc_t keys, values_spanc_t values, value_lengths_spanc_t sizes) {
 
-    size_t const migration_max_cnt = config_.region_config.country.migration_max_cnt;
-    size_t offset = 0;
-    for (size_t idx = 0; idx < keys.size(); idx += migration_max_cnt) {
-        std::string file_name = fmt::format("udb_building_{}", idx / migration_max_cnt);
-
-        size_t size = 0;
-        size_t count = std::min(migration_max_cnt, keys.size() - idx);
-        for (size_t i = 0; i < count; ++i)
-            size += sizes[idx + i];
-
-        // TODO: Remove const casts later
-        span_gt<fingerprint_t> fingerprints {
-            const_cast<fingerprint_t*>(reinterpret_cast<fingerprint_t const*>(keys.data() + idx)),
-            count};
+    static size_t building_id = 0;
+    std::string file_name = fmt::format("udb_building_{}", building_id++);
+    // TODO: Remove const casts later
+    span_gt<fingerprint_t> fingerprints {
+        const_cast<fingerprint_t*>(reinterpret_cast<fingerprint_t const*>(keys.data())),
+        keys.size()};
 #ifdef DEV_BUILD
-        auto building =
-            region_t::building_constructor_t::build({file_name.data(), file_name.size()},
-                                                    {},
-                                                    fingerprints,
-                                                    {reinterpret_cast<byte_t const*>(values.data() + offset), size},
-                                                    {sizes.data(), sizes.size()},
-                                                    ds_info_t::sorted_k);
+    auto building =
+        region_t::building_constructor_t::build({file_name.data(), file_name.size()},
+                                                {},
+                                                fingerprints,
+                                                {reinterpret_cast<byte_t const*>(values.data()), values.size()},
+                                                {sizes.data(), sizes.size()},
+                                                ds_info_t::sorted_k);
 #else
-        auto building =
-            region_t::building_constructor_t::build({},
-                                                    fingerprints,
-                                                    {reinterpret_cast<byte_t const*>(values.data() + offset), size},
-                                                    {sizes.data(), sizes.size()},
-                                                    ds_info_t::sorted_k);
+    auto building =
+        region_t::building_constructor_t::build({},
+                                                fingerprints,
+                                                {reinterpret_cast<byte_t const*>(values.data()), values.size()},
+                                                {sizes.data(), sizes.size()},
+                                                ds_info_t::sorted_k);
 #endif
-        auto holder = building.export_and_destroy();
-        import_data.push_back(holder);
-        offset += size;
-    }
+    auto holder = building.export_and_destroy();
+    import_data.push_back(holder);
 
     return {keys.size(), operation_status_t::ok_k};
 }
