@@ -205,9 +205,11 @@ operation_result_t rocksdb_t::insert(key_t key, value_spanc_t value) {
 
 operation_result_t rocksdb_t::update(key_t key, value_spanc_t value) {
 
-    key_t key_to_read = key, key_to_write = key;
+    key_t key_to_read = key;
+    key_t key_to_write = key;
+
     rocksdb::PinnableSlice data;
-    rocksdb::Status status = db_->Get(read_options_, to_slice(key_to_read), &data);
+    rocksdb::Status status = db_->Get(read_options_, cf_handles_[0], to_slice(key_to_read), &data);
     if (status.IsNotFound())
         return {1, operation_status_t::not_found_k};
     else if (!status.ok())
@@ -224,7 +226,7 @@ operation_result_t rocksdb_t::remove(key_t key) {
 
 operation_result_t rocksdb_t::read(key_t key, value_span_t value) const {
     rocksdb::PinnableSlice data;
-    rocksdb::Status status = db_->Get(read_options_, to_slice(key), &data);
+    rocksdb::Status status = db_->Get(read_options_, cf_handles_[0], to_slice(key), &data);
     if (status.IsNotFound())
         return {1, operation_status_t::not_found_k};
     else if (!status.ok())
@@ -239,7 +241,8 @@ operation_result_t rocksdb_t::batch_insert(keys_spanc_t keys, values_spanc_t val
     size_t offset = 0;
     rocksdb::WriteBatch batch;
     for (size_t idx = 0; idx != keys.size(); ++idx) {
-        batch.Put(to_slice(keys[idx]), to_slice(value_slice.subspan(offset, sizes[idx])));
+        key_t key = keys[idx];
+        batch.Put(to_slice(key), to_slice(values.subspan(offset, sizes[idx])));
         offset += sizes[idx];
     }
     rocksdb::Status status = db_->Write(write_options_, &batch);
@@ -294,7 +297,7 @@ operation_result_t rocksdb_t::bulk_load(keys_spanc_t keys, values_spanc_t values
 
         for (; idx != keys.size(); ++idx) {
             auto key = keys[idx];
-            status = sst_file_writer.Add(to_slice(key), value_slice(values.subspan(data_offset, sizes[idx])));
+            status = sst_file_writer.Add(to_slice(key), to_slice(values.subspan(data_offset, sizes[idx])));
             if (!status.ok())
                 break;
             data_offset += sizes[idx];
@@ -327,7 +330,7 @@ operation_result_t rocksdb_t::range_select(key_t key, size_t length, values_span
 
     size_t i = 0;
     size_t exported_bytes = 0;
-    std::unique_ptr<rocksdb::Iterator> it = db_->NewIterator(read_options_);
+    std::unique_ptr<rocksdb::Iterator> it(db_->NewIterator(read_options_));
     it->Seek(to_slice(key));
     for (; it->Valid() && i != length; i++, it->Next()) {
         memcpy(values.data() + exported_bytes, it->value().data(), it->value().size());
@@ -339,7 +342,7 @@ operation_result_t rocksdb_t::range_select(key_t key, size_t length, values_span
 operation_result_t rocksdb_t::scan(key_t key, size_t length, value_span_t single_value) const {
 
     size_t i = 0;
-    std::unique_ptr<rocksdb::Iterator> it = db_->NewIterator(read_options_);
+    std::unique_ptr<rocksdb::Iterator> it(db_->NewIterator(read_options_));
     it->Seek(to_slice(key));
     for (; it->Valid() && i != length; i++, it->Next())
         memcpy(single_value.data(), it->value().data(), it->value().size());
@@ -361,7 +364,7 @@ size_t rocksdb_t::size_on_disk() const {
 
 std::unique_ptr<transaction_t> rocksdb_t::create_transaction() {
 
-    auto raw = std::make_unique<rocksdb::Transaction>(transaction_db_->BeginTransaction(write_options_));
+    std::unique_ptr<rocksdb::Transaction> raw(transaction_db_->BeginTransaction(write_options_));
     auto id = size_t(raw.get());
     raw->SetName(std::to_string(id));
     return std::make_unique<rocksdb_transaction_t>(std::move(raw), cf_handles_);
