@@ -46,6 +46,7 @@ enum class db_mode_t {
 
 inline rocksdb::Slice to_slice(key_t& key) {
     key = __builtin_bswap64(key);
+    static_assert(sizeof(key_t) == sizeof(uint64_t), "Check `__builtin_bswap64`");
     return {reinterpret_cast<char const*>(&key), sizeof(key_t)};
 }
 
@@ -158,9 +159,10 @@ bool rocksdb_t::open() {
     table_options.filter_policy.reset(rocksdb::NewBloomFilterPolicy(10));
     options_.table_factory.reset(rocksdb::NewBlockBasedTableFactory(table_options));
     // options_.comparator = &key_cmp_;
-    static_assert(sizeof(key_t) == sizeof(uint64_t), "Check `__builtin_bswap64`");
 
+    // Overwrite latency-affecting settings, that aren't externally configurable.
     read_options_.verify_checksums = false;
+    read_options_.background_purge_on_iterator_cleanup = true;
     write_options_.disableWAL = true;
 
     rocksdb::DB* db_raw = nullptr;
@@ -342,6 +344,10 @@ operation_result_t rocksdb_t::range_select(key_t key, size_t length, values_span
 operation_result_t rocksdb_t::scan(key_t key, size_t length, value_span_t single_value) const {
 
     size_t i = 0;
+    rocksdb::ReadOptions scan_options = read_options_;
+    // It's recommended to disable caching on long scans.
+    // https://github.com/facebook/rocksdb/blob/49a10feb21dc5c766bb272406136667e1d8a969e/include/rocksdb/options.h#L1462
+    scan_options.fill_cache = false;
     std::unique_ptr<rocksdb::Iterator> it(db_->NewIterator(read_options_));
     it->Seek(to_slice(key));
     for (; it->Valid() && i != length; i++, it->Next())
