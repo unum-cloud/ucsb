@@ -222,6 +222,10 @@ operation_result_t unumdb_t::bulk_load(keys_spanc_t keys, values_spanc_t values,
 
     static size_t building_id = 0;
     std::string file_name = fmt::format("udb_building_{}", building_id++);
+    building_config_t config;
+    config.citizens_capacity = values.size();
+    config.citizens_max_cnt = keys.size();
+
     // TODO: Remove const casts later
     span_gt<fingerprint_t> fingerprints {
         const_cast<fingerprint_t*>(reinterpret_cast<fingerprint_t const*>(keys.data())),
@@ -229,14 +233,14 @@ operation_result_t unumdb_t::bulk_load(keys_spanc_t keys, values_spanc_t values,
 #ifdef DEV_BUILD
     auto building =
         region_t::building_constructor_t::build({file_name.data(), file_name.size()},
-                                                {},
+                                                config,
                                                 fingerprints,
                                                 {reinterpret_cast<byte_t const*>(values.data()), values.size()},
                                                 {sizes.data(), sizes.size()},
                                                 ds_info_t::sorted_k);
 #else
     auto building =
-        region_t::building_constructor_t::build({},
+        region_t::building_constructor_t::build(config,
                                                 fingerprints,
                                                 {reinterpret_cast<byte_t const*>(values.data()), values.size()},
                                                 {sizes.data(), sizes.size()},
