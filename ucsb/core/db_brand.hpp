@@ -30,8 +30,7 @@ inline std::shared_ptr<db_t> make_db(db_brand_t db_brand, bool transactional) {
             init_file_io_by_libc("./"); // Note: Temporary solution
             return std::make_shared<unum::unumdb_t>();
         }
-        case db_brand_t::rocksdb_k:
-            return std::make_shared<facebook::rocksdb_gt<facebook::db_mode_t::transactional_k>>();
+        case db_brand_t::rocksdb_k: return std::make_shared<facebook::rocksdb_t>(facebook::db_mode_t::transactional_k);
         default: break;
         }
     }
@@ -41,7 +40,7 @@ inline std::shared_ptr<db_t> make_db(db_brand_t db_brand, bool transactional) {
             init_file_io_by_libc("./"); // Note: Temporary solution
             return std::make_shared<unum::unumdb_t>();
         }
-        case db_brand_t::rocksdb_k: return std::make_shared<facebook::rocksdb_gt<facebook::db_mode_t::regular_k>>();
+        case db_brand_t::rocksdb_k: return std::make_shared<facebook::rocksdb_t>(facebook::db_mode_t::regular_k);
         case db_brand_t::leveldb_k: return std::make_shared<google::leveldb_t>();
         case db_brand_t::wiredtiger_k: return std::make_shared<mongodb::wiredtiger_t>();
         case db_brand_t::lmdb_k: return std::make_shared<symas::lmdb_t>();
