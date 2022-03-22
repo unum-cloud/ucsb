@@ -227,7 +227,12 @@ operation_result_t leveldb_t::batch_read(keys_spanc_t keys, values_span_t values
 }
 
 operation_result_t leveldb_t::bulk_load(keys_spanc_t keys, values_spanc_t values, value_lengths_spanc_t sizes) {
-    // Currently this DB doesn't have bulk insert so instead we do batch insert
+    // Technically, LevelDB has a `TableBuilder` class, which is public, but once built -
+    // can't be imported into the DB itself.
+    // https://github.com/google/leveldb/blob/main/include/leveldb/table_builder.h
+    // The most efficient alternative is to use `WriteBatch`, which comes with a very
+    // scarce set of options.
+    // https://github.com/google/leveldb/blob/main/include/leveldb/options.h
     return batch_insert(keys, values, sizes);
 }
 
