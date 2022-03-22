@@ -11,6 +11,7 @@ using transaction_t = data_accessor_t;
 
 /**
  * @brief A base class for benchmarking key-value stores.
+ * This doesn't apply to transactional benchmarks.
  *
  * General usage procedure is the following:
  * 1. Configure `.set_config` and a custom file,

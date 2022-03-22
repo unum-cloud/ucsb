@@ -13,15 +13,30 @@ using json = nlohmann::json;
 namespace ucsb {
 
 /**
- * @brief Single benchmark configuration (per thread)
- * Some properties can be changed by the program based on thread count
+ * @brief A description of a single benchmark.
+ * It's post-processed version will devide the task
+ * by the number of threads.
  */
 struct workload_t {
     std::string name;
 
-    size_t db_records_count = 0; // DB all records count
-    size_t records_count = 0;    // Set by the program based on threads count
-    size_t operations_count = 0; // Can be changed by the program based on threads count
+    /**
+     * @brief Qualitative reference number of entries in the DB.
+     * Doesn't change during the benchmark.
+     * Defines the number of entries after initialization,
+     * but it's outdated after insertions and deletions.
+     */
+    size_t db_records_count = 0;
+    /**
+     * @brief Number of entries to be changed/inserted/deleted
+     * for this specific workload, divided by the number of threads.
+     */
+    size_t records_count = 0;
+    /**
+     * @brief Similar to @p `records_count`, but divided by the number
+     * of entries per batch. Will be equal to 1 for bulk scans operations.
+     */
+    size_t operations_count = 0;
 
     float insert_proportion = 0;
     float update_proportion = 0;
@@ -34,7 +49,7 @@ struct workload_t {
     float range_select_proportion = 0;
     float scan_proportion = 0;
 
-    key_t start_key = 0; // Can be changed by the program based on threads count
+    key_t start_key = 0;
     distribution_kind_t key_dist = distribution_kind_t::uniform_k;
 
     value_length_t value_length = 0;

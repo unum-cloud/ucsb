@@ -29,9 +29,9 @@ struct data_accessor_t {
     /**
      * @brief Performs many insert at once in a batch-asynchronous fashion.
      *
-     * @param keys Keys are in strict ascending order
-     * @param values Values are written in continuous form
-     * @param sizes Value sizes
+     * @param keys Keys are in strict ascending order.
+     * @param values Values are written in continuous form.
+     * @param sizes Value sizes.
      */
     virtual operation_result_t batch_insert(keys_spanc_t keys, values_spanc_t values, value_lengths_spanc_t sizes) = 0;
 
@@ -45,8 +45,8 @@ struct data_accessor_t {
      * wise). For this benchmark we don't return the retrieved the values and only
      * check them under the hood.
      *
-     * @param keys Keys are randome
-     * @param values single buffer for all values
+     * @param keys Keys are random.
+     * @param values A single buffer for all concatenated values.
      */
     virtual operation_result_t batch_read(keys_spanc_t keys, values_span_t values) const = 0;
 
@@ -56,9 +56,9 @@ struct data_accessor_t {
      * asume that after every `batch_insert` DB flushes, but in thiscase
      * DB shuld do many `bulk_load`s and periodically flushs
      *
-     * @param keys Keys are in strict ascending order
-     * @param values Values are written in continuous form
-     * @param sizes Value sizes
+     * @param keys Keys are in strict ascending order.
+     * @param values Values are written in continuous form.
+     * @param sizes Value sizes.
      */
     virtual operation_result_t bulk_load(keys_spanc_t keys, values_spanc_t values, value_lengths_spanc_t sizes) = 0;
 

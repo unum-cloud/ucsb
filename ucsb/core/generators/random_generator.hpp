@@ -5,8 +5,8 @@
 
 namespace ucsb {
 
-struct randome_int_generator_t final : generator_gt<uint32_t> {
-    inline randome_int_generator_t() : device_(), rand_(device_()), last_(0) { generate(); }
+struct random_int_generator_t final : generator_gt<uint32_t> {
+    inline random_int_generator_t() : device_(), rand_(device_()), last_(0) { generate(); }
 
     inline uint32_t generate() override { return last_ = rand_(); }
     inline uint32_t last() override { return last_; }
@@ -17,12 +17,12 @@ struct randome_int_generator_t final : generator_gt<uint32_t> {
     float last_;
 };
 
-struct randome_double_generator_t final : generator_gt<float> {
-    inline randome_double_generator_t(float min, float max)
+struct random_double_generator_t final : generator_gt<float> {
+    inline random_double_generator_t(float min, float max)
         : device_(), rand_(device_()), uniform_(min, max), last_(0.0) {
         generate();
     }
-    inline ~randome_double_generator_t() override = default;
+    inline ~random_double_generator_t() override = default;
 
     inline float generate() override { return last_ = uniform_(rand_); }
     inline float last() override { return last_; }
@@ -43,7 +43,7 @@ struct random_byte_generator_t final : generator_gt<char> {
     inline char last() override { return buf_[(off_ - 1 + 6) % 6]; }
 
   private:
-    randome_int_generator_t generator_;
+    random_int_generator_t generator_;
     char buf_[6];
     int off_;
 };

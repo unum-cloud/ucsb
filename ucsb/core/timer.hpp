@@ -6,6 +6,10 @@ namespace bm = benchmark;
 
 namespace ucsb {
 
+/**
+ * @brief Trivial Google Benchmark wrapper.
+ * No added value here :)
+ */
 struct timer_ref_t {
     inline timer_ref_t(bm::State& state) : state_(&state) {}
 

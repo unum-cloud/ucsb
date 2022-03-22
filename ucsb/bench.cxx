@@ -8,7 +8,7 @@
 
 #include "ucsb/core/types.hpp"
 #include "ucsb/core/settings.hpp"
-#include "ucsb/core/stat.hpp"
+#include "ucsb/core/profiler.hpp"
 #include "ucsb/core/db.hpp"
 #include "ucsb/core/workload.hpp"
 #include "ucsb/core/worker.hpp"
@@ -33,8 +33,8 @@ using operation_kind_t = ucsb::operation_kind_t;
 using operation_status_t = ucsb::operation_status_t;
 using operation_result_t = ucsb::operation_result_t;
 using operation_chooser_t = std::unique_ptr<ucsb::operation_chooser_t>;
-using cpu_stat_t = ucsb::cpu_stat_t;
-using mem_stat_t = ucsb::mem_stat_t;
+using cpu_profiler_t = ucsb::cpu_profiler_t;
+using mem_profiler_t = ucsb::mem_profiler_t;
 using exception_t = ucsb::exception_t;
 using printable_bytes_t = ucsb::printable_bytes_t;
 using threads_fence_t = ucsb::threads_fence_t;
@@ -268,8 +268,8 @@ void bench(bm::State& state, workload_t const& workload, db_t& db, data_accessor
     static size_t fails_count = 0;
     static size_t done_operations_count = 0;
     static size_t bytes_processed_count = 0;
-    cpu_stat_t cpu_stat;
-    mem_stat_t mem_stat;
+    cpu_profiler_t cpu_stat;
+    mem_profiler_t mem_stat;
 
     // Progress
     static size_t done_iterations_count = 0;
