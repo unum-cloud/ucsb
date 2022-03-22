@@ -150,13 +150,12 @@ operation_result_t rocksdb_transaction_t::batch_insert(keys_spanc_t keys,
     size_t offset = 0;
     for (size_t idx = 0; idx < keys.size(); ++idx) {
         auto key = keys[idx];
-        rocksdb::Status status =
-            transaction_->Put(to_slice(key), to_slice(value_spanc_t {values.data() + offset, sizes[idx]}));
+        rocksdb::Status status = transaction_->Put(to_slice(key), to_slice(values.subspan(offset, sizes[idx])));
         if (!status.ok()) {
             assert(status.IsTryAgain());
             status = transaction_->Commit();
             assert(status.ok());
-            status = transaction_->Put(to_slice(key), to_slice(value_spanc_t {values.data() + offset, sizes[idx]}));
+            status = transaction_->Put(to_slice(key), to_slice(values.subspan(offset, sizes[idx])));
             assert(status.ok());
         }
         offset += sizes[idx];
