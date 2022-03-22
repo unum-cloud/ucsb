@@ -30,10 +30,19 @@ namespace google
     using values_span_t = ucsb::values_span_t;
     using values_spanc_t = ucsb::values_spanc_t;
     using value_lengths_spanc_t = ucsb::value_lengths_spanc_t;
-    using bulk_metadata_t = ucsb::bulk_metadata_t;
     using operation_status_t = ucsb::operation_status_t;
     using operation_result_t = ucsb::operation_result_t;
     using transaction_t = ucsb::transaction_t;
+
+    inline leveldb::Slice to_slice(key_t &key)
+    {
+        return {reinterpret_cast<char const *>(&key), sizeof(key_t)};
+    }
+
+    inline leveldb::Slice to_slice(value_spanc_t value)
+    {
+        return {reinterpret_cast<char const *>(value.data()), value.size()};
+    }
 
     /**
      * @brief LevelDB wrapper for the UCSB benchmark.
@@ -59,10 +68,7 @@ namespace google
         operation_result_t batch_insert(keys_spanc_t keys, values_spanc_t values, value_lengths_spanc_t sizes) override;
         operation_result_t batch_read(keys_spanc_t keys, values_span_t values) const override;
 
-        bulk_metadata_t prepare_bulk_import_data(keys_spanc_t keys,
-                                                 values_spanc_t values,
-                                                 value_lengths_spanc_t sizes) const override;
-        operation_result_t bulk_import(bulk_metadata_t const &metadata) override;
+        operation_result_t bulk_load(keys_spanc_t keys, values_spanc_t values, value_lengths_spanc_t sizes) override;
 
         operation_result_t range_select(key_t key, size_t length, values_span_t values) const override;
         operation_result_t scan(key_t key, size_t length, value_span_t single_value) const override;
@@ -85,7 +91,7 @@ namespace google
 
         inline bool load_config(config_t &config);
 
-        struct key_comparator_t final /*: public leveldb::Comparator*/
+        struct key_comparator_t final : public leveldb::Comparator
         {
             int Compare(leveldb::Slice const &left, leveldb::Slice const &right) const /*override*/
             {
@@ -105,6 +111,9 @@ namespace google
         fs::path dir_path_;
 
         leveldb::Options options_;
+        leveldb::ReadOptions read_options_;
+        leveldb::WriteOptions write_options_;
+
         std::unique_ptr<leveldb::DB> db_;
         key_comparator_t key_cmp_;
     };
@@ -126,7 +135,7 @@ namespace google
 
         options_ = leveldb::Options();
         options_.create_if_missing = true;
-        // options.comparator = &key_cmp_;
+        // options_.comparator = &key_cmp_;
         if (config.write_buffer_size > 0)
             options_.write_buffer_size = config.write_buffer_size;
         if (config.max_file_size > 0)
@@ -164,50 +173,37 @@ namespace google
 
     operation_result_t leveldb_t::insert(key_t key, value_spanc_t value)
     {
-        leveldb::Slice slice{reinterpret_cast<char const *>(&key), sizeof(key)};
-        leveldb::Slice data_slice{reinterpret_cast<char const *>(value.data()), value.size()};
-        leveldb::WriteOptions wopt;
-        leveldb::Status status = db_->Put(wopt, slice, data_slice);
-        if (!status.ok())
-            return {0, operation_status_t::error_k};
-        return {1, operation_status_t::ok_k};
+        leveldb::Status status = db_->Put(write_options_, to_slice(key), to_slice(value));
+        return {1, status.ok() ? operation_status_t::ok_k : operation_status_t::error_k};
     }
 
     operation_result_t leveldb_t::update(key_t key, value_spanc_t value)
     {
 
         std::string data;
-        leveldb::Slice slice{reinterpret_cast<char const *>(&key), sizeof(key)};
-        leveldb::Status status = db_->Get(leveldb::ReadOptions(), slice, &data);
+        leveldb::Status status = db_->Get(read_options_, to_slice(key), &data);
         if (status.IsNotFound())
             return {1, operation_status_t::not_found_k};
         else if (!status.ok())
-            return {0, operation_status_t::error_k};
+            return {1, operation_status_t::error_k};
 
-        leveldb::Slice data_slice{reinterpret_cast<char const *>(value.data()), value.size()};
-        leveldb::WriteOptions wopt;
-        status = db_->Put(wopt, slice, data_slice);
-        if (!status.ok())
-            return {0, operation_status_t::error_k};
-        return {1, operation_status_t::ok_k};
+        status = db_->Put(write_options_, to_slice(key), to_slice(value));
+        return {1, status.ok() ? operation_status_t::ok_k : operation_status_t::error_k};
     }
 
     operation_result_t leveldb_t::remove(key_t key)
     {
-        leveldb::WriteOptions wopt;
-        leveldb::Slice slice{reinterpret_cast<char const *>(&key), sizeof(key)};
-        leveldb::Status status = db_->Delete(wopt, slice);
-        if (!status.ok())
-            return {0, operation_status_t::error_k};
-
-        return {1, operation_status_t::ok_k};
+        leveldb::Status status = db_->Delete(write_options_, to_slice(key));
+        return {1, status.ok() ? operation_status_t::ok_k : operation_status_t::error_k};
     }
 
     operation_result_t leveldb_t::read(key_t key, value_span_t value) const
     {
+
+        // Unlike RocksDB, we can't read into some form fo a `PinnableSlice`,
+        // just `std::string`, causing heap allocations.
         std::string data;
-        leveldb::Slice slice{reinterpret_cast<char const *>(&key), sizeof(key)};
-        leveldb::Status status = db_->Get(leveldb::ReadOptions(), slice, &data);
+        leveldb::Status status = db_->Get(read_options_, to_slice(key), &data);
         if (status.IsNotFound())
             return {1, operation_status_t::not_found_k};
         else if (!status.ok())
@@ -219,19 +215,30 @@ namespace google
 
     operation_result_t leveldb_t::batch_insert(keys_spanc_t keys, values_spanc_t values, value_lengths_spanc_t sizes)
     {
-        return {0, operation_status_t::not_implemented_k};
+
+        size_t offset = 0;
+        leveldb::WriteBatch batch;
+        for (size_t idx = 0; idx < keys.size(); ++idx)
+        {
+            key_t key = keys[idx];
+            batch.Put(to_slice(key), to_slice(values.subspan(offset, sizes[idx])));
+            offset += sizes[idx];
+        }
+
+        leveldb::Status status = db_->Write(leveldb::WriteOptions(), &batch);
+        return {keys.size(), status.ok() ? operation_status_t::ok_k : operation_status_t::error_k};
     }
 
     operation_result_t leveldb_t::batch_read(keys_spanc_t keys, values_span_t values) const
     {
+
         // Note: imitation of batch read!
         size_t offset = 0;
         size_t found_cnt = 0;
         for (auto key : keys)
         {
             std::string data;
-            leveldb::Slice slice{reinterpret_cast<char const *>(&key), sizeof(key)};
-            leveldb::Status status = db_->Get(leveldb::ReadOptions(), slice, &data);
+            leveldb::Status status = db_->Get(read_options_, to_slice(key), &data);
             if (status.ok())
             {
                 memcpy(values.data() + offset, data.data(), data.size());
@@ -242,56 +249,43 @@ namespace google
         return {found_cnt, operation_status_t::ok_k};
     }
 
-    bulk_metadata_t leveldb_t::prepare_bulk_import_data(keys_spanc_t keys,
-                                                        values_spanc_t values,
-                                                        value_lengths_spanc_t sizes) const
+    operation_result_t leveldb_t::bulk_load(keys_spanc_t keys, values_spanc_t values, value_lengths_spanc_t sizes)
     {
-        // This DB doesn't support bulk import
-        (void)keys;
-        (void)values;
-        (void)sizes;
-        return {};
-    }
-
-    operation_result_t leveldb_t::bulk_import(bulk_metadata_t const &metadata)
-    {
-        return {0, operation_status_t::not_implemented_k};
+        // Technically, LevelDB has a `TableBuilder` class, which is public, but once built -
+        // can't be imported into the DB itself.
+        // https://github.com/google/leveldb/blob/main/include/leveldb/table_builder.h
+        // The most efficient alternative is to use `WriteBatch`, which comes with a very
+        // scarce set of options.
+        // https://github.com/google/leveldb/blob/main/include/leveldb/options.h
+        return batch_insert(keys, values, sizes);
     }
 
     operation_result_t leveldb_t::range_select(key_t key, size_t length, values_span_t values) const
     {
-        leveldb::Iterator *db_iter = db_->NewIterator(leveldb::ReadOptions());
-        leveldb::Slice slice{reinterpret_cast<char const *>(&key), sizeof(key)};
-        db_iter->Seek(slice);
-        size_t offset = 0;
-        size_t selected_records_count = 0;
-        for (size_t i = 0; db_iter->Valid() && i < length; i++)
+
+        size_t i = 0;
+        size_t exported_bytes = 0;
+        std::unique_ptr<leveldb::Iterator> it(db_->NewIterator(read_options_));
+        it->Seek(to_slice(key));
+        for (; it->Valid() && i != length; i++, it->Next())
         {
-            std::string data = db_iter->value().ToString();
-            memcpy(values.data() + offset, data.data(), data.size());
-            offset += data.size();
-            db_iter->Next();
-            ++selected_records_count;
+            memcpy(values.data() + exported_bytes, it->value().data(), it->value().size());
+            exported_bytes += it->value().size();
         }
-        delete db_iter;
-        return {selected_records_count, operation_status_t::ok_k};
+        return {i, operation_status_t::ok_k};
     }
 
     operation_result_t leveldb_t::scan(key_t key, size_t length, value_span_t single_value) const
     {
-        leveldb::Iterator *db_iter = db_->NewIterator(leveldb::ReadOptions());
-        leveldb::Slice slice{reinterpret_cast<char const *>(&key), sizeof(key)};
-        db_iter->Seek(slice);
-        size_t scanned_records_count = 0;
-        for (size_t i = 0; db_iter->Valid() && i < length; i++)
-        {
-            std::string data = db_iter->value().ToString();
-            memcpy(single_value.data(), data.data(), data.size());
-            db_iter->Next();
-            ++scanned_records_count;
-        }
-        delete db_iter;
-        return {scanned_records_count, operation_status_t::ok_k};
+
+        size_t i = 0;
+        leveldb::ReadOptions scan_options = read_options_;
+        scan_options.fill_cache = false;
+        std::unique_ptr<leveldb::Iterator> it(db_->NewIterator(read_options_));
+        it->Seek(to_slice(key));
+        for (; it->Valid() && i != length; i++, it->Next())
+            memcpy(single_value.data(), it->value().data(), it->value().size());
+        return {i, operation_status_t::ok_k};
     }
 
     void leveldb_t::flush()

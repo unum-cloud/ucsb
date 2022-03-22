@@ -11,32 +11,39 @@
 
 namespace ucsb {
 
-struct cpu_stat_t {
+/**
+ * @brief Manages a sibling thread, that samples CPU time and real time from OS.
+ * Uses similar methodology to Python package `psutil`, to estimate CPU load
+ * from the aforementioned timers.
+ *
+ * @see psutil: https://pypi.org/project/psutil/
+ */
+struct cpu_profiler_t {
 
-    inline cpu_stat_t(size_t request_delay = 100)
-        : request_delay_(request_delay), requests_count_(0), time_to_die_(true) {}
-    inline ~cpu_stat_t() { stop(); }
+    inline cpu_profiler_t(size_t request_delay = 100)
+        : time_to_die_(true), request_delay_(request_delay), requests_count_(0) {}
+    inline ~cpu_profiler_t() { stop(); }
 
-    struct stat_t {
+    struct stats_t {
         float min = std::numeric_limits<float>::max();
         float max = 0;
         float avg = 0;
     };
 
     inline void start() {
-        if (!time_to_die_.load(std::memory_order_relaxed))
+        if (!time_to_die_.load())
             return;
 
-        percent_.min = std::numeric_limits<float>::max();
-        percent_.max = 0;
-        percent_.avg = 0;
+        stats_.min = std::numeric_limits<float>::max();
+        stats_.max = 0;
+        stats_.avg = 0;
 
         requests_count_ = 0;
         time_to_die_.store(false);
-        thread_ = std::thread(&cpu_stat_t::request_cpu_usage, this);
+        thread_ = std::thread(&cpu_profiler_t::request_cpu_usage, this);
     }
     inline void stop() {
-        if (time_to_die_.load(std::memory_order_relaxed))
+        if (time_to_die_.load())
             return;
 
         // Wait to calculate one more times for  to get more accuracy
@@ -46,13 +53,13 @@ struct cpu_stat_t {
         thread_.join();
     }
 
-    inline stat_t percent() const { return percent_; }
+    inline stats_t percent() const { return stats_; }
 
   private:
     inline void recalculate(float percent) {
-        percent_.min = std::min(percent, percent_.min);
-        percent_.max = std::max(percent, percent_.max);
-        percent_.avg = (percent_.avg * (requests_count_ - 1) + percent) / requests_count_;
+        stats_.min = std::min(percent, stats_.min);
+        stats_.max = std::max(percent, stats_.max);
+        stats_.avg = (stats_.avg * (requests_count_ - 1) + percent) / requests_count_;
     }
 
     void request_cpu_usage() {
@@ -85,62 +92,71 @@ struct cpu_stat_t {
         }
     }
 
-    stat_t percent_;
-
-    size_t request_delay_;
-    size_t requests_count_;
     std::thread thread_;
     std::atomic_bool time_to_die_;
+
+    stats_t stats_;
+    size_t request_delay_;
+    size_t requests_count_;
 };
 
-struct mem_stat_t {
+/**
+ * @brief Manages a sibling thread, that sample the virtual "/proc/self/stat" file
+ * to estimate memory usage stats of the current process, similar to Valgrind.
+ * Collects both Resident Set Size and Virtual Memory Size.
+ * ! To avoid reimplementing STL for a purposes of benchmark, this uses `std::ifstream`
+ * ! and does numerous heap allocations. Not a recommended practice :)
+ *
+ * @see valgrind: https://valgrind.org/
+ */
+struct mem_profiler_t {
 
-    inline mem_stat_t(size_t request_delay = 100)
-        : request_delay_(request_delay), requests_count_(0), time_to_die_(true) {}
-    inline ~mem_stat_t() { stop(); }
+    inline mem_profiler_t(size_t request_delay = 100)
+        : time_to_die_(true), request_delay_(request_delay), requests_count_(0), page_size_(sysconf(_SC_PAGE_SIZE)) {}
+    inline ~mem_profiler_t() { stop(); }
 
-    struct stat_t {
+    struct stats_t {
         size_t min = std::numeric_limits<size_t>::max();
         size_t max = 0;
         size_t avg = 0;
     };
 
     inline void start() {
-        if (!time_to_die_.load(std::memory_order_relaxed))
+        if (!time_to_die_.load())
             return;
 
-        vm_.min = std::numeric_limits<size_t>::max();
-        vm_.max = 0;
-        vm_.avg = 0;
+        stats_vms_.min = std::numeric_limits<size_t>::max();
+        stats_vms_.max = 0;
+        stats_vms_.avg = 0;
 
-        rss_.min = std::numeric_limits<size_t>::max();
-        rss_.max = 0;
-        rss_.avg = 0;
+        stats_rss_.min = std::numeric_limits<size_t>::max();
+        stats_rss_.max = 0;
+        stats_rss_.avg = 0;
 
         requests_count_ = 0;
         time_to_die_.store(false);
-        thread_ = std::thread(&mem_stat_t::request_mem_usage, this);
+        thread_ = std::thread(&mem_profiler_t::request_mem_usage, this);
     }
     inline void stop() {
-        if (time_to_die_.load(std::memory_order_relaxed))
+        if (time_to_die_.load())
             return;
 
         time_to_die_.store(true);
         thread_.join();
     }
 
-    inline stat_t vm() const { return vm_; }
-    inline stat_t rss() const { return rss_; }
+    inline stats_t vm() const { return stats_vms_; }
+    inline stats_t rss() const { return stats_rss_; }
 
   private:
     inline void recalculate(size_t vm, size_t rss) {
-        vm_.min = std::min(vm, vm_.min);
-        vm_.max = std::max(vm, vm_.max);
-        vm_.avg = (vm_.avg * (requests_count_ - 1) + vm) / requests_count_;
+        stats_vms_.min = std::min(vm, stats_vms_.min);
+        stats_vms_.max = std::max(vm, stats_vms_.max);
+        stats_vms_.avg = (stats_vms_.avg * (requests_count_ - 1) + vm) / requests_count_;
 
-        rss_.min = std::min(rss, rss_.min);
-        rss_.max = std::max(rss, rss_.max);
-        rss_.avg = (rss_.avg * (requests_count_ - 1) + rss) / requests_count_;
+        stats_rss_.min = std::min(rss, stats_rss_.min);
+        stats_rss_.max = std::max(rss, stats_rss_.max);
+        stats_rss_.avg = (stats_rss_.avg * (requests_count_ - 1) + rss) / requests_count_;
     }
 
     inline void request_mem_usage() {
@@ -167,18 +183,18 @@ struct mem_stat_t {
             starttime >> vm >> rss;
         stat.close();
 
-        size_t page_size = sysconf(_SC_PAGE_SIZE);
-        rss = rss * page_size;
+        rss = rss * page_size_;
     }
 
     std::thread thread_;
+    std::atomic_bool time_to_die_;
 
-    stat_t vm_;
-    stat_t rss_;
+    stats_t stats_vms_;
+    stats_t stats_rss_;
 
     size_t request_delay_;
     size_t requests_count_;
-    std::atomic_bool time_to_die_;
+    size_t page_size_;
 };
 
 } // namespace ucsb

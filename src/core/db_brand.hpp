@@ -28,7 +28,7 @@ namespace ucsb
             switch (db_brand)
             {
             case db_brand_t::rocksdb_k:
-                return std::make_shared<facebook::rocksdb_gt<facebook::db_mode_t::transactional_k>>();
+                return std::make_shared<facebook::rocksdb_t>(facebook::db_mode_t::transactional_k);
             default:
                 break;
             }
@@ -38,7 +38,7 @@ namespace ucsb
             switch (db_brand)
             {
             case db_brand_t::rocksdb_k:
-                return std::make_shared<facebook::rocksdb_gt<facebook::db_mode_t::regular_k>>();
+                return std::make_shared<facebook::rocksdb_t>(facebook::db_mode_t::regular_k);
             case db_brand_t::leveldb_k:
                 return std::make_shared<google::leveldb_t>();
             case db_brand_t::wiredtiger_k:

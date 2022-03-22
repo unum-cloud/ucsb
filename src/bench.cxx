@@ -1,3 +1,4 @@
+#include <atomic>
 #include <memory>
 #include <string>
 #include <vector>
@@ -7,7 +8,7 @@
 
 #include "src/core/types.hpp"
 #include "src/core/settings.hpp"
-#include "src/core/stat.hpp"
+#include "src/core/profiler.hpp"
 #include "src/core/db.hpp"
 #include "src/core/workload.hpp"
 #include "src/core/worker.hpp"
@@ -32,8 +33,8 @@ using operation_kind_t = ucsb::operation_kind_t;
 using operation_status_t = ucsb::operation_status_t;
 using operation_result_t = ucsb::operation_result_t;
 using operation_chooser_t = std::unique_ptr<ucsb::operation_chooser_t>;
-using cpu_stat_t = ucsb::cpu_stat_t;
-using mem_stat_t = ucsb::mem_stat_t;
+using cpu_profiler_t = ucsb::cpu_profiler_t;
+using mem_profiler_t = ucsb::mem_profiler_t;
 using exception_t = ucsb::exception_t;
 using printable_bytes_t = ucsb::printable_bytes_t;
 using threads_fence_t = ucsb::threads_fence_t;
@@ -182,6 +183,7 @@ inline void register_section(std::string const &name)
 
 inline std::string section_name(settings_t const &settings, workloads_t const &workloads)
 {
+
     std::vector<std::string> infos;
     if (settings.transactional)
         infos.push_back("transactional");
@@ -284,13 +286,13 @@ inline operation_chooser_t create_operation_chooser(workload_t const &workload)
     chooser->add(operation_kind_t::read_modify_write_k, workload.read_modify_write_proportion);
     chooser->add(operation_kind_t::batch_insert_k, workload.batch_insert_proportion);
     chooser->add(operation_kind_t::batch_read_k, workload.batch_read_proportion);
-    chooser->add(operation_kind_t::bulk_import_k, workload.bulk_import_proportion);
+    chooser->add(operation_kind_t::bulk_load_k, workload.bulk_load_proportion);
     chooser->add(operation_kind_t::range_select_k, workload.range_select_proportion);
     chooser->add(operation_kind_t::scan_k, workload.scan_proportion);
     return chooser;
 }
 
-void bench(bm::State &state, workload_t const &workload, data_accessor_t &data_accessor)
+void bench(bm::State &state, workload_t const &workload, db_t &db, data_accessor_t &data_accessor)
 {
 
     auto chooser = create_operation_chooser(workload);
@@ -301,14 +303,15 @@ void bench(bm::State &state, workload_t const &workload, data_accessor_t &data_a
     static size_t fails_count = 0;
     static size_t done_operations_count = 0;
     static size_t bytes_processed_count = 0;
-    cpu_stat_t cpu_stat;
-    mem_stat_t mem_stat;
+    cpu_profiler_t cpu_stat;
+    mem_profiler_t mem_stat;
 
     // Progress
     static size_t done_iterations_count = 0;
     size_t last_printed_iterations_count = 0;
     size_t const iterations_total_count = state.threads() * workload.operations_count;
     size_t const printable_iterations_distance = iterations_total_count / 10;
+    std::atomic_bool do_flash = true;
 
     if (state.thread_index() == 0)
     {
@@ -352,8 +355,8 @@ void bench(bm::State &state, workload_t const &workload, data_accessor_t &data_a
         case operation_kind_t::batch_read_k:
             result = worker.do_batch_read();
             break;
-        case operation_kind_t::bulk_import_k:
-            result = worker.do_bulk_import();
+        case operation_kind_t::bulk_load_k:
+            result = worker.do_bulk_load();
             break;
         case operation_kind_t::range_select_k:
             result = worker.do_range_select();
@@ -382,6 +385,11 @@ void bench(bm::State &state, workload_t const &workload, data_accessor_t &data_a
             fmt::print("{}: {:>6.2f}%\r", workload.name, percent);
             fflush(stdout);
         }
+
+        // Last thread will flush the DB
+        bool only_once = true;
+        if (done_iterations_count == iterations_total_count && do_flash.compare_exchange_weak(only_once, false))
+            db.flush();
     }
 
     if (state.thread_index() == 0)
@@ -399,6 +407,7 @@ void bench(bm::State &state, workload_t const &workload, data_accessor_t &data_a
         state.counters["mem_avg,bytes"] = bm::Counter(mem_stat.rss().avg, bm::Counter::kDefaults, bm::Counter::kIs1024);
         state.counters["processed,bytes"] =
             bm::Counter(bytes_processed_count, bm::Counter::kDefaults, bm::Counter::kIs1024);
+        state.counters["disk,bytes"] = bm::Counter(db.size_on_disk(), bm::Counter::kDefaults, bm::Counter::kIs1024);
     }
 }
 
@@ -417,16 +426,14 @@ void bench(bm::State &state, workload_t const &workload, db_t &db, bool transact
         auto transaction = db.create_transaction();
         if (!transaction)
             throw exception_t("Failed to create DB transaction");
-        bench(state, workload, *transaction);
+        bench(state, workload, db, *transaction);
     }
     else
-        bench(state, workload, db);
+        bench(state, workload, db, db);
 
     fence.sync();
     if (state.thread_index() == 0)
     {
-        db.flush();
-        state.counters["disk,bytes"] = bm::Counter(db.size_on_disk(), bm::Counter::kDefaults, bm::Counter::kIs1024);
         if (!db.close())
             throw exception_t("Failed to close DB");
     }

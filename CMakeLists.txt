@@ -115,6 +115,9 @@ else ()
   message(STATUS "Unknown CMAKE_CXX_COMPILER_ID: ${CMAKE_CXX_COMPILER_ID}")
 endif()
 
+# Use this if you are manually installing rockdb and leveldb, otherwise comment it
+# set(CXX_TARGET_LINK_LIBRARIES rocksdb leveldb)
+
 set(PKG_CONFIG ON)
 if (${PKG_CONFIG})
   find_package(PkgConfig REQUIRED)
@@ -139,6 +142,7 @@ find_package(Threads REQUIRED)
 
 add_executable(ucsb_bench ./src/bench.cxx)
 target_link_libraries(ucsb_bench${ARTIFACT_SUFFIX} 
+  # ${CXX_TARGET_LINK_LIBRARIES}
   ${PKG_PACKAGES_LIBRARIES}
   ${CONAN_LIBS}
 )

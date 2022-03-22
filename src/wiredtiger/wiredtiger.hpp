@@ -22,7 +22,6 @@ namespace mongodb
     using values_span_t = ucsb::values_span_t;
     using values_spanc_t = ucsb::values_spanc_t;
     using value_lengths_spanc_t = ucsb::value_lengths_spanc_t;
-    using bulk_metadata_t = ucsb::bulk_metadata_t;
     using operation_status_t = ucsb::operation_status_t;
     using operation_result_t = ucsb::operation_result_t;
     using transaction_t = ucsb::transaction_t;
@@ -34,9 +33,10 @@ namespace mongodb
      */
     struct wiredtiger_t : public ucsb::db_t
     {
-
         inline wiredtiger_t()
-            : conn_(nullptr), session_(nullptr), cursor_(nullptr), table_name_("table:access"), key_buffer_(100) {}
+            : conn_(nullptr), session_(nullptr), cursor_(nullptr), bulk_load_cursor_(nullptr), table_name_("table:access")
+        {
+        }
         inline ~wiredtiger_t() override = default;
 
         void set_config(fs::path const &config_path, fs::path const &dir_path) override;
@@ -52,10 +52,7 @@ namespace mongodb
         operation_result_t batch_insert(keys_spanc_t keys, values_spanc_t values, value_lengths_spanc_t sizes) override;
         operation_result_t batch_read(keys_spanc_t keys, values_span_t values) const override;
 
-        bulk_metadata_t prepare_bulk_import_data(keys_spanc_t keys,
-                                                 values_spanc_t values,
-                                                 value_lengths_spanc_t sizes) const override;
-        operation_result_t bulk_import(bulk_metadata_t const &metadata) override;
+        operation_result_t bulk_load(keys_spanc_t keys, values_spanc_t values, value_lengths_spanc_t sizes) override;
 
         operation_result_t range_select(key_t key, size_t length, values_span_t values) const override;
         operation_result_t scan(key_t key, size_t length, value_span_t single_value) const override;
@@ -66,14 +63,22 @@ namespace mongodb
         std::unique_ptr<transaction_t> create_transaction() override;
 
     private:
+        struct config_t
+        {
+            size_t cache_size = 0;
+        };
+
+        inline bool load_config(config_t &config);
+        inline std::string create_str_config(config_t const &config) const;
+
         fs::path config_path_;
         fs::path dir_path_;
 
         WT_CONNECTION *conn_;
         WT_SESSION *session_;
         mutable WT_CURSOR *cursor_;
+        WT_CURSOR *bulk_load_cursor_;
         std::string table_name_;
-        std::vector<char> key_buffer_;
     };
 
     inline int compare_keys(
@@ -98,8 +103,15 @@ namespace mongodb
 
     bool wiredtiger_t::open()
     {
+        if (conn_)
+            return true;
 
-        int res = wiredtiger_open(dir_path_.c_str(), NULL, "create", &conn_);
+        config_t config;
+        if (!load_config(config))
+            return false;
+
+        std::string str_config = create_str_config(config);
+        int res = wiredtiger_open(dir_path_.c_str(), NULL, str_config.c_str(), &conn_);
         if (res)
             return false;
 
@@ -116,7 +128,8 @@ namespace mongodb
         //     return false;
         // }
 
-        res = session_->create(session_, table_name_.c_str(), "key_format=S,value_format=u");
+        static_assert(sizeof(key_t) == sizeof(uint64_t), "Need to change `key_format` below");
+        res = session_->create(session_, table_name_.c_str(), "key_format=Q,value_format=u");
         if (res)
         {
             close();
@@ -143,6 +156,7 @@ namespace mongodb
             return false;
 
         cursor_ = nullptr;
+        bulk_load_cursor_ = nullptr;
         session_ = nullptr;
         conn_ = nullptr;
         return true;
@@ -151,7 +165,7 @@ namespace mongodb
     void wiredtiger_t::destroy()
     {
         if (session_)
-            session_->drop(session_, table_name_.c_str(), "key_format=S,value_format=u");
+            session_->drop(session_, table_name_.c_str(), "key_format=Q,value_format=u");
 
         bool ok = close();
         assert(ok);
@@ -162,48 +176,42 @@ namespace mongodb
     operation_result_t wiredtiger_t::insert(key_t key, value_spanc_t value)
     {
 
-        cursor_->set_key(cursor_, &key);
+        cursor_->set_key(cursor_, key);
         WT_ITEM db_value;
         db_value.data = value.data();
         db_value.size = value.size();
         cursor_->set_value(cursor_, &db_value);
         int res = cursor_->insert(cursor_);
         cursor_->reset(cursor_);
-        if (res)
-            return {0, operation_status_t::error_k};
-        return {1, operation_status_t::ok_k};
+        return {1, res == 0 ? operation_status_t::ok_k : operation_status_t::error_k};
     }
 
     operation_result_t wiredtiger_t::update(key_t key, value_spanc_t value)
     {
 
-        cursor_->set_key(cursor_, &key);
+        cursor_->set_key(cursor_, key);
         WT_ITEM db_value;
         db_value.data = value.data();
         db_value.size = value.size();
         cursor_->set_value(cursor_, &db_value);
         int res = cursor_->update(cursor_);
         cursor_->reset(cursor_);
-        if (res)
-            return {0, operation_status_t::error_k};
-        return {1, operation_status_t::ok_k};
+        return {1, res == 0 ? operation_status_t::ok_k : operation_status_t::error_k};
     }
 
     operation_result_t wiredtiger_t::remove(key_t key)
     {
 
-        cursor_->set_key(cursor_, &key);
+        cursor_->set_key(cursor_, key);
         int res = cursor_->remove(cursor_);
         cursor_->reset(cursor_);
-        if (res)
-            return {0, operation_status_t::error_k};
-        return {1, operation_status_t::ok_k};
+        return {1, res == 0 ? operation_status_t::ok_k : operation_status_t::error_k};
     }
 
     operation_result_t wiredtiger_t::read(key_t key, value_span_t value) const
     {
 
-        cursor_->set_key(cursor_, &key);
+        cursor_->set_key(cursor_, key);
         int res = cursor_->search(cursor_);
         if (res)
             return {0, operation_status_t::error_k};
@@ -219,18 +227,34 @@ namespace mongodb
 
     operation_result_t wiredtiger_t::batch_insert(keys_spanc_t keys, values_spanc_t values, value_lengths_spanc_t sizes)
     {
-        return {0, operation_status_t::not_implemented_k};
+
+        size_t offset = 0;
+        for (size_t idx = 0; idx < keys.size(); ++idx)
+        {
+            cursor_->set_key(cursor_, &keys[idx]);
+            WT_ITEM db_value;
+            db_value.data = values.data() + offset;
+            db_value.size = sizes[idx];
+            cursor_->set_value(cursor_, &db_value);
+            int res = cursor_->insert(cursor_);
+            cursor_->reset(cursor_);
+            if (res)
+                return {0, operation_status_t::error_k};
+            offset += sizes[idx];
+        }
+        return {keys.size(), operation_status_t::ok_k};
     }
 
     operation_result_t wiredtiger_t::batch_read(keys_spanc_t keys, values_span_t values) const
     {
+
         // Note: imitation of batch read!
         size_t offset = 0;
         size_t found_cnt = 0;
         for (auto key : keys)
         {
             WT_ITEM db_value;
-            cursor_->set_key(cursor_, &key);
+            cursor_->set_key(cursor_, key);
             int res = cursor_->search(cursor_);
             if (res == 0)
             {
@@ -247,25 +271,45 @@ namespace mongodb
         return {found_cnt, operation_status_t::ok_k};
     }
 
-    bulk_metadata_t wiredtiger_t::prepare_bulk_import_data(keys_spanc_t keys,
-                                                           values_spanc_t values,
-                                                           value_lengths_spanc_t sizes) const
+    operation_result_t wiredtiger_t::bulk_load(keys_spanc_t keys, values_spanc_t values, value_lengths_spanc_t sizes)
     {
-        // This DB doesn't support bulk import
-        (void)keys;
-        (void)values;
-        (void)sizes;
-        return {};
-    }
+        // Warnings:
+        //   DB must be empty
+        //   No other cursors while doing bulk load
 
-    operation_result_t wiredtiger_t::bulk_import(bulk_metadata_t const &metadata)
-    {
-        return {0, operation_status_t::not_implemented_k};
+        if (cursor_)
+        {
+            cursor_->close(cursor_);
+            cursor_ = nullptr;
+        }
+
+        if (bulk_load_cursor_ == nullptr)
+        {
+            // Batch cursor will be closed in flush()
+            auto res = session_->open_cursor(session_, table_name_.c_str(), NULL, "bulk", &bulk_load_cursor_);
+            if (res)
+                return {0, operation_status_t::error_k};
+        }
+
+        size_t offset = 0;
+        for (size_t idx = 0; idx < keys.size(); ++idx)
+        {
+            bulk_load_cursor_->set_key(bulk_load_cursor_, keys[idx]);
+            WT_ITEM db_value;
+            db_value.data = &values[offset];
+            db_value.size = sizes[idx];
+            bulk_load_cursor_->set_value(bulk_load_cursor_, &db_value);
+            bulk_load_cursor_->insert(bulk_load_cursor_);
+            offset += sizes[idx];
+        }
+
+        return {keys.size(), operation_status_t::ok_k};
     }
 
     operation_result_t wiredtiger_t::range_select(key_t key, size_t length, values_span_t values) const
     {
-        cursor_->set_key(cursor_, &key);
+
+        cursor_->set_key(cursor_, key);
         int res = cursor_->search(cursor_);
         if (res)
             return {0, operation_status_t::error_k};
@@ -291,7 +335,7 @@ namespace mongodb
 
     operation_result_t wiredtiger_t::scan(key_t key, size_t length, value_span_t single_value) const
     {
-        cursor_->set_key(cursor_, &key);
+        cursor_->set_key(cursor_, key);
         int res = cursor_->search(cursor_);
         if (res)
             return {0, operation_status_t::error_k};
@@ -315,7 +359,11 @@ namespace mongodb
 
     void wiredtiger_t::flush()
     {
-        // Nothing to do
+        if (bulk_load_cursor_)
+        {
+            bulk_load_cursor_->close(bulk_load_cursor_);
+            bulk_load_cursor_ = nullptr;
+        }
     }
 
     size_t wiredtiger_t::size_on_disk() const
@@ -326,6 +374,27 @@ namespace mongodb
     std::unique_ptr<transaction_t> wiredtiger_t::create_transaction()
     {
         return {};
+    }
+
+    bool wiredtiger_t::load_config(config_t &config)
+    {
+        if (!fs::exists(config_path_))
+            return false;
+
+        std::ifstream i_config(config_path_);
+        nlohmann::json j_config;
+        i_config >> j_config;
+
+        config.cache_size = j_config.value("cache_size", 100'000'000);
+
+        return true;
+    }
+
+    inline std::string wiredtiger_t::create_str_config(config_t const &config) const
+    {
+        std::string str_config = "create";
+        std::string str_cache_size = fmt::format("cache_size={}", config.cache_size);
+        return fmt::format("{},{}", str_config, str_cache_size);
     }
 
 } // namespace mongodb

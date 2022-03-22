@@ -3,6 +3,9 @@
 
 namespace ucsb {
 
+/**
+ * @brief Formatting sugar for "fmt" library.
+ */
 struct printable_bytes_t {
     size_t bytes = 0;
 };

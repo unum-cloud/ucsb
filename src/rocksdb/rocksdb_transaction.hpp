@@ -1,7 +1,5 @@
 #pragma once
 
-#ifdef build_transaction_m
-
 #include <memory>
 #include <vector>
 #include <fmt/format.h>
@@ -24,39 +22,45 @@ namespace facebook
     using values_span_t = ucsb::values_span_t;
     using values_spanc_t = ucsb::values_spanc_t;
     using value_lengths_spanc_t = ucsb::value_lengths_spanc_t;
-    using bulk_metadata_t = ucsb::bulk_metadata_t;
     using operation_status_t = ucsb::operation_status_t;
     using operation_result_t = ucsb::operation_result_t;
 
-    /**
-     * @brief Prealocated buffers for batch operations.
-     * These variables defined as global not as function local,
-     * because at the end of the benchmark (see ~rocksdb_transaction_t())
-     * we need to clear them before RocksDB statis objects are destructed
-     * https://github.com/facebook/rocksdb/issues/649
+    inline rocksdb::Slice to_slice(key_t &key)
+    {
+        key = __builtin_bswap64(key);
+        static_assert(sizeof(key_t) == sizeof(uint64_t), "Check `__builtin_bswap64`");
+        return {reinterpret_cast<char const *>(&key), sizeof(key_t)};
+    }
+
+    inline rocksdb::Slice to_slice(value_spanc_t value)
+    {
+        return {reinterpret_cast<char const *>(value.data()), value.size()};
+    }
+
+    /*
+     * @brief Preallocated buffers used for batch operations.
+     * Globals and especially `thread_local`s are a bad practice.
      */
+    thread_local std::vector<key_t> transaction_batch_keys;
     thread_local std::vector<rocksdb::Slice> transaction_key_slices;
     thread_local std::vector<rocksdb::PinnableSlice> transaction_value_slices;
     thread_local std::vector<rocksdb::Status> transaction_statuses;
 
     /**
      * @brief RocksDB transactional wrapper for the UCSB benchmark.
+     * Wraps all of our operations into transactions or just
+     * snapshots if read-only workloads run.
      */
     struct rocksdb_transaction_t : public ucsb::transaction_t
     {
     public:
-        inline rocksdb_transaction_t(std::unique_ptr<rocksdb::Transaction> &&transaction,
+        inline rocksdb_transaction_t(std::unique_ptr<rocksdb::Transaction> transaction,
                                      std::vector<rocksdb::ColumnFamilyHandle *> const &cf_handles)
-            : transaction_(std::forward<std::unique_ptr<rocksdb::Transaction> &&>(transaction)), cf_handles_(cf_handles)
+            : transaction_(std::move(transaction)), cf_handles_(cf_handles)
         {
             read_options_.verify_checksums = false;
         }
-        inline ~rocksdb_transaction_t()
-        {
-            key_sltransaction_key_slicesices.clear();
-            transaction_value_slices.clear();
-            transaction_statuses.clear();
-        }
+        inline ~rocksdb_transaction_t();
 
         operation_result_t insert(key_t key, value_spanc_t value) override;
         operation_result_t update(key_t key, value_spanc_t value) override;
@@ -66,10 +70,7 @@ namespace facebook
         operation_result_t batch_insert(keys_spanc_t keys, values_spanc_t values, value_lengths_spanc_t sizes) override;
         operation_result_t batch_read(keys_spanc_t keys, values_span_t values) const override;
 
-        bulk_metadata_t prepare_bulk_import_data(keys_spanc_t keys,
-                                                 values_spanc_t values,
-                                                 value_lengths_spanc_t sizes) const override;
-        operation_result_t bulk_import(bulk_metadata_t const &metadata) override;
+        operation_result_t bulk_load(keys_spanc_t keys, values_spanc_t values, value_lengths_spanc_t sizes) override;
 
         operation_result_t range_select(key_t key, size_t length, values_span_t values) const override;
         operation_result_t scan(key_t key, size_t length, value_span_t single_value) const override;
@@ -83,21 +84,24 @@ namespace facebook
 
     inline rocksdb_transaction_t::~rocksdb_transaction_t()
     {
+        transaction_batch_keys.clear();
+        transaction_key_slices.clear();
+        transaction_value_slices.clear();
+        transaction_statuses.clear();
+
         auto status = transaction_->Commit();
         assert(status.ok());
     }
 
     operation_result_t rocksdb_transaction_t::insert(key_t key, value_spanc_t value)
     {
-        rocksdb::Slice slice{reinterpret_cast<char const *>(&key), sizeof(key)};
-        rocksdb::Slice data_slice{reinterpret_cast<char const *>(value.data()), value.size()};
-        rocksdb::Status status = transaction_->Put(slice, data_slice);
+        rocksdb::Status status = transaction_->Put(to_slice(key), to_slice(value));
         if (!status.ok())
         {
             assert(status.IsTryAgain());
             status = transaction_->Commit();
             assert(status.ok());
-            status = transaction_->Put(slice, data_slice);
+            status = transaction_->Put(to_slice(key), to_slice(value));
             assert(status.ok());
         }
         return {1, operation_status_t::ok_k};
@@ -106,22 +110,21 @@ namespace facebook
     operation_result_t rocksdb_transaction_t::update(key_t key, value_spanc_t value)
     {
 
-        std::string data;
-        rocksdb::Slice slice{reinterpret_cast<char const *>(&key), sizeof(key)};
-        rocksdb::Status status = transaction_->Get(read_options_, slice, &data);
+        key_t key_to_read = key, key_to_write = key;
+        rocksdb::PinnableSlice data;
+        rocksdb::Status status = transaction_->Get(read_options_, to_slice(key_to_read), &data);
         if (status.IsNotFound())
             return {1, operation_status_t::not_found_k};
         else if (!status.ok())
             return {0, operation_status_t::error_k};
 
-        rocksdb::Slice data_slice{reinterpret_cast<char const *>(value.data()), value.size()};
-        status = transaction_->Put(slice, data_slice);
+        status = transaction_->Put(to_slice(key_to_write), to_slice(value));
         if (!status.ok())
         {
             assert(status.IsTryAgain());
             status = transaction_->Commit();
             assert(status.ok());
-            status = transaction_->Put(slice, data_slice);
+            status = transaction_->Put(to_slice(key_to_write), to_slice(value));
             assert(status.ok());
         }
         return {1, operation_status_t::ok_k};
@@ -129,14 +132,13 @@ namespace facebook
 
     operation_result_t rocksdb_transaction_t::remove(key_t key)
     {
-        rocksdb::Slice slice{reinterpret_cast<char const *>(&key), sizeof(key)};
-        rocksdb::Status status = transaction_->Delete(slice);
+        rocksdb::Status status = transaction_->Delete(to_slice(key));
         if (!status.ok())
         {
             assert(status.IsTryAgain());
             status = transaction_->Commit();
             assert(status.ok());
-            status = transaction_->Delete(slice);
+            status = transaction_->Delete(to_slice(key));
             assert(status.ok());
         }
 
@@ -145,9 +147,8 @@ namespace facebook
 
     operation_result_t rocksdb_transaction_t::read(key_t key, value_span_t value) const
     {
-        std::string data;
-        rocksdb::Slice slice{reinterpret_cast<char const *>(&key), sizeof(key)};
-        rocksdb::Status status = transaction_->Get(read_options_, slice, &data);
+        rocksdb::PinnableSlice data;
+        rocksdb::Status status = transaction_->Get(read_options_, to_slice(key), &data);
         if (status.IsNotFound())
             return {1, operation_status_t::not_found_k};
         else if (!status.ok())
@@ -161,24 +162,38 @@ namespace facebook
                                                            values_spanc_t values,
                                                            value_lengths_spanc_t sizes)
     {
-        return {0, operation_status_t::not_implemented_k};
+
+        size_t offset = 0;
+        for (size_t idx = 0; idx < keys.size(); ++idx)
+        {
+            auto key = keys[idx];
+            rocksdb::Status status = transaction_->Put(to_slice(key), to_slice(values.subspan(offset, sizes[idx])));
+            if (!status.ok())
+            {
+                assert(status.IsTryAgain());
+                status = transaction_->Commit();
+                assert(status.ok());
+                status = transaction_->Put(to_slice(key), to_slice(values.subspan(offset, sizes[idx])));
+                assert(status.ok());
+            }
+            offset += sizes[idx];
+        }
+        return {keys.size(), operation_status_t::ok_k};
     }
 
     operation_result_t rocksdb_transaction_t::batch_read(keys_spanc_t keys, values_span_t values) const
     {
 
-        if (keys.size() > transaction_key_slices.size())
+        if (keys.size() > transaction_batch_keys.size())
         {
-            transaction_key_slices = std::vector<rocksdb::Slice>(keys.size());
-            transaction_value_slices = std::vector<rocksdb::PinnableSlice>(keys.size());
-            transaction_statuses = std::vector<rocksdb::Status>(keys.size());
+            transaction_batch_keys.resize(keys.size());
+            transaction_key_slices.resize(keys.size());
+            transaction_value_slices.resize(keys.size());
+            transaction_statuses.resize(keys.size());
         }
 
         for (size_t idx = 0; idx < keys.size(); ++idx)
-        {
-            rocksdb::Slice slice{reinterpret_cast<char const *>(&keys[idx]), sizeof(keys[idx])};
-            transaction_key_slices[idx] = slice;
-        }
+            transaction_key_slices[idx] = to_slice(transaction_batch_keys[idx] = keys[idx]);
 
         transaction_->MultiGet(read_options_,
                                cf_handles_[0],
@@ -191,71 +206,52 @@ namespace facebook
         size_t found_cnt = 0;
         for (size_t i = 0; i < transaction_statuses.size(); ++i)
         {
-            if (transaction_statuses[i].ok())
-            {
-                memcpy(values.data() + offset, transaction_value_slices[i].data(), transaction_value_slices[i].size());
-                offset += transaction_value_slices[i].size();
-                ++found_cnt;
-            }
+            if (!transaction_statuses[i].ok())
+                continue;
+
+            memcpy(values.data() + offset, transaction_value_slices[i].data(), transaction_value_slices[i].size());
+            offset += transaction_value_slices[i].size();
+            ++found_cnt;
         }
 
         return {found_cnt, operation_status_t::ok_k};
     }
 
-    bulk_metadata_t rocksdb_transaction_t::prepare_bulk_import_data(keys_spanc_t keys,
-                                                                    values_spanc_t values,
-                                                                    value_lengths_spanc_t sizes) const
+    operation_result_t rocksdb_transaction_t::bulk_load(keys_spanc_t keys,
+                                                        values_spanc_t values,
+                                                        value_lengths_spanc_t sizes)
     {
-        // RocksDB doesn't support bulk import by transaction
-        (void)keys;
-        (void)values;
-        (void)sizes;
-        return {};
-    }
-
-    operation_result_t rocksdb_transaction_t::bulk_import(bulk_metadata_t const &metadata)
-    {
-        return {0, operation_status_t::not_implemented_k};
+        return batch_insert(keys, values, sizes);
     }
 
     operation_result_t rocksdb_transaction_t::range_select(key_t key, size_t length, values_span_t values) const
     {
 
-        rocksdb::Iterator *db_iter = transaction_->GetIterator(read_options_);
-        rocksdb::Slice slice{reinterpret_cast<char const *>(&key), sizeof(key)};
-        db_iter->Seek(slice);
-        size_t offset = 0;
-        size_t selected_records_count = 0;
-        for (size_t i = 0; db_iter->Valid() && i < length; i++)
+        size_t i = 0;
+        size_t exported_bytes = 0;
+        std::unique_ptr<rocksdb::Iterator> it(transaction_->GetIterator(read_options_));
+        it->Seek(to_slice(key));
+        for (; it->Valid() && i != length; i++, it->Next())
         {
-            std::string data = db_iter->value().ToString();
-            memcpy(values.data() + offset, data.data(), data.size());
-            offset += data.size();
-            db_iter->Next();
-            ++selected_records_count;
+            memcpy(values.data() + exported_bytes, it->value().data(), it->value().size());
+            exported_bytes += it->value().size();
         }
-        delete db_iter;
-        return {selected_records_count, operation_status_t::ok_k};
+        return {i, operation_status_t::ok_k};
     }
 
     operation_result_t rocksdb_transaction_t::scan(key_t key, size_t length, value_span_t single_value) const
     {
 
-        rocksdb::Iterator *db_iter = transaction_->GetIterator(read_options_);
-        rocksdb::Slice slice{reinterpret_cast<char const *>(&key), sizeof(key)};
-        db_iter->Seek(slice);
-        size_t scanned_records_count = 0;
-        for (size_t i = 0; db_iter->Valid() && i < length; i++)
-        {
-            std::string data = db_iter->value().ToString();
-            memcpy(single_value.data(), data.data(), data.size());
-            db_iter->Next();
-            ++scanned_records_count;
-        }
-        delete db_iter;
-        return {scanned_records_count, operation_status_t::ok_k};
+        size_t i = 0;
+        rocksdb::ReadOptions scan_options = read_options_;
+        // It's recommended to disable caching on long scans.
+        // https://github.com/facebook/rocksdb/blob/49a10feb21dc5c766bb272406136667e1d8a969e/include/rocksdb/options.h#L1462
+        scan_options.fill_cache = false;
+        std::unique_ptr<rocksdb::Iterator> it(transaction_->GetIterator(scan_options));
+        it->Seek(to_slice(key));
+        for (; it->Valid() && i != length; i++, it->Next())
+            memcpy(single_value.data(), it->value().data(), it->value().size());
+        return {i, operation_status_t::ok_k};
     }
 
 } // namespace facebook
-
-#endif

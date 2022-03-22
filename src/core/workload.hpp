@@ -14,16 +14,31 @@ namespace ucsb
 {
 
     /**
-     * @brief Single benchmark configuration (per thread)
-     * Some properties can be changed by the program based on thread count
+     * @brief A description of a single benchmark.
+     * It's post-processed version will devide the task
+     * by the number of threads.
      */
     struct workload_t
     {
         std::string name;
 
-        size_t db_records_count = 0; // DB all records count
-        size_t records_count = 0;    // Set by the program based on threads count
-        size_t operations_count = 0; // Can be changed by the program based on threads count
+        /**
+         * @brief Qualitative reference number of entries in the DB.
+         * Doesn't change during the benchmark.
+         * Defines the number of entries after initialization,
+         * but it's outdated after insertions and deletions.
+         */
+        size_t db_records_count = 0;
+        /**
+         * @brief Number of entries to be changed/inserted/deleted
+         * for this specific workload, divided by the number of threads.
+         */
+        size_t records_count = 0;
+        /**
+         * @brief Similar to @p `records_count`, but divided by the number
+         * of entries per batch. Will be equal to 1 for bulk scans operations.
+         */
+        size_t operations_count = 0;
 
         float insert_proportion = 0;
         float update_proportion = 0;
@@ -32,11 +47,11 @@ namespace ucsb
         float read_modify_write_proportion = 0;
         float batch_insert_proportion = 0;
         float batch_read_proportion = 0;
-        float bulk_import_proportion = 0;
+        float bulk_load_proportion = 0;
         float range_select_proportion = 0;
         float scan_proportion = 0;
 
-        key_t start_key = 0; // Can be changed by the program based on threads count
+        key_t start_key = 0;
         distribution_kind_t key_dist = distribution_kind_t::uniform_k;
 
         value_length_t value_length = 0;
@@ -50,9 +65,9 @@ namespace ucsb
         size_t batch_read_max_length = 0;
         distribution_kind_t batch_read_length_dist = distribution_kind_t::uniform_k;
 
-        size_t bulk_import_min_length = 0;
-        size_t bulk_import_max_length = 0;
-        distribution_kind_t bulk_import_length_dist = distribution_kind_t::uniform_k;
+        size_t bulk_load_min_length = 0;
+        size_t bulk_load_max_length = 0;
+        distribution_kind_t bulk_load_length_dist = distribution_kind_t::uniform_k;
 
         size_t range_select_min_length = 0;
         size_t range_select_max_length = 0;
@@ -108,7 +123,7 @@ namespace ucsb
             workload.read_modify_write_proportion = (*j_workload).value("read_modify_write_proportion", 0.0);
             workload.batch_insert_proportion = (*j_workload).value("batch_insert_proportion", 0.0);
             workload.batch_read_proportion = (*j_workload).value("batch_read_proportion", 0.0);
-            workload.bulk_import_proportion = (*j_workload).value("bulk_import_proportion", 0.0);
+            workload.bulk_load_proportion = (*j_workload).value("bulk_load_proportion", 0.0);
             workload.range_select_proportion = (*j_workload).value("range_select_proportion", 0.0);
             workload.scan_proportion = (*j_workload).value("scan_proportion", 0.0);
 
@@ -147,11 +162,10 @@ namespace ucsb
                 return false;
             }
 
-            workload.bulk_import_min_length = (*j_workload).value("bulk_import_min_length", 256);
-            workload.bulk_import_max_length = (*j_workload).value("bulk_import_max_length", 256);
-            workload.bulk_import_length_dist =
-                parse_distribution((*j_workload).value("bulk_import_length_dist", "uniform"));
-            if (workload.bulk_import_length_dist == distribution_kind_t::unknown_k)
+            workload.bulk_load_min_length = (*j_workload).value("bulk_load_min_length", 256);
+            workload.bulk_load_max_length = (*j_workload).value("bulk_load_max_length", 256);
+            workload.bulk_load_length_dist = parse_distribution((*j_workload).value("bulk_load_length_dist", "uniform"));
+            if (workload.bulk_load_length_dist == distribution_kind_t::unknown_k)
             {
                 workloads.clear();
                 return false;

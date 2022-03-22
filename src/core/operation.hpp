@@ -18,7 +18,7 @@ namespace ucsb
         read_modify_write_k,
         batch_insert_k,
         batch_read_k,
-        bulk_import_k,
+        bulk_load_k,
         range_select_k,
         scan_k,
     };
@@ -53,8 +53,8 @@ namespace ucsb
         inline operation_kind_t choose();
 
     private:
-        randome_double_generator_t generator_;
         std::vector<std::pair<operation_kind_t, float>> ops_;
+        random_double_generator_t generator_;
         float sum_;
     };
 
