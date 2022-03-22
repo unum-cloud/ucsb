@@ -61,6 +61,13 @@ struct wiredtiger_t : public ucsb::db_t {
     std::unique_ptr<transaction_t> create_transaction() override;
 
   private:
+    struct config_t {
+        size_t cache_size = 0;
+    };
+
+    inline bool load_config(config_t& config);
+    inline std::string create_str_config(config_t const& config) const;
+
     fs::path config_path_;
     fs::path dir_path_;
 
@@ -91,7 +98,15 @@ void wiredtiger_t::set_config(fs::path const& config_path, fs::path const& dir_p
 
 bool wiredtiger_t::open() {
 
-    int res = wiredtiger_open(dir_path_.c_str(), NULL, "create", &conn_);
+    if (conn_)
+        return true;
+
+    config_t config;
+    if (!load_config(config))
+        return false;
+
+    std::string str_config = create_str_config(config);
+    int res = wiredtiger_open(dir_path_.c_str(), NULL, str_config.c_str(), &conn_);
     if (res)
         return false;
 
@@ -326,6 +341,26 @@ size_t wiredtiger_t::size_on_disk() const {
 
 std::unique_ptr<transaction_t> wiredtiger_t::create_transaction() {
     return {};
+}
+
+bool wiredtiger_t::load_config(config_t& config) {
+    if (!fs::exists(config_path_))
+        return false;
+
+    std::ifstream i_config(config_path_);
+    nlohmann::json j_config;
+    i_config >> j_config;
+
+    config.cache_size = j_config.value("cache_size", 100'000'000);
+
+    return true;
+}
+
+inline std::string wiredtiger_t::create_str_config(config_t const& config) const {
+
+    std::string str_config = "create";
+    std::string str_cache_size = fmt::format("cache_size={}", config.cache_size);
+    return fmt::format("{},{}", str_config, str_cache_size);
 }
 
 } // namespace mongodb
