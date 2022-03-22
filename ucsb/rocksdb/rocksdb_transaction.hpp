@@ -45,12 +45,14 @@ thread_local std::vector<rocksdb::Status> transaction_statuses;
 
 /**
  * @brief RocksDB transactional wrapper for the UCSB benchmark.
+ * Wraps all of our operations into transactions or just
+ * snapshots if read-only workloads run.
  */
 struct rocksdb_transaction_t : public ucsb::transaction_t {
   public:
-    inline rocksdb_transaction_t(std::unique_ptr<rocksdb::Transaction>&& transaction,
+    inline rocksdb_transaction_t(std::unique_ptr<rocksdb::Transaction> transaction,
                                  std::vector<rocksdb::ColumnFamilyHandle*> const& cf_handles)
-        : transaction_(std::forward<std::unique_ptr<rocksdb::Transaction>&&>(transaction)), cf_handles_(cf_handles) {
+        : transaction_(std::move(transaction)), cf_handles_(cf_handles) {
         read_options_.verify_checksums = false;
     }
     inline ~rocksdb_transaction_t();

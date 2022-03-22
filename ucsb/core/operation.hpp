@@ -48,8 +48,8 @@ struct operation_chooser_t {
     inline operation_kind_t choose();
 
   private:
-    randome_double_generator_t generator_;
     std::vector<std::pair<operation_kind_t, float>> ops_;
+    random_double_generator_t generator_;
     float sum_;
 };
 

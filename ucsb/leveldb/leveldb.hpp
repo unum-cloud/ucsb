@@ -184,6 +184,9 @@ operation_result_t leveldb_t::remove(key_t key) {
 }
 
 operation_result_t leveldb_t::read(key_t key, value_span_t value) const {
+
+    // Unlike RocksDB, we can't read into some form fo a `PinnableSlice`,
+    // just `std::string`, causing heap allocations.
     std::string data;
     leveldb::Status status = db_->Get(read_options_, to_slice(key), &data);
     if (status.IsNotFound())

@@ -26,7 +26,7 @@ struct zipfian_generator_t : public generator_gt<size_t> {
     inline float zeta(size_t num, float theta) { return zeta(0, num, theta, 0.f); }
     inline float zeta(size_t last_num, size_t cur_num, float theta, float last_zeta);
 
-    randome_double_generator_t generator_;
+    random_double_generator_t generator_;
     size_t items_count_;
     size_t base_;
     size_t count_for_zeta_;

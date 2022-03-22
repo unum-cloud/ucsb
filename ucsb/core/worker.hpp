@@ -19,6 +19,11 @@
 
 namespace ucsb {
 
+/**
+ * @brief Performs a single workload on a single DB.
+ * Responsible for generating the synthtic dataset and
+ * managing most of memory allocations outside of the DB.
+ */
 struct worker_t {
     using key_generator_t = std::unique_ptr<generator_gt<key_t>>;
     using acknowledged_key_generator_t = std::unique_ptr<acknowledged_counter_generator_t>;
