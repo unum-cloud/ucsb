@@ -1,6 +1,7 @@
 # UCSB
 
 Unum Cloud Service Benchmark is the grandchild of Yahoo Cloud Service Benchmark, reimplemented in C++, with less costly abstractions and with more workloads, crafted specifically for the Big Data age!
+A full description of this benchmark can be found [here, in our corporate blog](unum.cloud/ucsb).
 
 ## Benchmark Specification
 
@@ -15,14 +16,14 @@ Our UnumDB is also evaluated with this benchmark, but it was removed from the pu
 
 ### Workloads
 
-* Initialization
-* Reads/Update: 50/50 (Called Workload # in YCSB)
-* Read/Insert: 95/5 (Called Workload # in YCSB)
-* Read (Called Workload # in YCSB)
+* Initialization via Bulk Imports
+* 50% Read + 50% Update
+* 95% Read + 5% Insert
+* Read
 * Range Select
 * Full Scan
 * Batch Read
-* *Bulk Load*
+* Batch Inserts
 
 ### Sizes
 
@@ -31,21 +32,17 @@ For a key-value store to be fast, you want keys as small as possible, yet capabl
 The original YCSB used fixed size strings with a lot of unnecessary serialization and formatting methods, causing additional and benchmarking itself, rather than the DBMS.
 The size of values, though was left identical to the original YCSB benchmark.
 
-Here is how long the benchmarks took on our hardware for every size:
+Here is how long the single-threaded benchmarks take on our hardware for different workload sizes:
 
-* 100 MB
-* 1 GB
-* 10 GB
-* 100 GB
-* 1 TB
-* *10 TB*
+* 10 GB ~2 hours
+* 100 GB ~1 day
+* 1 TB ~1 week
 
-## Known Issues
+## Known Issues and TODOs
 
 * [ ] Current benchmarks don't use custom key comparators. Both variants were tested and it didn't affect speed.
-* [ ] Linker error when trying to supply custom comparators to LevelDB.
-* [ ] RocksDB local builds are significantly slower than prebuilt variants.
-* [ ] WiredTiger crashes on 1 TB benchmarks, specifically on the `ReadInsert` workload.
+* [ ] WiredTiger sometimes crashes on 1 TB benchmarks.
+* [ ] Read/Update might be replaced with a Read-Modify-Write operation.
 
 ## Benchmark
 
