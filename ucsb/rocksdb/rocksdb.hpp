@@ -44,16 +44,6 @@ enum class db_mode_t {
     transactional_k,
 };
 
-inline rocksdb::Slice to_slice(key_t& key) {
-    key = __builtin_bswap64(key);
-    static_assert(sizeof(key_t) == sizeof(uint64_t), "Check `__builtin_bswap64`");
-    return {reinterpret_cast<char const*>(&key), sizeof(key_t)};
-}
-
-inline rocksdb::Slice to_slice(value_spanc_t value) {
-    return {reinterpret_cast<char const*>(value.data()), value.size()};
-}
-
 /*
  * @brief Preallocated buffers used for batch operations.
  * Globals and especially `thread_local`s are a bad practice.
