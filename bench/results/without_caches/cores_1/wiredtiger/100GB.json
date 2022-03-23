@@ -196,7 +196,7 @@
       "fails,%": 0.0,
       "mem_avg,bytes": 2048500534.0,
       "mem_max,bytes": 2255929344.0,
-      "operations/s": 182444.7321303445,
+      "operations/s": 181344.7321303445,
       "processed,bytes": 102400000000.0
     },
     {
