@@ -1,52 +1,38 @@
 # UCSB
 
-Unum Cloud Service Benchmark is the grandchild of Yahoo Cloud Service Benchmark, reimplemented in C++, with less costly abstractions and with more workloads, crafted specifically for the Big Data age!
+Unum Cloud Serving Benchmark is the grandchild of Yahoo Cloud Serving Benchmark, reimplemented in C++, with less costly abstractions and with more workloads, crafted specifically for the Big Data age!
+A full description of this benchmark can be found [here, in our corporate blog](https://unum.cloud/ucsb), together with the recent results.
 
-## Benchmark Specification
+![UCSB Benchmark Duration for RocksDB, LevelDB, WiredTiger and UnumDB](https://unum.cloud/assets/post/2022-03-22-ucsb/ucsb-duration.png)
 
-### Implemented Backends
+To run the benchmark, call `./run.py`.
+Output will be placed into the `bench/results/` folder.
 
-* RocksDB, version: 6.20.3
-* LevelDB, version: 1.23
-* LMDB, version: 0.9.29
-* WiredTiger, version: 10.0.0
+## Supported Backends
 
-Our UnumDB is also evaluated with this benchmark, but it was removed from the publicly available mirror.
+* WiredTiger. Version 10.0.0.
+* LevelDB. Version 1.23.
+* RocksDB. Version 6.29.3.
+* LMDB. Version 0.9.29.
 
-### Workloads
+Our UnumDB is also evaluated with this benchmark, but it wasn't included into the public mirror.
 
-* Initialization
-* Reads/Update: 50/50 (Called Workload # in YCSB)
-* Read/Insert: 95/5 (Called Workload # in YCSB)
-* Read (Called Workload # in YCSB)
-* Range Select
-* Full Scan
-* Batch Read
-* *Bulk Import*
+### Implemented Workloads
 
-### Sizes
+* [∅](https://unum.cloud/ucsb#0): imports monotonically increasing keys 🔄
+* [A](https://unum.cloud/ucsb#A): 50% reads + 50% updates, all random
+* [C](https://unum.cloud/ucsb#C): reads, all random
+* [D](https://unum.cloud/ucsb#D): 95% reads + 5% inserts, all random
+* [E](https://unum.cloud/ucsb#E): range scan 🔄
+* [✗](https://unum.cloud/ucsb#X): batch read 🆕
+* [Y](https://unum.cloud/ucsb#Y): batch insert 🆕
+* [Z](https://unum.cloud/ucsb#Z): scans 🆕
 
-By default we run this benchmarks with 8 byte integer keys and 1 KB values.
-For a key-value store to be fast, you want keys as small as possible, yet capable of addressing long ranges.
-The original YCSB used fixed size strings with a lot of unnecessary serialization and formatting methods, causing additional and benchmarking itself, rather than the DBMS.
-The size of values, though was left identical to the original YCSB benchmark.
+The **∅** was previously implemented as one-by-one inserts, but some KVS support the external construction of its internal representation files.
+The **E** was [previously](https://github.com/brianfrankcooper/YCSB/blob/master/workloads/workloade) mixed with 5% insertions.
 
-Here is how long the benchmarks took on our hardware for every size:
+## Known Issues and TODOs
 
-* 100 MB
-* 1 GB
-* 10 GB
-* 100 GB
-* 1 TB
-* *10 TB*
-
-## Known Issues
-
-* [ ] Current benchmarks don't use custom key comparators. Both variants were tested and it didn't affect speed.
-* [ ] Linker error when trying to supply custom comparators to LevelDB.
-* [ ] RocksDB local builds are significantly slower than prebuilt variants.
-* [ ] WiredTiger crashes on 1 TB benchmarks, specifically on the `ReadInsert` workload.
-
-## Benchmark
-
-Run `sudo python3 run.py`. Output is located in `bench/results/` folder.
+* [ ] Current benchmarks don't use custom key comparators. Both variants were tested and it didn't affect the speed.
+* [ ] WiredTiger sometimes crashes on 1 TB benchmarks.
+* [ ] Read/Update might be replaced with a Read-Modify-Write operation.
