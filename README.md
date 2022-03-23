@@ -1,6 +1,6 @@
 # UCSB
 
-Unum Cloud Service Benchmark is the grandchild of Yahoo Cloud Service Benchmark, reimplemented in C++, with less costly abstractions and with more workloads, crafted specifically for the Big Data age!
+Unum Cloud Serving Benchmark is the grandchild of Yahoo Cloud Serving Benchmark, reimplemented in C++, with less costly abstractions and with more workloads, crafted specifically for the Big Data age!
 A full description of this benchmark can be found [here, in our corporate blog](unum.cloud/ucsb), together with the recent results.
 
 ![UCSB Benchmark Duration for RocksDB, LevelDB, WiredTiger and UnumDB](unum.cloud/assets/post/2022-03-22-ucsb/ucsb-duration.png)
