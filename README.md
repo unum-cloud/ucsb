@@ -19,7 +19,7 @@ Our UnumDB is also evaluated with this benchmark, but it wasn't included into th
 
 ### Implemented Workloads
 
-* [∅](unum.cloud/ucsb#0): inserts monotonically increasing keys 🔄
+* [∅](unum.cloud/ucsb#0): imports monotonically increasing keys 🔄
 * [A](unum.cloud/ucsb#A): 50% reads + 50% updates, all random
 * [C](unum.cloud/ucsb#C): reads, all random
 * [D](unum.cloud/ucsb#D): 95% reads + 5% inserts, all random
