@@ -430,11 +430,11 @@ bool lmdb_t::load_config(config_t& config) {
     nlohmann::json j_config;
     i_config >> j_config;
 
-    config.map_size = j_config.value("map_size", size_t(0));
-    config.no_sync = j_config.value("no_sync", true);
-    config.no_meta_sync = j_config.value("no_meta_sync", false);
-    config.no_read_a_head = j_config.value("no_read_a_head", false);
-    config.write_map = j_config.value("write_map", false);
+    config.map_size = j_config.value<size_t>("map_size", size_t(0));
+    config.no_sync = j_config.value<bool>("no_sync", true);
+    config.no_meta_sync = j_config.value<bool>("no_meta_sync", false);
+    config.no_read_a_head = j_config.value<bool>("no_read_a_head", false);
+    config.write_map = j_config.value<bool>("write_map", false);
 
     return true;
 }

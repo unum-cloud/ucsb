@@ -284,12 +284,12 @@ bool leveldb_t::load_config(config_t& config) {
     nlohmann::json j_config;
     i_config >> j_config;
 
-    config.write_buffer_size = j_config.value("write_buffer_size", 67108864);
-    config.max_file_size = j_config.value("max_file_size", 67108864);
-    config.max_open_files = j_config.value("max_open_files", 1000);
-    config.compression = j_config.value("compression", "none");
-    config.cache_size = j_config.value("cache_size", 134217728);
-    config.filter_bits = j_config.value("filter_bits", 10);
+    config.write_buffer_size = j_config.value<size_t>("write_buffer_size", size_t(67108864));
+    config.max_file_size = j_config.value<size_t>("max_file_size", size_t(67108864));
+    config.max_open_files = j_config.value<size_t>("max_open_files", size_t(1000));
+    config.compression = j_config.value<std::string>("compression", "none");
+    config.cache_size = j_config.value<size_t>("cache_size", size_t(134217728));
+    config.filter_bits = j_config.value<size_t>("filter_bits", size_t(10));
 
     return true;
 }
