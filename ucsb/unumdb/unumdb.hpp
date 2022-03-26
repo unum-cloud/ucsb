@@ -230,7 +230,7 @@ operation_result_t unumdb_t::bulk_load(keys_spanc_t keys, values_spanc_t values,
     span_gt<fingerprint_t> fingerprints {
         const_cast<fingerprint_t*>(reinterpret_cast<fingerprint_t const*>(keys.data())),
         keys.size()};
-#ifdef DEV_BUILD
+#ifdef DEV_MODE
     auto building =
         region_t::building_constructor_t::build({file_name.data(), file_name.size()},
                                                 config,
