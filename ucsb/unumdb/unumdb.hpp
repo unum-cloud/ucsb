@@ -348,14 +348,13 @@ bool unumdb_t::load_config() {
     config_.region_config.country.migration_max_cnt = j_config["migration_max_cnt"].get<size_t>();
 
     config_.region_config.country.city.fixed_citizen_size = config_.region_config.country.fixed_citizen_size;
-    config_.region_config.country.city.files_size_enlarge_factor = j_config["files_size_enlarge_factor"].get<size_t>();
-    config_.region_config.country.city.files_count_enlarge_factor =
-        j_config["files_count_enlarge_factor"].get<size_t>();
+    config_.region_config.country.city.street_enlarge_factor = j_config["street_enlarge_factor"].get<size_t>();
 
     config_.region_config.country.city.street_0.fixed_citizen_size = config_.region_config.country.fixed_citizen_size;
     config_.region_config.country.city.street_0.unfixed_citizen_max_size =
         config_.region_config.country.unfixed_citizen_max_size;
-    config_.region_config.country.city.street_0.max_files_cnt = j_config["max_files_cnt"].get<size_t>();
+    config_.region_config.country.city.street_0.capacity_bytes = j_config["street_capacity_bytes"].get<size_t>();
+
     config_.region_config.country.city.street_0.building.citizens_capacity =
         config_.region_config.country.migration_capacity;
     config_.region_config.country.city.street_0.building.citizens_max_cnt =
