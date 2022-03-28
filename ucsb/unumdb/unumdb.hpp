@@ -266,7 +266,7 @@ operation_result_t unumdb_t::range_select(key_t key, size_t length, values_span_
         if (!it.is_removed()) {
             citizen_size_t citizen_size = it.size();
             citizen_span_t citizen {reinterpret_cast<byte_t*>(values.data()) + i * citizen_size, citizen_size};
-            read_notifier.add_one();
+            countdown.increment(1);
             it.get(citizen, countdown);
             ++task_cnt;
         }
