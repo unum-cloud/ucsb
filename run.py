@@ -109,7 +109,7 @@ def run(db_name: str, size: int, threads_count: int, workload_names: list) -> No
         runner = './build_release/bin/_ucsb_bench'
     child = pexpect.spawn(f'{runner} \
                             -db {db_name} \
-                            {transactional_flag}\
+                            {transactional_flag} \
                             -c {config_path} \
                             -w {workloads_path} \
                             -r {results_path} \
