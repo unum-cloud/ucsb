@@ -223,8 +223,8 @@ operation_result_t unumdb_t::bulk_load(keys_spanc_t keys, values_spanc_t values,
     static size_t building_id = 0;
     std::string file_name = fmt::format("udb_building_{}", building_id++);
     building_config_t config;
-    config.citizens_capacity = values.size();
-    config.citizens_max_cnt = keys.size();
+    config.capacity_bytes = values.size();
+    config.elements_max_cnt = keys.size();
 
     // TODO: Remove const casts later
     span_gt<fingerprint_t> fingerprints {
@@ -355,9 +355,9 @@ bool unumdb_t::load_config() {
         config_.region_config.country.unfixed_citizen_max_size;
     config_.region_config.country.city.street_0.capacity_bytes = j_config["street_capacity_bytes"].get<size_t>();
 
-    config_.region_config.country.city.street_0.building.citizens_capacity =
+    config_.region_config.country.city.street_0.building.capacity_bytes =
         config_.region_config.country.migration_capacity;
-    config_.region_config.country.city.street_0.building.citizens_max_cnt =
+    config_.region_config.country.city.street_0.building.elements_max_cnt =
         config_.region_config.country.migration_max_cnt;
     config_.region_config.country.city.street_0.building.fixed_citizen_size =
         config_.region_config.country.fixed_citizen_size;

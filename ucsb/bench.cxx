@@ -35,7 +35,6 @@ using operation_result_t = ucsb::operation_result_t;
 using operation_chooser_t = std::unique_ptr<ucsb::operation_chooser_t>;
 using cpu_profiler_t = ucsb::cpu_profiler_t;
 using mem_profiler_t = ucsb::mem_profiler_t;
-using exception_t = ucsb::exception_t;
 using printable_bytes_t = ucsb::printable_bytes_t;
 using threads_fence_t = ucsb::threads_fence_t;
 
@@ -306,7 +305,7 @@ void bench(bm::State& state, workload_t const& workload, db_t& db, data_accessor
         case operation_kind_t::bulk_load_k: result = worker.do_bulk_load(); break;
         case operation_kind_t::range_select_k: result = worker.do_range_select(); break;
         case operation_kind_t::scan_k: result = worker.do_scan(); break;
-        default: throw exception_t("Unknown operation"); break;
+        default: throw ucsb::exception_t("Unknown operation"); break;
         }
 
         bool success = result.status == operation_status_t::ok_k;
@@ -353,14 +352,14 @@ void bench(bm::State& state, workload_t const& workload, db_t& db, bool transact
 
     if (state.thread_index() == 0) {
         if (!db.open())
-            throw exception_t("Failed to open DB");
+            throw ucsb::exception_t("Failed to open DB");
     }
     fence.sync();
 
     if (transactional) {
         auto transaction = db.create_transaction();
         if (!transaction)
-            throw exception_t("Failed to create DB transaction");
+            throw ucsb::exception_t("Failed to create DB transaction");
         bench(state, workload, db, *transaction);
     }
     else
@@ -369,7 +368,7 @@ void bench(bm::State& state, workload_t const& workload, db_t& db, bool transact
     fence.sync();
     if (state.thread_index() == 0) {
         if (!db.close())
-            throw exception_t("Failed to close DB");
+            throw ucsb::exception_t("Failed to close DB");
     }
 }
 
