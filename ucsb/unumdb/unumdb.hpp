@@ -220,9 +220,12 @@ operation_result_t unumdb_t::batch_read(keys_spanc_t keys, values_span_t values)
 
 operation_result_t unumdb_t::bulk_load(keys_spanc_t keys, values_spanc_t values, value_lengths_spanc_t sizes) {
 
-    static size_t building_id = 0;
-    std::string file_name = fmt::format("udb_building_{}", building_id++);
     building_config_t config;
+#ifdef DEV_MODE
+    static size_t building_id = 0;
+    config.city_name = fmt::format("udb_building_{}", building_id++);
+    config.street_name = 0;
+#endif
     config.capacity_bytes = values.size();
     config.elements_max_cnt = keys.size();
 
@@ -230,22 +233,12 @@ operation_result_t unumdb_t::bulk_load(keys_spanc_t keys, values_spanc_t values,
     span_gt<fingerprint_t> fingerprints {
         const_cast<fingerprint_t*>(reinterpret_cast<fingerprint_t const*>(keys.data())),
         keys.size()};
-#ifdef DEV_MODE
-    auto building =
-        region_t::building_constructor_t::build({file_name.data(), file_name.size()},
-                                                config,
-                                                fingerprints,
-                                                {reinterpret_cast<byte_t const*>(values.data()), values.size()},
-                                                {sizes.data(), sizes.size()},
-                                                ds_info_t::sorted_k);
-#else
     auto building =
         region_t::building_constructor_t::build(config,
                                                 fingerprints,
                                                 {reinterpret_cast<byte_t const*>(values.data()), values.size()},
                                                 {sizes.data(), sizes.size()},
                                                 ds_info_t::sorted_k);
-#endif
     auto holder = building.export_and_destroy();
     import_data.push_back(holder);
 
@@ -355,6 +348,10 @@ bool unumdb_t::load_config() {
         config_.region_config.country.unfixed_citizen_max_size;
     config_.region_config.country.city.street_0.capacity_bytes = j_config["street_capacity_bytes"].get<size_t>();
 
+#ifdef DEV_MODE
+    config.city_name = "Armenia";
+    config.street_name = 0;
+#endif
     config_.region_config.country.city.street_0.building.capacity_bytes =
         config_.region_config.country.migration_capacity;
     config_.region_config.country.city.street_0.building.elements_max_cnt =
