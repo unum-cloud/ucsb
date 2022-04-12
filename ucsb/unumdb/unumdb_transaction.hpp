@@ -5,7 +5,6 @@
 #include <fmt/format.h>
 
 #include "diskkv/region.hpp"
-#include "diskkv/validator.hpp"
 
 #include "ucsb/core/types.hpp"
 #include "ucsb/core/data_accessor.hpp"

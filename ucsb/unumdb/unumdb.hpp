@@ -39,7 +39,7 @@ thread_local darray_gt<building_holder_t> import_data;
  */
 struct unumdb_t : public ucsb::db_t {
   public:
-    inline unumdb_t() : region_("", region_config_t()) {}
+    inline unumdb_t() : region_("", user_config_t()) {}
     inline ~unumdb_t() { close(); }
 
     void set_config(fs::path const& config_path, fs::path const& dir_path) override;
@@ -67,8 +67,8 @@ struct unumdb_t : public ucsb::db_t {
 
   private:
     struct db_config_t {
-        region_config_t region_config;
-        string_t io_device;
+        user_reqion_config_t user_config;
+        string_t io_device_name;
         size_t uring_max_files_count = 0;
         size_t uring_queue_depth = 0;
         darray_gt<string_t> paths;
@@ -93,8 +93,7 @@ bool unumdb_t::open() {
     if (!load_config())
         return false;
 
-    issues_t issues;
-    if (!validator_t::validate(config_.region_config, issues))
+    if (issues_t issues; !validator_t::validate(config_.user_config, issues))
         return false;
 
     for (auto const& path : config_.paths) {
@@ -106,16 +105,19 @@ bool unumdb_t::open() {
     darray_gt<string_t> paths = config_.paths;
     if (config_.paths.empty())
         paths.push_back(dir_path_.c_str());
-    if (config_.io_device == string_t("libc"))
+    if (config_.io_device_name == string_t("mmap"))
+        init_file_io_by_mmap(paths);
+    else if (config_.io_device_name == string_t("libc"))
         init_file_io_by_libc(paths);
-    else if (config_.io_device == string_t("pulling"))
+    else if (config_.io_device_name == string_t("pulling"))
         init_file_io_by_pulling(paths, config_.uring_queue_depth);
-    else if (config_.io_device == string_t("polling"))
+    else if (config_.io_device_name == string_t("polling"))
         init_file_io_by_polling(paths, config_.uring_max_files_count, config_.uring_queue_depth);
     else
         return false;
 
-    region_ = region_t("Kovkas", config_.region_config);
+    auto region_config = create_region_config(config_.user_config);
+    region_ = region_t("Kovkas", region_config);
 
     // Cleanup directories
     if (!region_.population_count()) {
@@ -329,45 +331,25 @@ bool unumdb_t::load_config() {
     nlohmann::json j_config;
     i_config >> j_config;
 
-    config_.region_config.default_transaction.migration_capacity =
-        j_config["transaction_migration_capacity"].get<size_t>();
-    config_.region_config.default_transaction.migration_max_cnt =
-        j_config["transaction_migration_max_cnt"].get<size_t>();
+    config_.user_config.txn_cache_elements_max_cnt = j_config["txn_cache_elements_max_cnt"].get<size_t>();
+    config_.user_config.txn_cache_elements_capacity_bytes = j_config["txn_cache_elements_capacity_bytes"].get<size_t>();
 
-    config_.region_config.country.threads_max_cnt = j_config["threads_max_cnt"].get<size_t>();
-    config_.region_config.country.fixed_citizen_size = 0;
-    config_.region_config.country.unfixed_citizen_max_size = j_config["unfixed_citizen_max_size"].get<size_t>();
-    config_.region_config.country.migration_capacity = j_config["migration_capacity"].get<size_t>();
-    config_.region_config.country.migration_max_cnt = j_config["migration_max_cnt"].get<size_t>();
+    config_.user_config.threads_max_cnt = j_config["threads_max_cnt"].get<size_t>();
+    config_.user_config.cache_elements_max_cnt = j_config["cache_elements_max_cnt"].get<size_t>();
+    config_.user_config.cache_elements_capacity_bytes = j_config["cache_elements_capacity_bytes"].get<size_t>();
+    config_.user_config.l0_capacity_bytes = j_config["l0_capacity_bytes"].get<size_t>();
+    config_.user_config.level_enlarge_factor = j_config["level_enlarge_factor"].get<size_t>();
+    config_.user_config.fixed_citizen_size = j_config["fixed_citizen_size"].get<size_t>();
+    config_.user_config.unfixed_citizen_max_size = j_config["unfixed_citizen_max_size"].get<size_t>();
 
-    config_.region_config.country.city.fixed_citizen_size = config_.region_config.country.fixed_citizen_size;
-    config_.region_config.country.city.street_enlarge_factor = j_config["street_enlarge_factor"].get<size_t>();
-
-    config_.region_config.country.city.street_0.fixed_citizen_size = config_.region_config.country.fixed_citizen_size;
-    config_.region_config.country.city.street_0.unfixed_citizen_max_size =
-        config_.region_config.country.unfixed_citizen_max_size;
-    config_.region_config.country.city.street_0.capacity_bytes = j_config["street_capacity_bytes"].get<size_t>();
-
-#ifdef DEV_MODE
-    config.city_name = "Armenia";
-    config.street_name = 0;
-#endif
-    config_.region_config.country.city.street_0.building.capacity_bytes =
-        config_.region_config.country.migration_capacity;
-    config_.region_config.country.city.street_0.building.elements_max_cnt =
-        config_.region_config.country.migration_max_cnt;
-    config_.region_config.country.city.street_0.building.fixed_citizen_size =
-        config_.region_config.country.fixed_citizen_size;
-
-    config_.io_device = j_config["io_device"].get<std::string>().c_str();
+    config_.io_device_name = j_config["io_device_name"].get<std::string>().c_str();
     config_.uring_max_files_count = j_config["uring_max_files_count"].get<size_t>();
     config_.uring_queue_depth = j_config["uring_queue_depth"].get<size_t>();
 
     std::vector<std::string> paths = j_config["paths"].get<std::vector<std::string>>();
-    for (auto const& path : paths) {
+    for (auto const& path : paths)
         if (!path.empty())
             config_.paths.push_back(path.c_str());
-    }
 
     return true;
 }
