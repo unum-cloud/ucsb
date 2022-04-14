@@ -116,7 +116,7 @@ operation_result_t unumdb_transaction_t::read(key_t key, value_span_t value) con
     notifier_t read_notifier(countdown);
     citizen_span_t citizen {reinterpret_cast<byte_t*>(value.data()), value.size()};
     transaction_->select<caching_t::io_k>(location, citizen, read_notifier);
-    if (!countdown.wait(*threads_pile))
+    if (!countdown.wait(*fibers))
         return {0, operation_status_t::error_k};
 
     return {1, operation_status_t::ok_k};
@@ -160,7 +160,7 @@ operation_result_t unumdb_transaction_t::batch_read(keys_spanc_t keys, values_sp
             countdown_t countdown(batch_size);
             span_gt<byte_t> buffer_span(reinterpret_cast<byte_t*>(values.data()), found_buffer_size);
             transaction_->select(locations.view(), buffer_span, countdown);
-            if (!countdown.wait(*threads_pile))
+            if (!countdown.wait(*fibers))
                 return {0, operation_status_t::error_k};
             found_cnt += batch_size;
         }
@@ -198,7 +198,7 @@ operation_result_t unumdb_transaction_t::range_select(key_t key, size_t length, 
         }
 
         if ((task_cnt == batch_size) | (read_notifier.has_failed())) {
-            selected_records_count += size_t(countdown.wait(*threads_pile)) * batch_size;
+            selected_records_count += size_t(countdown.wait(*fibers)) * batch_size;
             batch_size = std::min(length - i + 1, uring_queue_depth_);
             task_cnt = 0;
         }
@@ -219,7 +219,7 @@ operation_result_t unumdb_transaction_t::scan(key_t key, size_t length, value_sp
         if (!it.is_removed()) {
             countdown.reset(1);
             it.get(citizen, countdown);
-            countdown.wait(*threads_pile);
+            countdown.wait(*fibers);
             ++scanned_records_count;
         }
     }
