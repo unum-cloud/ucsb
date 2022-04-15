@@ -98,6 +98,7 @@ def launch_db(db_name: str, config_path: os.PathLike) -> None:
 def run(db_name: str, size: int, threads_count: int, workload_names: list) -> None:
     config_path = get_db_config_file_path(db_name, size)
     workloads_path = get_worklods_file_path(size)
+    db_path = get_db_path(db_name, size)
     results_path = get_results_dir_path()
 
     transactional_flag = '-t' if transactional else ''
@@ -112,6 +113,7 @@ def run(db_name: str, size: int, threads_count: int, workload_names: list) -> No
                             {transactional_flag} \
                             -c {config_path} \
                             -w {workloads_path} \
+                            -wd {db_path} \
                             -r {results_path} \
                             -threads {threads_count} \
                             -filter {filter}'

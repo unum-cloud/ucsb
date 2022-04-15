@@ -45,6 +45,7 @@ inline void usage_message(const char* command) {
     fmt::print("-t: transactional\n");
     fmt::print("-c: Database configuration file path\n");
     fmt::print("-w: Workloads file path\n");
+    fmt::print("-wd: Working dir path\n");
     fmt::print("-r: Results dir path\n");
     fmt::print("-filter: Workload filter (Optional)\n");
     fmt::print("-threads: Threads count (Optional, default: 1)\n");
@@ -100,6 +101,19 @@ void parse_and_validate_args(int argc, char* argv[], settings_t& settings) {
             settings.results_path = path;
             ++arg_idx;
         }
+        else if (strcmp(argv[arg_idx], "-wd") == 0) {
+            ++arg_idx;
+            if (arg_idx >= argc) {
+                usage_message(argv[0]);
+                fmt::print("Missing argument value for -wd\n");
+                exit(1);
+            }
+            std::string path(argv[arg_idx]);
+            if (path.back() != '/')
+                path.push_back('/');
+            settings.working_dir_path = path;
+            ++arg_idx;
+        }
         else if (strcmp(argv[arg_idx], "-threads") == 0) {
             ++arg_idx;
             if (arg_idx >= argc) {
@@ -142,6 +156,10 @@ void parse_and_validate_args(int argc, char* argv[], settings_t& settings) {
     }
     if (settings.workloads_path.empty()) {
         fmt::print("-w: workloads file path not specified\n");
+        exit(1);
+    }
+    if (settings.working_dir_path.empty()) {
+        fmt::print("-wd: working dir path not specified\n");
         exit(1);
     }
     if (settings.results_path.empty()) {
@@ -377,7 +395,6 @@ int main(int argc, char** argv) {
     // Setup settings
     settings_t settings;
     parse_and_validate_args(argc, argv, settings);
-    settings.db_dir_path = fmt::format("./tmp/{}/{}/", settings.db_name, settings.workloads_path.stem().c_str());
     std::string results_dir_path(
         fmt::format("{}/cores_{}/{}/", settings.results_path.string(), settings.threads_count, settings.db_name));
     std::string results_file_path = fmt::format("{}{}.json", results_dir_path, settings.workloads_path.stem().c_str());
@@ -410,7 +427,7 @@ int main(int argc, char** argv) {
         threads_workloads.push_back(splited_workloads);
     }
 
-    ucsb::fs::create_directories(settings.db_dir_path);
+    ucsb::fs::create_directories(settings.working_dir_path.string());
     ucsb::fs::create_directories(settings.results_path.parent_path());
 
     // Setup DB
@@ -423,7 +440,7 @@ int main(int argc, char** argv) {
             fmt::print("Failed to create DB: {}\n", settings.db_name);
         return 1;
     }
-    db->set_config(settings.db_config_path, settings.db_dir_path);
+    db->set_config(settings.db_config_path, settings.working_dir_path.string());
 
     threads_fence_t fence(settings.threads_count);
 

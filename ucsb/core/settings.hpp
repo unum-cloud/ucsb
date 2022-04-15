@@ -11,7 +11,7 @@ struct settings_t {
     std::string workload_filter;
 
     fs::path db_config_path;
-    fs::path db_dir_path;
+    fs::path working_dir_path;
     fs::path workloads_path;
     fs::path results_path;
 
