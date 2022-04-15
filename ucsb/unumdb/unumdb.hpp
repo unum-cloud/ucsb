@@ -223,7 +223,7 @@ operation_result_t unumdb_t::batch_read(keys_spanc_t keys, values_span_t values)
 operation_result_t unumdb_t::bulk_load(keys_spanc_t keys, values_spanc_t values, value_lengths_spanc_t sizes) {
 
     building_config_t config;
-#ifdef DEV_MODE
+#if dev_m
     static size_t building_id = 0;
     config.city_name = string_t::format("udb_building_{}", building_id++);
     config.street_name = 0;
@@ -339,8 +339,12 @@ bool unumdb_t::load_config() {
     config_.user_config.cache_elements_capacity_bytes = j_config["cache_elements_capacity_bytes"].get<size_t>();
     config_.user_config.l0_capacity_bytes = j_config["l0_capacity_bytes"].get<size_t>();
     config_.user_config.level_enlarge_factor = j_config["level_enlarge_factor"].get<size_t>();
-    config_.user_config.fixed_citizen_size = j_config["fixed_citizen_size"].get<size_t>();
+    config_.user_config.fixed_citizen_size = 0;
     config_.user_config.unfixed_citizen_max_size = j_config["unfixed_citizen_max_size"].get<size_t>();
+
+#if dev_m
+    config_.user_config.name = "Armenia";
+#endif
 
     config_.io_device_name = j_config["io_device_name"].get<std::string>().c_str();
     config_.uring_max_files_count = j_config["uring_max_files_count"].get<size_t>();
