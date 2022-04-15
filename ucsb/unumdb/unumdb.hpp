@@ -39,7 +39,7 @@ thread_local darray_gt<building_holder_t> import_data;
  */
 struct unumdb_t : public ucsb::db_t {
   public:
-    inline unumdb_t() : region_("", user_config_t()) {}
+    inline unumdb_t() : region_("", region_config_t()) {}
     inline ~unumdb_t() { close(); }
 
     void set_config(fs::path const& config_path, fs::path const& dir_path) override;
@@ -67,7 +67,7 @@ struct unumdb_t : public ucsb::db_t {
 
   private:
     struct db_config_t {
-        user_reqion_config_t user_config;
+        user_region_config_t user_config;
         string_t io_device_name;
         size_t uring_max_files_count = 0;
         size_t uring_queue_depth = 0;
@@ -129,7 +129,7 @@ bool unumdb_t::open() {
 }
 
 bool unumdb_t::close() {
-    if (raid_rand) {
+    if (vdisk_router) {
         if (!region_.name().empty())
             region_.flush();
         region_ = region_t("", region_config_t());
@@ -175,7 +175,7 @@ operation_result_t unumdb_t::read(key_t key, value_span_t value) const {
     notifier_t read_notifier(countdown);
     citizen_span_t citizen {reinterpret_cast<byte_t*>(value.data()), value.size()};
     region_.select<caching_t::io_k>(location, citizen, read_notifier);
-    if (!countdown.wait(*threads_pile))
+    if (!countdown.wait(*fibers))
         return {0, operation_status_t::error_k};
 
     return {1, operation_status_t::ok_k};
@@ -208,7 +208,7 @@ operation_result_t unumdb_t::batch_read(keys_spanc_t keys, values_span_t values)
             countdown_t countdown(batch_size);
             span_gt<byte_t> buffer_span(reinterpret_cast<byte_t*>(values.data()), found_buffer_size);
             region_.select(locations.view(), buffer_span, countdown);
-            if (!countdown.wait(*threads_pile))
+            if (!countdown.wait(*fibers))
                 return {0, operation_status_t::error_k};
             found_cnt += batch_size;
         }
@@ -225,7 +225,7 @@ operation_result_t unumdb_t::bulk_load(keys_spanc_t keys, values_spanc_t values,
     building_config_t config;
 #ifdef DEV_MODE
     static size_t building_id = 0;
-    config.city_name = fmt::format("udb_building_{}", building_id++);
+    config.city_name = string_t::format("udb_building_{}", building_id++);
     config.street_name = 0;
 #endif
     config.capacity_bytes = values.size();
@@ -267,7 +267,7 @@ operation_result_t unumdb_t::range_select(key_t key, size_t length, values_span_
         }
 
         if ((task_cnt == batch_size) | (read_notifier.has_failed())) {
-            selected_records_count += size_t(countdown.wait(*threads_pile)) * batch_size;
+            selected_records_count += size_t(countdown.wait(*fibers)) * batch_size;
             batch_size = std::min(length - i + 1, config_.uring_queue_depth);
             task_cnt = 0;
         }
@@ -289,7 +289,7 @@ operation_result_t unumdb_t::scan(key_t key, size_t length, value_span_t single_
         if (!it.is_removed()) {
             countdown.reset(1);
             it.get(citizen, countdown);
-            countdown.wait(*threads_pile);
+            countdown.wait(*fibers);
             ++scanned_records_count;
         }
     }
