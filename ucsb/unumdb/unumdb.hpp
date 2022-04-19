@@ -305,7 +305,7 @@ void unumdb_t::flush() {
     darray_gt<building_holder_t> import_data;
     import_data.reserve(thread_idx_.load());
     for (auto const& thread_import_data : import_data_)
-        import_data.append_move(thread_import_data.span(), thread_import_data.device());
+        import_data.append(std::move(thread_import_data));
 
     if (!import_data.empty()) {
         region_.import(import_data.view());
