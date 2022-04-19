@@ -1,5 +1,6 @@
 #pragma once
 
+#include <atomic>
 #include <vector>
 #include <fmt/format.h>
 
@@ -31,15 +32,12 @@ using fingerprint_t = key_t;
 using region_t = region_gt<key_t, data_source_t::unfixed_size_k>;
 using building_holder_t = building_holder_gt<fingerprint_t>;
 
-// Note: It is defined outsize of the class because object member can not be thread_local
-thread_local darray_gt<building_holder_t> import_data;
-
 /**
  * @brief UnumDB wrapper for the UCSB benchmark.
  */
 struct unumdb_t : public ucsb::db_t {
   public:
-    inline unumdb_t() : region_("", region_config_t()) {}
+    inline unumdb_t() : region_("", region_config_t()), thread_idx_(0) {}
     inline ~unumdb_t() { close(); }
 
     void set_config(fs::path const& config_path, fs::path const& dir_path) override;
@@ -82,6 +80,10 @@ struct unumdb_t : public ucsb::db_t {
     db_config_t config_;
 
     region_t region_;
+
+    // for every thread we use different darray to collect buildings
+    darray_gt<darray_gt<building_holder_t>> import_data_;
+    std::atomic_size_t thread_idx_;
 };
 
 void unumdb_t::set_config(fs::path const& config_path, fs::path const& dir_path) {
@@ -118,6 +120,7 @@ bool unumdb_t::open() {
 
     auto region_config = create_region_config(config_.user_config);
     region_ = region_t("Kovkas", region_config);
+    import_data_.resize(config_.user_config.threads_max_cnt);
 
     // Cleanup directories
     if (!region_.population_count()) {
@@ -242,7 +245,8 @@ operation_result_t unumdb_t::bulk_load(keys_spanc_t keys, values_spanc_t values,
                                                 {sizes.data(), sizes.size()},
                                                 ds_info_t::sorted_k);
     auto holder = building.export_and_destroy();
-    import_data.push_back(holder);
+    auto thread_idx = thread_idx_.fetch_add(1) % import_data_.size();
+    import_data_[thread_idx].push_back(holder);
 
     return {keys.size(), operation_status_t::ok_k};
 }
@@ -298,9 +302,15 @@ operation_result_t unumdb_t::scan(key_t key, size_t length, value_span_t single_
 }
 
 void unumdb_t::flush() {
+    darray_gt<building_holder_t> import_data;
+    import_data.reserve(thread_idx_.load());
+    for (auto const& thread_import_data : import_data_)
+        import_data.append_move(thread_import_data.span(), thread_import_data.device());
+
     if (!import_data.empty()) {
         region_.import(import_data.view());
         import_data.clear();
+        import_data_.clear();
     }
     else {
         region_.flush();
