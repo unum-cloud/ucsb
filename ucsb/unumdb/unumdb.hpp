@@ -226,9 +226,9 @@ operation_result_t unumdb_t::batch_read(keys_spanc_t keys, values_span_t values)
 operation_result_t unumdb_t::bulk_load(keys_spanc_t keys, values_spanc_t values, value_lengths_spanc_t sizes) {
 
     building_config_t config;
+    auto building_idx = thread_idx_.fetch_add(1);
 #if dev_m
-    static size_t building_id = 0;
-    config.city_name = string_t::format("udb_building_{}", building_id++);
+    config.city_name = string_t::format("udb_building_{}", building_idx);
     config.street_name = 0;
 #endif
     config.capacity_bytes = values.size();
@@ -245,7 +245,7 @@ operation_result_t unumdb_t::bulk_load(keys_spanc_t keys, values_spanc_t values,
                                                 {sizes.data(), sizes.size()},
                                                 ds_info_t::sorted_k);
     auto holder = building.export_and_destroy();
-    auto thread_idx = thread_idx_.fetch_add(1) % import_data_.size();
+    auto thread_idx = building_idx % import_data_.size();
     import_data_[thread_idx].push_back(holder);
 
     return {keys.size(), operation_status_t::ok_k};
