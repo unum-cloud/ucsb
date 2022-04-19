@@ -38,6 +38,7 @@ sizes = [
     # '10GB',
     # '100GB',
     # '1TB',
+    # '10TB',
 ]
 
 workload_names = [
