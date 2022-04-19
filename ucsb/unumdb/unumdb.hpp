@@ -98,7 +98,7 @@ bool unumdb_t::open() {
 
     for (auto const& path : config_.paths) {
         if (!fs::exists(path.c_str()))
-            if (!fs::create_directory(path.c_str()))
+            if (!fs::create_directories(path.c_str()))
                 return false;
     }
 
