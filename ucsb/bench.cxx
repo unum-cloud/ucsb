@@ -317,7 +317,6 @@ void bench(bm::State& state, workload_t const& workload, db_t& db, data_accessor
     }
 
     while (state.KeepRunningBatch(workload.operations_count)) {
-        fmt::print("KeepRunningBatch\n");
         size_t iterations_per_thread = workload.operations_count;
         while (iterations_per_thread) {
             operation_result_t result;
