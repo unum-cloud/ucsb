@@ -33,8 +33,13 @@ struct workload_t {
      */
     size_t records_count = 0;
     /**
-     * @brief Similar to @p `records_count`, but divided by the number
-     * of entries per batch. Will be equal to 1 for bulk scans operations.
+     * @brief Number of operations which will be done by all threads
+     * Loads from workload file, doesn't change during the benchmark.
+     */
+    size_t db_operations_count = 0;
+    /**
+     * @brief Number of operations for this specific workload,
+     * which will be done by a single thread, divided by the number of threads.
      */
     size_t operations_count = 0;
 
@@ -109,7 +114,7 @@ bool load(fs::path const& path, workloads_t& workloads) {
         workload.name = (*j_workload)["name"].get<std::string>();
 
         workload.db_records_count = (*j_workload)["records_count"].get<size_t>();
-        workload.operations_count = (*j_workload)["operations_count"].get<size_t>();
+        workload.db_operations_count = (*j_workload)["operations_count"].get<size_t>();
 
         workload.insert_proportion = (*j_workload).value("insert_proportion", 0.0);
         workload.update_proportion = (*j_workload).value("update_proportion", 0.0);
