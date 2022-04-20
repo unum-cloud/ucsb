@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 
 import os
 import sys
@@ -10,7 +9,8 @@ import subprocess
 
 drop_caches = False
 transactional = False
-cleanup_previous = False
+# cleanup_previous = False
+cleanup_previous = True
 run_docker_image = False
 
 threads = [
@@ -24,10 +24,11 @@ threads = [
 ]
 
 db_names = [
-    'rocksdb',
-    'leveldb',
-    'wiredtiger',
-    'lmdb',
+    # 'rocksdb',
+    'mongodb',
+    # 'leveldb',
+    # 'wiredtiger',
+    # 'lmdb',
 ]
 
 sizes = [
@@ -42,17 +43,18 @@ workload_names = [
     'Init',
     'Read',
     'BatchRead',
-    'RangeSelect',
-    'Scan',
-    'ReadUpdate_50_50',
-    'ReadInsert_95_5',
-    'Remove',
+    # 'RangeSelect',
+    # 'Scan',
+    # 'ReadUpdate_50_50',
+    # 'ReadInsert_95_5',
+    # 'BatchInsert',
+    # 'Remove',
+    # 'Insert',
 
     # Aditional workloads
     # BulkImport: Imports whole DB equal to the workload size
     # BatchInsert: Do batch inserts equal to 10% of the workload size
     # 'BulkImport',
-    # 'BatchInsert',
 ]
 
 
@@ -87,6 +89,15 @@ def get_results_dir_path() -> str:
 def drop_system_caches():
     with open('/proc/sys/vm/drop_caches', 'w') as stream:
         stream.write('3\n')
+
+def launch_db(db_name: str, config_path: os.PathLike) -> None:
+    if db_name == "mongodb":
+        subprocess.Popen(
+            ["mongo", "--eval", "db.getSiblingDB('admin').shutdownServer()"], stdout=subprocess.DEVNULL)
+        time.sleep(2)
+        subprocess.Popen(["sudo", "mongod", "--config",
+                            config_path], stdout=subprocess.DEVNULL)
+        print(" *** Mongod is running ***")
 
 
 def run(db_name: str, size: int, threads_count: int, workload_names: list) -> None:
@@ -135,6 +146,11 @@ def main() -> None:
                 if len(threads) > 1 and cleanup_previous:
                     if os.path.exists(db_path):
                         shutil.rmtree(db_path)
+
+                # Prepare DB enviroment
+                pathlib.Path(db_path).mkdir(parents=True, exist_ok=True)
+                config_path = get_db_config_file_path(db_name, size)
+                launch_db(db_name, config_path)
 
                 if drop_caches:
                     for workload_name in workload_names:
