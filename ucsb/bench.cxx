@@ -13,6 +13,7 @@
 #include "ucsb/core/workload.hpp"
 #include "ucsb/core/worker.hpp"
 #include "ucsb/core/db_brand.hpp"
+#include "ucsb/core/distribution.hpp"
 #include "ucsb/core/operation.hpp"
 #include "ucsb/core/exception.hpp"
 #include "ucsb/core/printable.hpp"
@@ -29,6 +30,7 @@ using data_accessor_t = ucsb::data_accessor_t;
 using db_brand_t = ucsb::db_brand_t;
 using timer_ref_t = ucsb::timer_ref_t;
 using worker_t = ucsb::worker_t;
+using distribution_kind_t = ucsb::distribution_kind_t;
 using operation_kind_t = ucsb::operation_kind_t;
 using operation_status_t = ucsb::operation_status_t;
 using operation_result_t = ucsb::operation_result_t;
@@ -268,6 +270,41 @@ std::vector<workload_t> split_workload_into_threads(workload_t const& workload, 
     return workloads;
 }
 
+void validate_workload(workload_t const& workload, size_t threads_count) {
+
+    assert(threads_count > 0);
+    assert(!workload.name.empty());
+    assert(workload.db_records_count > 0);
+    assert(workload.db_operations_count > 0);
+
+    float proportion = 0;
+    proportion += workload.insert_proportion;
+    proportion += workload.update_proportion;
+    proportion += workload.remove_proportion;
+    proportion += workload.read_proportion;
+    proportion += workload.read_modify_write_proportion;
+    proportion += workload.batch_insert_proportion;
+    proportion += workload.batch_read_proportion;
+    proportion += workload.bulk_load_proportion;
+    proportion += workload.range_select_proportion;
+    proportion += workload.scan_proportion;
+    assert(proportion > 0.0 && proportion <= 1.0);
+
+    assert(workload.key_dist != distribution_kind_t::unknown_k);
+
+    assert(workload.batch_insert_min_length <= workload.batch_insert_max_length);
+    assert(workload.batch_insert_max_length <= workload.db_records_count / threads_count);
+
+    assert(workload.batch_read_min_length <= workload.batch_read_max_length);
+    assert(workload.batch_read_max_length <= workload.db_records_count / threads_count);
+
+    assert(workload.bulk_load_min_length <= workload.bulk_load_max_length);
+    assert(workload.bulk_load_max_length <= workload.db_records_count / threads_count);
+
+    assert(workload.range_select_min_length <= workload.range_select_max_length);
+    assert(workload.range_select_max_length <= workload.db_records_count / threads_count);
+}
+
 inline operation_chooser_t create_operation_chooser(workload_t const& workload) {
     operation_chooser_t chooser = std::make_unique<ucsb::operation_chooser_t>();
     chooser->add(operation_kind_t::insert_k, workload.insert_proportion);
@@ -434,6 +471,7 @@ int main(int argc, char** argv) {
     }
     std::vector<workloads_t> threads_workloads;
     for (auto const& workload : workloads) {
+        validate_workload(workload, settings.threads_count);
         std::vector<workload_t> splited_workloads = split_workload_into_threads(workload, settings.threads_count);
         threads_workloads.push_back(splited_workloads);
     }

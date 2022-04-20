@@ -2,6 +2,7 @@
 #include <utility>
 #include <memory>
 #include <vector>
+#include <set>
 #include <fmt/format.h>
 
 #include "ucsb/core/types.hpp"
@@ -152,8 +153,11 @@ inline operation_result_t worker_t::do_batch_insert() {
 }
 
 inline operation_result_t worker_t::do_batch_read() {
+    // Note: Pause benchmark timer to do data preparation, to measure batch read time only
+    timer_.pause();
     keys_spanc_t keys = generate_batch_read_keys();
     values_span_t values = values_buffer(keys.size());
+    timer_.resume();
     return data_accessor_->batch_read(keys, values);
 }
 
@@ -315,8 +319,17 @@ inline keys_spanc_t worker_t::generate_batch_insert_keys() {
 inline keys_spanc_t worker_t::generate_batch_read_keys() {
     size_t batch_length = batch_read_length_generator_->generate();
     keys_span_t keys(keys_buffer_.data(), batch_length);
-    for (size_t i = 0; i < batch_length; ++i)
-        keys[i] = generate_key();
+    size_t i = 0;
+    size_t unique_keys_count = 0;
+    std::set<key_t> unique_keys;
+    while (unique_keys_count != batch_length) {
+        auto key = generate_key();
+        if (!unique_keys.contains(key)) {
+            keys[unique_keys_count] = key;
+            unique_keys_count++;
+            unique_keys.insert(key);
+        }
+    }
     return keys;
 }
 
