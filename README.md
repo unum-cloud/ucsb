@@ -33,8 +33,6 @@ The **E** was [previously](https://github.com/brianfrankcooper/YCSB/blob/master/
 
 ## Known Issues and TODOs
 
-* [ ] MongoDB adapter.
-* [ ] Redis adapter.
 * [ ] Current benchmarks don't use custom key comparators. Both variants were tested and it didn't affect the speed.
 * [ ] WiredTiger sometimes crashes on 1 TB benchmarks.
 * [ ] Read/Update might be replaced with a Read-Modify-Write operation.

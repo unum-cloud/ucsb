@@ -3,12 +3,10 @@
 
 #include "src/core/generators/generator.hpp"
 
-namespace ucsb
-{
+namespace ucsb {
 
-  template <typename value_at>
-  struct uniform_generator_gt : public generator_gt<value_at>
-  {
+template <typename value_at>
+struct uniform_generator_gt : public generator_gt<value_at> {
     using value_t = value_at;
     static_assert(std::is_integral<value_t>());
 
@@ -20,6 +18,6 @@ namespace ucsb
     std::mt19937_64 generator_;
     std::uniform_int_distribution<value_t> dist_;
     value_t last_;
-  };
+};
 
 } // namespace ucsb
