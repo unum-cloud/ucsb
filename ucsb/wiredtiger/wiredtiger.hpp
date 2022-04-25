@@ -43,12 +43,12 @@ struct wiredtiger_t : public ucsb::db_t {
     bool close() override;
     void destroy() override;
 
-    operation_result_t insert(key_t key, value_spanc_t value) override;
+    operation_result_t upsert(key_t key, value_spanc_t value) override;
     operation_result_t update(key_t key, value_spanc_t value) override;
     operation_result_t remove(key_t key) override;
 
     operation_result_t read(key_t key, value_span_t value) const override;
-    operation_result_t batch_insert(keys_spanc_t keys, values_spanc_t values, value_lengths_spanc_t sizes) override;
+    operation_result_t batch_upsert(keys_spanc_t keys, values_spanc_t values, value_lengths_spanc_t sizes) override;
     operation_result_t batch_read(keys_spanc_t keys, values_span_t values) const override;
 
     operation_result_t bulk_load(keys_spanc_t keys, values_spanc_t values, value_lengths_spanc_t sizes) override;
@@ -164,7 +164,7 @@ void wiredtiger_t::destroy() {
     ucsb::clear_directory(dir_path_);
 }
 
-operation_result_t wiredtiger_t::insert(key_t key, value_spanc_t value) {
+operation_result_t wiredtiger_t::upsert(key_t key, value_spanc_t value) {
 
     cursor_->set_key(cursor_, key);
     WT_ITEM db_value;
@@ -212,7 +212,7 @@ operation_result_t wiredtiger_t::read(key_t key, value_span_t value) const {
     return {1, operation_status_t::ok_k};
 }
 
-operation_result_t wiredtiger_t::batch_insert(keys_spanc_t keys, values_spanc_t values, value_lengths_spanc_t sizes) {
+operation_result_t wiredtiger_t::batch_upsert(keys_spanc_t keys, values_spanc_t values, value_lengths_spanc_t sizes) {
 
     size_t offset = 0;
     for (size_t idx = 0; idx < keys.size(); ++idx) {

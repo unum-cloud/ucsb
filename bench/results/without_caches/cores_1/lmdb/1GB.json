@@ -193,10 +193,10 @@
       "processed,bytes": 512703488.0
     },
     {
-      "name": "ReadInsert_95_5/iterations:1000000/real_time",
+      "name": "ReadUpsert_95_5/iterations:1000000/real_time",
       "family_index": 1,
       "per_family_instance_index": 0,
-      "run_name": "ReadInsert_95_5/iterations:1000000/real_time",
+      "run_name": "ReadUpsert_95_5/iterations:1000000/real_time",
       "run_type": "iteration",
       "repetitions": 1,
       "repetition_index": 0,
@@ -216,10 +216,10 @@
       "processed,bytes": 1024000000.0
     },
     {
-      "name": "BatchInsert/iterations:100/real_time/threads:1",
+      "name": "BatchUpsert/iterations:100/real_time/threads:1",
       "family_index": 1,
       "per_family_instance_index": 0,
-      "run_name": "BatchInsert/iterations:100/real_time/threads:1",
+      "run_name": "BatchUpsert/iterations:100/real_time/threads:1",
       "run_type": "iteration",
       "repetitions": 1,
       "repetition_index": 0,

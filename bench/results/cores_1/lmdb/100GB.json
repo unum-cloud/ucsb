@@ -187,10 +187,10 @@
       "operations/s": 2.2000361264831529e+05
     },
     {
-      "name": "ReadInsert_95_5/iterations:100000000/real_time",
+      "name": "ReadUpsert_95_5/iterations:100000000/real_time",
       "family_index": 7,
       "per_family_instance_index": 0,
-      "run_name": "ReadInsert_95_5/iterations:100000000/real_time",
+      "run_name": "ReadUpsert_95_5/iterations:100000000/real_time",
       "run_type": "iteration",
       "repetitions": 1,
       "repetition_index": 0,

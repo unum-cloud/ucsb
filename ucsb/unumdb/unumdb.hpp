@@ -45,12 +45,12 @@ struct unumdb_t : public ucsb::db_t {
     bool close() override;
     void destroy() override;
 
-    operation_result_t insert(key_t key, value_spanc_t value) override;
+    operation_result_t upsert(key_t key, value_spanc_t value) override;
     operation_result_t update(key_t key, value_spanc_t value) override;
     operation_result_t remove(key_t key) override;
 
     operation_result_t read(key_t key, value_span_t value) const override;
-    operation_result_t batch_insert(keys_spanc_t keys, values_spanc_t values, value_lengths_spanc_t sizes) override;
+    operation_result_t batch_upsert(keys_spanc_t keys, values_spanc_t values, value_lengths_spanc_t sizes) override;
     operation_result_t batch_read(keys_spanc_t keys, values_span_t values) const override;
 
     operation_result_t bulk_load(keys_spanc_t keys, values_spanc_t values, value_lengths_spanc_t sizes) override;
@@ -145,7 +145,7 @@ void unumdb_t::destroy() {
     region_.destroy();
 }
 
-operation_result_t unumdb_t::insert(key_t key, value_spanc_t value) {
+operation_result_t unumdb_t::upsert(key_t key, value_spanc_t value) {
     citizen_view_t citizen {reinterpret_cast<byte_t const*>(value.data()), value.size()};
     region_.insert(key, citizen);
     return {1, operation_status_t::ok_k};
@@ -184,7 +184,7 @@ operation_result_t unumdb_t::read(key_t key, value_span_t value) const {
     return {1, operation_status_t::ok_k};
 }
 
-operation_result_t unumdb_t::batch_insert(keys_spanc_t keys, values_spanc_t values, value_lengths_spanc_t sizes) {
+operation_result_t unumdb_t::batch_upsert(keys_spanc_t keys, values_spanc_t values, value_lengths_spanc_t sizes) {
 
     region_.insert({keys.data(), keys.size()},
                    {reinterpret_cast<byte_t const*>(values.data()), values.size()},

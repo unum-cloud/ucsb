@@ -46,12 +46,12 @@ struct mongodb_t : public ucsb::db_t {
     bool close() override;
     void destroy() override;
 
-    operation_result_t insert(key_t key, value_spanc_t value) override;
+    operation_result_t upsert(key_t key, value_spanc_t value) override;
     operation_result_t update(key_t key, value_spanc_t value) override;
     operation_result_t remove(key_t key) override;
 
     operation_result_t read(key_t key, value_span_t value) const override;
-    operation_result_t batch_insert(keys_spanc_t keys, values_spanc_t values, value_lengths_spanc_t sizes) override;
+    operation_result_t batch_upsert(keys_spanc_t keys, values_spanc_t values, value_lengths_spanc_t sizes) override;
     operation_result_t batch_read(keys_spanc_t keys, values_span_t values) const override;
 
     operation_result_t bulk_load(keys_spanc_t keys, values_spanc_t values, value_lengths_spanc_t sizes) override;
@@ -88,7 +88,7 @@ void mongodb_t::destroy() {
     coll.drop();
 };
 
-operation_result_t mongodb_t::insert(key_t key, value_spanc_t value) {
+operation_result_t mongodb_t::upsert(key_t key, value_spanc_t value) {
     auto client = pool_.acquire();
     mongocxx::collection coll = mongocxx::collection((*client)["mongodb"][coll_name]);
     bsoncxx::stdx::string_view val(reinterpret_cast<const char*>(value.data()), value.size());
@@ -125,7 +125,7 @@ operation_result_t mongodb_t::read(key_t key, value_span_t value) const {
     return {1, operation_status_t::ok_k};
 }
 
-operation_result_t mongodb_t::batch_insert(keys_spanc_t keys, values_spanc_t values, value_lengths_spanc_t sizes) {
+operation_result_t mongodb_t::batch_upsert(keys_spanc_t keys, values_spanc_t values, value_lengths_spanc_t sizes) {
     auto client = pool_.acquire();
     mongocxx::collection coll = mongocxx::collection((*client)["mongodb"][coll_name]);
     std::vector<bsoncxx::document::value> cont;
@@ -138,11 +138,11 @@ operation_result_t mongodb_t::batch_insert(keys_spanc_t keys, values_spanc_t val
         cont.push_back(doc);
     }
 
-    size_t inserted_count = coll.insert_many(cont)->inserted_count();
-    if (inserted_count == keys.size())
+    size_t upserted_count = coll.insert_many(cont)->inserted_count();
+    if (upserted_count == keys.size())
         return {keys.size(), operation_status_t::ok_k};
 
-    return {inserted_count, operation_status_t::error_k};
+    return {upserted_count, operation_status_t::error_k};
 }
 
 operation_result_t mongodb_t::batch_read(keys_spanc_t keys, values_span_t values) const {
@@ -163,8 +163,8 @@ operation_result_t mongodb_t::batch_read(keys_spanc_t keys, values_span_t values
 //         bsoncxx::stdx::string_view val(reinterpret_cast<char const*>(values.data() + data_offset), sizes[index]);
 //         data_offset += sizes[index];
 //         bsoncxx::document::value doc = make_document(kvp("_id", int(keys[index])), kvp("key", val));
-//         mongocxx::model::insert_one insert_op {doc.view()};
-//         bulk->append(insert_op);
+//         mongocxx::model::upsert_one upsert_op {doc.view()};
+//         bulk->append(upsert_op);
 //     }
 //     metadata.data = bulk;
 //     return metadata;

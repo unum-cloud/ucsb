@@ -48,8 +48,8 @@ workload_names = [
     'RangeSelect',
     'Scan',
     'ReadUpdate_50_50',
-    'ReadInsert_95_5',
-    'BatchInsert',
+    'ReadUpsert_95_5',
+    'BatchUpsert',
     'Remove',
 ]
 

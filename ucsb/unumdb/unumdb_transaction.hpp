@@ -39,12 +39,12 @@ struct unumdb_transaction_t : public ucsb::transaction_t {
           uring_queue_depth_(uring_queue_depth) {}
     inline ~unumdb_transaction_t();
 
-    operation_result_t insert(key_t key, value_spanc_t value) override;
+    operation_result_t upsert(key_t key, value_spanc_t value) override;
     operation_result_t update(key_t key, value_spanc_t value) override;
     operation_result_t remove(key_t key) override;
 
     operation_result_t read(key_t key, value_span_t value) const override;
-    operation_result_t batch_insert(keys_spanc_t keys, values_spanc_t values, value_lengths_spanc_t sizes) override;
+    operation_result_t batch_upsert(keys_spanc_t keys, values_spanc_t values, value_lengths_spanc_t sizes) override;
     operation_result_t batch_read(keys_spanc_t keys, values_span_t values) const override;
 
     operation_result_t bulk_load(keys_spanc_t keys, values_spanc_t values, value_lengths_spanc_t sizes) override;
@@ -62,7 +62,7 @@ inline unumdb_transaction_t::~unumdb_transaction_t() {
     assert(status == status_t::ok_k);
 }
 
-operation_result_t unumdb_transaction_t::insert(key_t key, value_spanc_t value) {
+operation_result_t unumdb_transaction_t::upsert(key_t key, value_spanc_t value) {
     citizen_view_t citizen {reinterpret_cast<byte_t const*>(value.data()), value.size()};
     auto status = transaction_->insert(key, citizen);
     if (status != status_t::ok_k) {
@@ -122,7 +122,7 @@ operation_result_t unumdb_transaction_t::read(key_t key, value_span_t value) con
     return {1, operation_status_t::ok_k};
 }
 
-operation_result_t unumdb_transaction_t::batch_insert(keys_spanc_t keys,
+operation_result_t unumdb_transaction_t::batch_upsert(keys_spanc_t keys,
                                                       values_spanc_t values,
                                                       value_lengths_spanc_t sizes) {
     size_t offset = 0;
@@ -175,7 +175,7 @@ operation_result_t unumdb_transaction_t::batch_read(keys_spanc_t keys, values_sp
 operation_result_t unumdb_transaction_t::bulk_load(keys_spanc_t keys,
                                                    values_spanc_t values,
                                                    value_lengths_spanc_t sizes) {
-    return batch_insert(keys, values, sizes);
+    return batch_upsert(keys, values, sizes);
 }
 
 operation_result_t unumdb_transaction_t::range_select(key_t key, size_t length, values_span_t values) const {

@@ -193,10 +193,10 @@
       "processed,bytes": 563518552064.0
     },
     {
-      "name": "ReadInsert_95_5/iterations:31250000/real_time/threads:32",
+      "name": "ReadUpsert_95_5/iterations:31250000/real_time/threads:32",
       "family_index": 7,
       "per_family_instance_index": 0,
-      "run_name": "ReadInsert_95_5/iterations:31250000/real_time/threads:32",
+      "run_name": "ReadUpsert_95_5/iterations:31250000/real_time/threads:32",
       "run_type": "iteration",
       "repetitions": 1,
       "repetition_index": 0,
