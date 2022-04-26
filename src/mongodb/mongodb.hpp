@@ -37,18 +37,41 @@ namespace mongo
     using bsoncxx::builder::basic::kvp;
     using bsoncxx::builder::basic::make_document;
 
-    static mongocxx::instance instance{};
-    constexpr char kDataBaseName[] = "mongodb";
-
     /**
      * @brief MongoDB wrapper for the UCSB benchmark.
      * https://github.com/mongodb/mongo-cxx-driver
      */
+
+    /*
+     * @brief Preallocated buffers used for batch operations.
+     * Globals and especially `thread_local`s are a bad practice.
+     */
+
+    struct oid_hash_t
+    {
+        size_t operator()(const bsoncxx::oid &oid) const
+        {
+            return std::hash<std::string_view>{}({oid.bytes(), oid.size()});
+        }
+    };
+    thread_local std::unordered_map<bsoncxx::oid, size_t, oid_hash_t> batch_keys_map;
+    thread_local bsoncxx::builder::basic::array batch_keys_array;
+    constexpr char kDataBaseName[] = "mongodb";
+
     struct mongodb_t : public ucsb::db_t
     {
     public:
-        inline mongodb_t() : pool_(mongocxx::uri{}) {}
-        inline ~mongodb_t() { close(); }
+        inline mongodb_t() : inst_(), pool_({"mongodb://127.0.0.1:27017/?minPoolSize=1&maxPoolSize=4"})
+        {
+            std::cout << "Created mongo\n";
+        }
+        // inline mongodb_t() : pool_(uri_) {}
+        // inline mongodb_t() : pool_(mongocxx::uri{}) {}
+        inline ~mongodb_t()
+        {
+            close();
+            std::cout << "Closed mongo\n";
+        }
 
         void set_config(fs::path const &config_path, fs::path const &dir_path) override;
         bool open() override;
@@ -72,8 +95,11 @@ namespace mongo
         std::unique_ptr<transaction_t> create_transaction() override;
 
     private:
+        // mongocxx::uri uri_{"mongodb://127.0.0.1:27017/?minPoolSize=1&maxPoolSize=4"};
         mongocxx::collection get_collection() const;
+        mongocxx::instance inst_;
         mutable mongocxx::pool pool_;
+
         fs::path dir_path_;
         std::string coll_name;
     };
@@ -103,7 +129,8 @@ namespace mongo
     mongocxx::collection mongodb_t::get_collection() const
     {
         auto client = pool_.acquire();
-        return mongocxx::collection((*client)[kDataBaseName][coll_name]);
+        return {(*client)[kDataBaseName][coll_name]};
+        // return mongocxx::collection((*client)[kDataBaseName][coll_name]);
     }
 
     void mongodb_t::set_config(fs::path const &config_path, fs::path const &dir_path)
@@ -114,11 +141,14 @@ namespace mongo
 
     bool mongodb_t::open()
     {
+        std::cout << "*** open () ***" << std::endl;
         return true;
     }
 
     bool mongodb_t::close()
     {
+        batch_keys_array.clear();
+        batch_keys_map.clear();
         return true;
     }
 
@@ -132,15 +162,31 @@ namespace mongo
     {
         mongocxx::collection coll = this->get_collection();
         auto bin_val = make_binary(value.data(), value.size());
-        coll.insert_one(make_document(kvp("_id", make_oid(key)), kvp("data", bin_val)));
-        return {1, operation_status_t::ok_k};
+        mongocxx::options::update opts;
+        opts.upsert(true);
+        if (coll.update_one(
+                    make_document(kvp("_id", make_oid(key))),
+                    make_document(kvp("$set",
+                                      make_document(kvp("data", bin_val)))),
+                    opts)
+                ->modified_count())
+            return {1, operation_status_t::ok_k};
+        return {0, operation_status_t::error_k};
+        // coll.insert_one(make_document(kvp("_id", make_oid(key)), kvp("data", bin_val)));
     }
 
     operation_result_t mongodb_t::update(key_t key, value_spanc_t value)
     {
         mongocxx::collection coll = this->get_collection();
+        // TODO: Do we need upsert here?
+        mongocxx::options::update opts;
+        opts.upsert(true);
         auto bin_val = make_binary(value.data(), value.size());
-        if (coll.replace_one(make_document(kvp("_id", make_oid(key))), make_document(kvp("_id", make_oid(key)), kvp("data", bin_val)))
+        if (coll.update_one(
+                    make_document(kvp("_id", make_oid(key))),
+                    make_document(kvp("$set",
+                                      make_document(kvp("data", bin_val)))),
+                    opts)
                 ->modified_count())
             return {1, operation_status_t::ok_k};
         return {0, operation_status_t::error_k};
@@ -168,53 +214,59 @@ namespace mongo
     operation_result_t mongodb_t::batch_insert(keys_spanc_t keys, values_spanc_t values, value_lengths_spanc_t sizes)
     {
         mongocxx::collection coll = this->get_collection();
-        std::vector<bsoncxx::document::value> cont;
-        cont.reserve(keys.size());
+        auto bulk = mongocxx::bulk_write(coll.create_bulk_write());
+        // mongocxx::options::update opts;
+        // opts.upsert(true);
         size_t data_offset = 0;
-        for (size_t index = 0; index < keys.size(); ++index)
+        for (size_t index = 0; index < keys.size(); index++)
         {
             auto bin_val = make_binary(values.data() + data_offset, sizes[index]);
+            bsoncxx::document::value doc1 = make_document(kvp("_id", make_oid(keys[index])));
+            bsoncxx::document::value doc2 = make_document(
+                kvp("$set", make_document(kvp("data", bin_val))));
+            mongocxx::model::update_one upsert_op{doc1.view(), doc2.view()};
+            upsert_op.upsert(true);
+            bulk.append(upsert_op);
             data_offset += sizes[index];
-            bsoncxx::document::value doc =
-                make_document(kvp("_id", make_oid(keys[index])), kvp("data", bin_val));
-            cont.push_back(doc);
         }
-
-        size_t inserted_count = coll.insert_many(cont)->inserted_count();
-        if (inserted_count == keys.size())
+        size_t modified_count = bulk.execute()->modified_count();
+        if (modified_count == keys.size())
             return {keys.size(), operation_status_t::ok_k};
-
-        return {inserted_count, operation_status_t::error_k};
+        return {modified_count, operation_status_t::error_k};
     }
 
-    // TODO: Not all keys are found. Fix it.
     operation_result_t mongodb_t::batch_read(keys_spanc_t keys, values_span_t values) const
     {
-        auto keys_arr = bsoncxx::builder::basic::array{};
-        std::set<bsoncxx::oid> input_keys_set;
-        size_t found_cnt = 0;
+        batch_keys_map.reserve(keys.size());
 
-        // ! Keys are const;
-        // std::sort(keys.begin(), keys.end());
-        // size_t unique_keys_cnt = std::unique(keys.begin(), keys.end) - keys.begin();
-        for (const auto &key : keys)
+        for (size_t index = 0; index < keys.size(); index++)
         {
-            keys_arr.append(make_oid(key));
-            input_keys_set.insert(make_oid(key));
+            auto oid = make_oid(keys[index]);
+            batch_keys_map.emplace(oid, index);
+            batch_keys_array.append(oid);
         }
-        size_t unique_keys_cnt = input_keys_set.size();
+
+        size_t found_cnt = 0;
 
         mongocxx::collection coll = this->get_collection();
         auto cursor = coll.find(
             make_document(
-                kvp("_id", make_document(kvp("$in", keys_arr)))));
+                kvp("_id", make_document(kvp("$in", batch_keys_array)))));
 
-        // TODO: memcpy values.
         for (auto &&doc : cursor)
+        {
             found_cnt++;
+            auto key = doc["_id"].get_oid().value;
+            auto data = doc["data"].get_binary();
+            auto idx = batch_keys_map[key];
+            memcpy(&values[idx], data.bytes, data.size);
+        }
 
-        if (found_cnt == unique_keys_cnt)
-            return {unique_keys_cnt, operation_status_t::ok_k};
+        batch_keys_array.clear();
+        batch_keys_map.clear();
+
+        if (found_cnt == keys.size())
+            return {keys.size(), operation_status_t::ok_k};
 
         return {found_cnt, operation_status_t::error_k};
     }
@@ -224,7 +276,7 @@ namespace mongo
         mongocxx::collection coll = this->get_collection();
         auto bulk = mongocxx::bulk_write(coll.create_bulk_write());
         size_t data_offset = 0;
-        for (size_t index = 0; index < keys.size(); ++index)
+        for (size_t index = 0; index < keys.size(); index++)
         {
             auto bin_val = make_binary(values.data() + data_offset, sizes[index]);
             bsoncxx::document::value doc = make_document(kvp("_id", make_oid(keys[index])), kvp("data", bin_val));
