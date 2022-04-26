@@ -278,12 +278,12 @@ void validate_workload(workload_t const& workload, size_t threads_count) {
     assert(workload.db_operations_count > 0);
 
     float proportion = 0;
-    proportion += workload.insert_proportion;
+    proportion += workload.upsert_proportion;
     proportion += workload.update_proportion;
     proportion += workload.remove_proportion;
     proportion += workload.read_proportion;
     proportion += workload.read_modify_write_proportion;
-    proportion += workload.batch_insert_proportion;
+    proportion += workload.batch_upsert_proportion;
     proportion += workload.batch_read_proportion;
     proportion += workload.bulk_load_proportion;
     proportion += workload.range_select_proportion;
@@ -292,8 +292,8 @@ void validate_workload(workload_t const& workload, size_t threads_count) {
 
     assert(workload.key_dist != distribution_kind_t::unknown_k);
 
-    assert(workload.batch_insert_min_length <= workload.batch_insert_max_length);
-    assert(workload.batch_insert_max_length <= workload.db_records_count / threads_count);
+    assert(workload.batch_upsert_min_length <= workload.batch_upsert_max_length);
+    assert(workload.batch_upsert_max_length <= workload.db_records_count / threads_count);
 
     assert(workload.batch_read_min_length <= workload.batch_read_max_length);
     assert(workload.batch_read_max_length <= workload.db_records_count / threads_count);
@@ -307,12 +307,12 @@ void validate_workload(workload_t const& workload, size_t threads_count) {
 
 inline operation_chooser_t create_operation_chooser(workload_t const& workload) {
     operation_chooser_t chooser = std::make_unique<ucsb::operation_chooser_t>();
-    chooser->add(operation_kind_t::insert_k, workload.insert_proportion);
+    chooser->add(operation_kind_t::upsert_k, workload.upsert_proportion);
     chooser->add(operation_kind_t::update_k, workload.update_proportion);
     chooser->add(operation_kind_t::remove_k, workload.remove_proportion);
     chooser->add(operation_kind_t::read_k, workload.read_proportion);
     chooser->add(operation_kind_t::read_modify_write_k, workload.read_modify_write_proportion);
-    chooser->add(operation_kind_t::batch_insert_k, workload.batch_insert_proportion);
+    chooser->add(operation_kind_t::batch_upsert_k, workload.batch_upsert_proportion);
     chooser->add(operation_kind_t::batch_read_k, workload.batch_read_proportion);
     chooser->add(operation_kind_t::bulk_load_k, workload.bulk_load_proportion);
     chooser->add(operation_kind_t::range_select_k, workload.range_select_proportion);
@@ -360,12 +360,12 @@ void bench(bm::State& state, workload_t const& workload, db_t& db, data_accessor
             operation_result_t result;
             auto operation = chooser->choose();
             switch (operation) {
-            case operation_kind_t::insert_k: result = worker.do_insert(); break;
+            case operation_kind_t::upsert_k: result = worker.do_upsert(); break;
             case operation_kind_t::update_k: result = worker.do_update(); break;
             case operation_kind_t::remove_k: result = worker.do_remove(); break;
             case operation_kind_t::read_k: result = worker.do_read(); break;
             case operation_kind_t::read_modify_write_k: result = worker.do_read_modify_write(); break;
-            case operation_kind_t::batch_insert_k: result = worker.do_batch_insert(); break;
+            case operation_kind_t::batch_upsert_k: result = worker.do_batch_upsert(); break;
             case operation_kind_t::batch_read_k: result = worker.do_batch_read(); break;
             case operation_kind_t::bulk_load_k: result = worker.do_bulk_load(); break;
             case operation_kind_t::range_select_k: result = worker.do_range_select(); break;

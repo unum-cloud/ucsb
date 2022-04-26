@@ -43,12 +43,12 @@ struct workload_t {
      */
     size_t operations_count = 0;
 
-    float insert_proportion = 0;
+    float upsert_proportion = 0;
     float update_proportion = 0;
     float remove_proportion = 0;
     float read_proportion = 0;
     float read_modify_write_proportion = 0;
-    float batch_insert_proportion = 0;
+    float batch_upsert_proportion = 0;
     float batch_read_proportion = 0;
     float bulk_load_proportion = 0;
     float range_select_proportion = 0;
@@ -60,9 +60,9 @@ struct workload_t {
     value_length_t value_length = 0;
     distribution_kind_t value_length_dist = distribution_kind_t::const_k;
 
-    size_t batch_insert_min_length = 0;
-    size_t batch_insert_max_length = 0;
-    distribution_kind_t batch_insert_length_dist = distribution_kind_t::uniform_k;
+    size_t batch_upsert_min_length = 0;
+    size_t batch_upsert_max_length = 0;
+    distribution_kind_t batch_upsert_length_dist = distribution_kind_t::uniform_k;
 
     size_t batch_read_min_length = 0;
     size_t batch_read_max_length = 0;
@@ -116,12 +116,12 @@ bool load(fs::path const& path, workloads_t& workloads) {
         workload.db_records_count = (*j_workload)["records_count"].get<size_t>();
         workload.db_operations_count = (*j_workload)["operations_count"].get<size_t>();
 
-        workload.insert_proportion = (*j_workload).value("insert_proportion", 0.0);
+        workload.upsert_proportion = (*j_workload).value("upsert_proportion", 0.0);
         workload.update_proportion = (*j_workload).value("update_proportion", 0.0);
         workload.remove_proportion = (*j_workload).value("remove_proportion", 0.0);
         workload.read_proportion = (*j_workload).value("read_proportion", 0.0);
         workload.read_modify_write_proportion = (*j_workload).value("read_modify_write_proportion", 0.0);
-        workload.batch_insert_proportion = (*j_workload).value("batch_insert_proportion", 0.0);
+        workload.batch_upsert_proportion = (*j_workload).value("batch_upsert_proportion", 0.0);
         workload.batch_read_proportion = (*j_workload).value("batch_read_proportion", 0.0);
         workload.bulk_load_proportion = (*j_workload).value("bulk_load_proportion", 0.0);
         workload.range_select_proportion = (*j_workload).value("range_select_proportion", 0.0);
@@ -141,11 +141,11 @@ bool load(fs::path const& path, workloads_t& workloads) {
             return false;
         }
 
-        workload.batch_insert_min_length = (*j_workload).value("batch_insert_min_length", 256);
-        workload.batch_insert_max_length = (*j_workload).value("batch_insert_max_length", 256);
-        workload.batch_insert_length_dist =
-            parse_distribution((*j_workload).value("batch_insert_length_dist", "uniform"));
-        if (workload.batch_insert_length_dist == distribution_kind_t::unknown_k) {
+        workload.batch_upsert_min_length = (*j_workload).value("batch_upsert_min_length", 256);
+        workload.batch_upsert_max_length = (*j_workload).value("batch_upsert_max_length", 256);
+        workload.batch_upsert_length_dist =
+            parse_distribution((*j_workload).value("batch_upsert_length_dist", "uniform"));
+        if (workload.batch_upsert_length_dist == distribution_kind_t::unknown_k) {
             workloads.clear();
             return false;
         }

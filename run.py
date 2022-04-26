@@ -6,7 +6,6 @@ import time
 import shutil
 import pexpect
 import pathlib
-import subprocess
 
 drop_caches = False
 transactional = False

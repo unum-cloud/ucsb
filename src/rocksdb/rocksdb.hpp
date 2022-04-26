@@ -70,12 +70,12 @@ struct rocksdb_t : public ucsb::db_t {
     bool close() override;
     void destroy() override;
 
-    operation_result_t insert(key_t key, value_spanc_t value) override;
+    operation_result_t upsert(key_t key, value_spanc_t value) override;
     operation_result_t update(key_t key, value_spanc_t value) override;
     operation_result_t remove(key_t key) override;
 
     operation_result_t read(key_t key, value_span_t value) const override;
-    operation_result_t batch_insert(keys_spanc_t keys, values_spanc_t values, value_lengths_spanc_t sizes) override;
+    operation_result_t batch_upsert(keys_spanc_t keys, values_spanc_t values, value_lengths_spanc_t sizes) override;
     operation_result_t batch_read(keys_spanc_t keys, values_span_t values) const override;
 
     operation_result_t bulk_load(keys_spanc_t keys, values_spanc_t values, value_lengths_spanc_t sizes) override;
@@ -190,7 +190,7 @@ void rocksdb_t::destroy() {
     rocksdb::DestroyDB(dir_path_.string(), options_, cf_descs_);
 }
 
-operation_result_t rocksdb_t::insert(key_t key, value_spanc_t value) {
+operation_result_t rocksdb_t::upsert(key_t key, value_spanc_t value) {
     rocksdb::Status status = db_->Put(write_options_, to_slice(key), to_slice(value));
     return {1, status.ok() ? operation_status_t::ok_k : operation_status_t::error_k};
 }
@@ -228,7 +228,7 @@ operation_result_t rocksdb_t::read(key_t key, value_span_t value) const {
     return {1, operation_status_t::ok_k};
 }
 
-operation_result_t rocksdb_t::batch_insert(keys_spanc_t keys, values_spanc_t values, value_lengths_spanc_t sizes) {
+operation_result_t rocksdb_t::batch_upsert(keys_spanc_t keys, values_spanc_t values, value_lengths_spanc_t sizes) {
 
     size_t offset = 0;
     rocksdb::WriteBatch batch;

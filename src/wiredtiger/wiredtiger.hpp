@@ -32,6 +32,7 @@ using transaction_t = ucsb::transaction_t;
  * https://github.com/wiredtiger/wiredtiger
  */
 struct wiredtiger_t : public ucsb::db_t {
+
     inline wiredtiger_t()
         : conn_(nullptr), session_(nullptr), cursor_(nullptr), bulk_load_cursor_(nullptr), table_name_("table:access") {
     }
@@ -42,12 +43,12 @@ struct wiredtiger_t : public ucsb::db_t {
     bool close() override;
     void destroy() override;
 
-    operation_result_t insert(key_t key, value_spanc_t value) override;
+    operation_result_t upsert(key_t key, value_spanc_t value) override;
     operation_result_t update(key_t key, value_spanc_t value) override;
     operation_result_t remove(key_t key) override;
 
     operation_result_t read(key_t key, value_span_t value) const override;
-    operation_result_t batch_insert(keys_spanc_t keys, values_spanc_t values, value_lengths_spanc_t sizes) override;
+    operation_result_t batch_upsert(keys_spanc_t keys, values_spanc_t values, value_lengths_spanc_t sizes) override;
     operation_result_t batch_read(keys_spanc_t keys, values_span_t values) const override;
 
     operation_result_t bulk_load(keys_spanc_t keys, values_spanc_t values, value_lengths_spanc_t sizes) override;
@@ -97,6 +98,7 @@ void wiredtiger_t::set_config(fs::path const& config_path, fs::path const& dir_p
 }
 
 bool wiredtiger_t::open() {
+
     if (conn_)
         return true;
 
@@ -162,7 +164,7 @@ void wiredtiger_t::destroy() {
     ucsb::clear_directory(dir_path_);
 }
 
-operation_result_t wiredtiger_t::insert(key_t key, value_spanc_t value) {
+operation_result_t wiredtiger_t::upsert(key_t key, value_spanc_t value) {
 
     cursor_->set_key(cursor_, key);
     WT_ITEM db_value;
@@ -210,7 +212,7 @@ operation_result_t wiredtiger_t::read(key_t key, value_span_t value) const {
     return {1, operation_status_t::ok_k};
 }
 
-operation_result_t wiredtiger_t::batch_insert(keys_spanc_t keys, values_spanc_t values, value_lengths_spanc_t sizes) {
+operation_result_t wiredtiger_t::batch_upsert(keys_spanc_t keys, values_spanc_t values, value_lengths_spanc_t sizes) {
 
     size_t offset = 0;
     for (size_t idx = 0; idx < keys.size(); ++idx) {
@@ -306,6 +308,7 @@ operation_result_t wiredtiger_t::range_select(key_t key, size_t length, values_s
 }
 
 operation_result_t wiredtiger_t::scan(key_t key, size_t length, value_span_t single_value) const {
+
     cursor_->set_key(cursor_, key);
     int res = cursor_->search(cursor_);
     if (res)
@@ -355,6 +358,7 @@ bool wiredtiger_t::load_config(config_t& config) {
 }
 
 inline std::string wiredtiger_t::create_str_config(config_t const& config) const {
+
     std::string str_config = "create";
     std::string str_cache_size = fmt::format("cache_size={:.0M}", ucsb::printable_bytes_t {config.cache_size});
     return fmt::format("{},{}", str_config, str_cache_size);
