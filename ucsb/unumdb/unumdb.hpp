@@ -70,6 +70,14 @@ struct unumdb_t : public ucsb::db_t {
         size_t uring_max_files_count = 0;
         size_t uring_queue_depth = 0;
         darray_gt<string_t> paths;
+
+        inline void clear() {
+            user_config = user_region_config_t();
+            io_device_name.clear();
+            uring_max_files_count = 0;
+            uring_queue_depth = 0;
+            paths.clear();
+        }
     };
 
     bool load_config();
@@ -138,6 +146,7 @@ bool unumdb_t::close() {
         region_ = region_t("", region_config_t());
         cleanup_file_io();
     }
+    config_.clear();
     return true;
 }
 
