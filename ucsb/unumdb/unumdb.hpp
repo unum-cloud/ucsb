@@ -317,6 +317,10 @@ void unumdb_t::flush() {
         import_data.append(std::move(thread_import_data));
 
     if (!import_data.empty()) {
+        std::sort(import_data.begin(), import_data.end(), [](auto const& left, auto const& right) {
+            return left.schema.lower_fingerprint < right.schema.upper_fingerprint;
+        });
+
         region_.import(import_data.view());
         import_data.clear();
         import_data_.clear();

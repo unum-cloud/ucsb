@@ -278,8 +278,11 @@ operation_result_t rocksdb_t::bulk_load(keys_spanc_t keys, values_spanc_t values
     size_t data_offset = 0;
     std::vector<std::string> files;
 
+    size_t this_thread_id = std::hash<std::thread::id> {}(std::this_thread::get_id());
+    std::string this_thread_id_str = std::to_string(this_thread_id);
+
     while (true) {
-        std::string sst_file_path = fmt::format("/tmp/rocksdb_tmp_{}.sst", files.size());
+        std::string sst_file_path = fmt::format("/tmp/rocksdb_tmp_{}_{}.sst", this_thread_id_str, files.size());
         files.push_back(sst_file_path);
 
         rocksdb::SstFileWriter sst_file_writer(rocksdb::EnvOptions(), options_, options_.comparator);
@@ -376,7 +379,7 @@ bool rocksdb_t::load_aditional_options() {
     nlohmann::json j_config;
     i_config >> j_config;
 
-    std::vector<std::string> db_paths = j_config["db_paths"].get<std::vector<std::string>>();
+    std::vector<std::string> db_paths = j_config["paths"].get<std::vector<std::string>>();
     for (auto const& db_path : db_paths) {
         if (!db_path.empty()) {
             size_t files_size = 0;

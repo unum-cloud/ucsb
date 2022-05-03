@@ -1,6 +1,6 @@
 #pragma once
-#include <memory>
 #include <set>
+#include <memory>
 
 #include "ucsb/core/types.hpp"
 #include "ucsb/core/data_accessor.hpp"
