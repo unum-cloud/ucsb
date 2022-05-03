@@ -376,7 +376,7 @@ bool rocksdb_t::load_aditional_options() {
     nlohmann::json j_config;
     i_config >> j_config;
 
-    std::vector<std::string> db_paths = j_config["db_paths"].get<std::vector<std::string>>();
+    std::vector<std::string> db_paths = j_config["paths"].get<std::vector<std::string>>();
     for (auto const& db_path : db_paths) {
         if (!db_path.empty()) {
             size_t files_size = 0;
