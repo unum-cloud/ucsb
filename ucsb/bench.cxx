@@ -254,17 +254,31 @@ std::vector<workload_t> split_workload_into_threads(workload_t const& workload, 
     auto leftover_records_count = workload.db_records_count % threads_count;
     auto leftover_operations_count = workload.db_operations_count % threads_count;
 
+    size_t start_key = workload.start_key;
     for (size_t idx = 0; idx < threads_count; ++idx) {
         workload_t thread_workload = workload;
         thread_workload.records_count = records_count_per_thread + bool(leftover_records_count);
         thread_workload.operations_count = operations_count_per_thread + bool(leftover_operations_count);
         thread_workload.operations_count = std::max(size_t(1), thread_workload.operations_count);
         auto prev_thread_records_count = idx == 0 ? 0 : workloads[idx - 1].records_count;
-        thread_workload.start_key = workload.start_key + idx * prev_thread_records_count;
+        thread_workload.start_key = start_key;
         workloads.push_back(thread_workload);
 
         leftover_records_count -= bool(leftover_records_count);
         leftover_operations_count -= bool(leftover_operations_count);
+
+        if (workload.upsert_proportion == 1.0 || workload.batch_upsert_proportion == 1.0 ||
+            workload.bulk_load_proportion == 1.0) // Initialization case
+        {
+            size_t new_records_count =
+                bool(workload.upsert_proportion) * thread_workload.operations_count +
+                bool(workload.bulk_load_proportion) * thread_workload.operations_count * workload.bulk_load_max_length +
+                bool(workload.batch_upsert_proportion) * thread_workload.operations_count *
+                    workload.batch_upsert_max_length;
+            start_key += new_records_count;
+        }
+        else
+            start_key += workloads.back().records_count;
     }
 
     return workloads;
