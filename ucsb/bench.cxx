@@ -454,74 +454,83 @@ void bench(bm::State& state, workload_t const& workload, db_t& db, bool transact
 
 int main(int argc, char** argv) {
 
-    // Setup settings
-    settings_t settings;
-    parse_and_validate_args(argc, argv, settings);
-    std::string results_dir_path(
-        fmt::format("{}/cores_{}/{}/", settings.results_path.string(), settings.threads_count, settings.db_name));
-    std::string results_file_path = fmt::format("{}{}.json", results_dir_path, settings.workloads_path.stem().c_str());
-    std::string partial_results_file_path =
-        fmt::format("{}{}_partial.json", results_dir_path, settings.workloads_path.stem().c_str());
-    bool partial_benchmark = !settings.workload_filter.empty();
-    if (partial_benchmark)
-        settings.results_path = partial_results_file_path;
-    else
-        settings.results_path = results_file_path;
-
-    // Prepare worklods
-    workloads_t workloads;
-    if (!ucsb::load(settings.workloads_path, workloads)) {
-        fmt::print("Failed to load workloads. path: {}\n", settings.workloads_path.c_str());
-        return 1;
-    }
-    if (workloads.empty()) {
-        fmt::print("Workloads file is empty. path: {}\n", settings.workloads_path.c_str());
-        return 1;
-    }
-    workloads = filter_workloads(workloads, settings.workload_filter);
-    if (workloads.empty()) {
-        fmt::print("Filter dones't match any workload. filter: {}\n", settings.workload_filter);
-        return 1;
-    }
-    std::vector<workloads_t> threads_workloads;
-    for (auto const& workload : workloads) {
-        validate_workload(workload, settings.threads_count);
-        std::vector<workload_t> splited_workloads = split_workload_into_threads(workload, settings.threads_count);
-        threads_workloads.push_back(splited_workloads);
-    }
-
-    ucsb::fs::create_directories(settings.working_dir_path.string());
-    ucsb::fs::create_directories(settings.results_path.parent_path());
-
-    // Setup DB
-    db_brand_t db_brand = ucsb::parse_db_brand(settings.db_name);
-    std::shared_ptr<db_t> db = ucsb::make_db(db_brand, settings.transactional);
-    if (!db) {
-        if (settings.transactional)
-            fmt::print("Failed to create transactional DB: {}\n", settings.db_name);
+    try {
+        // Setup settings
+        settings_t settings;
+        parse_and_validate_args(argc, argv, settings);
+        std::string results_dir_path(
+            fmt::format("{}/cores_{}/{}/", settings.results_path.string(), settings.threads_count, settings.db_name));
+        std::string results_file_path =
+            fmt::format("{}{}.json", results_dir_path, settings.workloads_path.stem().c_str());
+        std::string partial_results_file_path =
+            fmt::format("{}{}_partial.json", results_dir_path, settings.workloads_path.stem().c_str());
+        bool partial_benchmark = !settings.workload_filter.empty();
+        if (partial_benchmark)
+            settings.results_path = partial_results_file_path;
         else
-            fmt::print("Failed to create DB: {}\n", settings.db_name);
-        return 1;
+            settings.results_path = results_file_path;
+
+        // Prepare worklods
+        workloads_t workloads;
+        if (!ucsb::load(settings.workloads_path, workloads)) {
+            fmt::print("Failed to load workloads. path: {}\n", settings.workloads_path.c_str());
+            return 1;
+        }
+        if (workloads.empty()) {
+            fmt::print("Workloads file is empty. path: {}\n", settings.workloads_path.c_str());
+            return 1;
+        }
+        workloads = filter_workloads(workloads, settings.workload_filter);
+        if (workloads.empty()) {
+            fmt::print("Filter dones't match any workload. filter: {}\n", settings.workload_filter);
+            return 1;
+        }
+        std::vector<workloads_t> threads_workloads;
+        for (auto const& workload : workloads) {
+            validate_workload(workload, settings.threads_count);
+            std::vector<workload_t> splited_workloads = split_workload_into_threads(workload, settings.threads_count);
+            threads_workloads.push_back(splited_workloads);
+        }
+
+        ucsb::fs::create_directories(settings.working_dir_path.string());
+        ucsb::fs::create_directories(settings.results_path.parent_path());
+
+        // Setup DB
+        db_brand_t db_brand = ucsb::parse_db_brand(settings.db_name);
+        std::shared_ptr<db_t> db = ucsb::make_db(db_brand, settings.transactional);
+        if (!db) {
+            if (settings.transactional)
+                fmt::print("Failed to create transactional DB: {}\n", settings.db_name);
+            else
+                fmt::print("Failed to create DB: {}\n", settings.db_name);
+            return 1;
+        }
+        db->set_config(settings.db_config_path, settings.working_dir_path.string());
+
+        threads_fence_t fence(settings.threads_count);
+
+        // Register benchmarks
+        register_section(section_name(settings, workloads));
+        for (auto const& splited_workloads : threads_workloads) {
+            std::string bench_name = splited_workloads.front().name;
+            register_benchmark(bench_name, settings.threads_count, [&](bm::State& state) {
+                auto const& workload = splited_workloads[state.thread_index()];
+                bench(state, workload, *db, settings.transactional, fence);
+            });
+        }
+
+        run_benchmarks(argc, argv, settings);
+
+        if (partial_benchmark) {
+            ucsb::marge_results(partial_results_file_path, results_file_path);
+            ucsb::fs::remove(partial_results_file_path);
+        }
     }
-    db->set_config(settings.db_config_path, settings.working_dir_path.string());
-
-    threads_fence_t fence(settings.threads_count);
-
-    // Register benchmarks
-    register_section(section_name(settings, workloads));
-    for (auto const& splited_workloads : threads_workloads) {
-        std::string bench_name = splited_workloads.front().name;
-        register_benchmark(bench_name, settings.threads_count, [&](bm::State& state) {
-            auto const& workload = splited_workloads[state.thread_index()];
-            bench(state, workload, *db, settings.transactional, fence);
-        });
+    catch (ucsb::exception_t const& ex) {
+        fmt::print("exception: {}\n", ex.what());
     }
-
-    run_benchmarks(argc, argv, settings);
-
-    if (partial_benchmark) {
-        ucsb::marge_results(partial_results_file_path, results_file_path);
-        ucsb::fs::remove(partial_results_file_path);
+    catch (...) {
+        fmt::print("Unknown exception was thrown\n");
     }
 
     return 0;
