@@ -361,7 +361,7 @@ bool unumdb_t::load_config() {
     config_.user_config.unfixed_citizen_max_size = j_config["unfixed_citizen_max_size"].get<size_t>();
 
 #if dev_m
-    config_.user_config.name = "Armenia";
+    config_.user_config.name = "Kovkas";
 #endif
 
     config_.io_device_name = j_config["io_device_name"].get<std::string>().c_str();
