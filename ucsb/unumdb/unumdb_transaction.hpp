@@ -4,7 +4,7 @@
 #include <vector>
 #include <fmt/format.h>
 
-#include "diskkv/region.hpp"
+#include "diskkv/lsm/region.hpp"
 
 #include "ucsb/core/types.hpp"
 #include "ucsb/core/data_accessor.hpp"
@@ -115,7 +115,7 @@ operation_result_t unumdb_transaction_t::read(key_t key, value_span_t value) con
     countdown_t countdown;
     notifier_t read_notifier(countdown);
     citizen_span_t citizen {reinterpret_cast<byte_t*>(value.data()), value.size()};
-    transaction_->select<caching_t::io_k>(location, citizen, read_notifier);
+    transaction_->select(location, citizen, read_notifier);
     if (!countdown.wait(*fibers))
         return {0, operation_status_t::error_k};
 
@@ -214,8 +214,8 @@ operation_result_t unumdb_transaction_t::scan(key_t key, size_t length, value_sp
     size_t scanned_records_count = 0;
 
     transaction_->lock_commit_shared();
-    auto it = transaction_->find<caching_t::ram_k>(key);
-    for (size_t i = 0; it != transaction_->end<caching_t::ram_k>() && i < length; ++it, ++i) {
+    auto it = transaction_->find(key);
+    for (size_t i = 0; it != transaction_->end() && i < length; ++it, ++i) {
         if (!it.is_removed()) {
             countdown.reset(1);
             it.get(citizen, countdown);

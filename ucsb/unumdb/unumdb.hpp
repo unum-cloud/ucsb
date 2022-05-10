@@ -4,8 +4,8 @@
 #include <vector>
 #include <fmt/format.h>
 
-#include "diskkv/region.hpp"
-#include "diskkv/validator.hpp"
+#include "diskkv/lsm/region.hpp"
+#include "diskkv/setup/validator.hpp"
 
 #include "ucsb/core/types.hpp"
 #include "ucsb/core/db.hpp"
@@ -115,14 +115,13 @@ bool unumdb_t::open() {
     darray_gt<string_t> paths = config_.paths;
     if (config_.paths.empty())
         paths.push_back(dir_path_.c_str());
-    if (config_.io_device_name == string_t("mmap"))
-        init_file_io_by_mmap(paths);
-    else if (config_.io_device_name == string_t("libc"))
-        init_file_io_by_libc(paths);
+    countdown_t silenced_countdown(1);
+    unum::io::nix::make_path(dir_path_.c_str(), silenced_countdown);
+    init_file_io_by_pulling(paths, 256);
+    if (config_.io_device_name == string_t("posix"))
+        init_file_io_by_posix(paths);
     else if (config_.io_device_name == string_t("pulling"))
         init_file_io_by_pulling(paths, config_.uring_queue_depth);
-    else if (config_.io_device_name == string_t("polling"))
-        init_file_io_by_polling(paths, config_.uring_max_files_count, config_.uring_queue_depth);
     else
         return false;
 
@@ -140,7 +139,7 @@ bool unumdb_t::open() {
 }
 
 bool unumdb_t::close() {
-    if (vdisk_router) {
+    if (router) {
         if (!region_.name().empty())
             region_.flush();
         region_ = region_t("", region_config_t());
@@ -186,7 +185,7 @@ operation_result_t unumdb_t::read(key_t key, value_span_t value) const {
     countdown_t countdown;
     notifier_t read_notifier(countdown);
     citizen_span_t citizen {reinterpret_cast<byte_t*>(value.data()), value.size()};
-    region_.select<caching_t::io_k>(location, citizen, read_notifier);
+    region_.select(location, citizen, read_notifier);
     if (!countdown.wait(*fibers))
         return {0, operation_status_t::error_k};
 
@@ -243,16 +242,12 @@ operation_result_t unumdb_t::bulk_load(keys_spanc_t keys, values_spanc_t values,
     config.capacity_bytes = values.size();
     config.elements_max_cnt = keys.size();
 
-    // TODO: Remove const casts later
-    span_gt<fingerprint_t> fingerprints {
-        const_cast<fingerprint_t*>(reinterpret_cast<fingerprint_t const*>(keys.data())),
-        keys.size()};
+    spanc_gt<fingerprint_t> fingerprints {reinterpret_cast<fingerprint_t const*>(keys.data()), keys.size()};
     auto building =
         region_t::building_constructor_t::build(config,
                                                 fingerprints,
                                                 {reinterpret_cast<byte_t const*>(values.data()), values.size()},
-                                                {sizes.data(), sizes.size()},
-                                                ds_info_t::sorted_k);
+                                                {sizes.data(), sizes.size()});
     auto holder = building.export_and_destroy();
     auto thread_idx = building_idx % import_data_.size();
     import_data_[thread_idx].push_back(holder);
@@ -297,8 +292,8 @@ operation_result_t unumdb_t::scan(key_t key, size_t length, value_span_t single_
     size_t scanned_records_count = 0;
 
     region_.lock_shared();
-    auto it = region_.find<caching_t::ram_k>(key);
-    for (size_t i = 0; it != region_.end<caching_t::ram_k>() && i < length; ++it, ++i) {
+    auto it = region_.find(key);
+    for (size_t i = 0; it != region_.end() && i < length; ++it, ++i) {
         if (!it.is_removed()) {
             countdown.reset(1);
             it.get(citizen, countdown);

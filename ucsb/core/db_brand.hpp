@@ -27,7 +27,7 @@ inline std::shared_ptr<db_t> make_db(db_brand_t db_brand, bool transactional) {
     if (transactional) {
         switch (db_brand) {
         case db_brand_t::unumdb_k: {
-            init_file_io_by_libc("./"); // Note: Temporary solution
+            init_file_io_by_posix(darray_gt<string_t> {"./"}); // Note: Temporary solution
             return std::make_shared<unum::unumdb_t>();
         }
         case db_brand_t::rocksdb_k: return std::make_shared<facebook::rocksdb_t>(facebook::db_mode_t::transactional_k);
@@ -37,7 +37,7 @@ inline std::shared_ptr<db_t> make_db(db_brand_t db_brand, bool transactional) {
     else {
         switch (db_brand) {
         case db_brand_t::unumdb_k: {
-            init_file_io_by_libc("./"); // Note: Temporary solution
+            init_file_io_by_posix(darray_gt<string_t> {"./"}); // Note: Temporary solution
             return std::make_shared<unum::unumdb_t>();
         }
         case db_brand_t::rocksdb_k: return std::make_shared<facebook::rocksdb_t>(facebook::db_mode_t::regular_k);
