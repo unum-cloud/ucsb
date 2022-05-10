@@ -37,7 +37,7 @@ using building_holder_t = building_holder_gt<fingerprint_t>;
  */
 struct unumdb_t : public ucsb::db_t {
   public:
-    inline unumdb_t() : region_("", region_config_t()), thread_idx_(0) {}
+    inline unumdb_t() : region_("", "./", region_config_t()), thread_idx_(0) {}
     inline ~unumdb_t() { close(); }
 
     void set_config(fs::path const& config_path, fs::path const& dir_path) override;
@@ -106,6 +106,8 @@ bool unumdb_t::open() {
     if (issues_t issues; !validator_t::validate(config_.user_config, issues))
         return false;
 
+    countdown_t silenced_countdown(1);
+    unum::io::nix::make_path(dir_path_.c_str(), silenced_countdown);
     for (auto const& path : config_.paths) {
         if (!fs::exists(path.c_str()))
             if (!fs::create_directories(path.c_str()))
@@ -115,8 +117,6 @@ bool unumdb_t::open() {
     darray_gt<string_t> paths = config_.paths;
     if (config_.paths.empty())
         paths.push_back(dir_path_.c_str());
-    countdown_t silenced_countdown(1);
-    unum::io::nix::make_path(dir_path_.c_str(), silenced_countdown);
     init_file_io_by_pulling(paths, 256);
     if (config_.io_device_name == string_t("posix"))
         init_file_io_by_posix(paths);
@@ -126,7 +126,7 @@ bool unumdb_t::open() {
         return false;
 
     auto region_config = create_region_config(config_.user_config);
-    region_ = region_t("Kovkas", region_config);
+    region_ = region_t("Kovkas", dir_path_.c_str(), region_config);
     import_data_.resize(config_.user_config.threads_max_cnt);
 
     // Cleanup directories
@@ -142,7 +142,7 @@ bool unumdb_t::close() {
     if (router) {
         if (!region_.name().empty())
             region_.flush();
-        region_ = region_t("", region_config_t());
+        region_ = region_t("", "./", region_config_t());
         cleanup_file_io();
     }
     config_.clear();
