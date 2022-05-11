@@ -60,4 +60,5 @@ class UCSBConan(ConanFile):
         self.requires("leveldb/1.23")
         self.requires("lmdb/0.9.29")
         self.requires("snappy/1.1.9")
+        self.requires("redis-plus-plus/1.3.3")
         pass

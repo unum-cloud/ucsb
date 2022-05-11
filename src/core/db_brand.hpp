@@ -7,6 +7,7 @@
 #include "src/leveldb/leveldb.hpp"
 #include "src/wiredtiger/wiredtiger.hpp"
 #include "src/lmdb/lmdb.hpp"
+#include "src/redis/redis.hpp"
 
 namespace ucsb {
 
@@ -17,7 +18,9 @@ enum class db_brand_t {
     leveldb_k,
     wiredtiger_k,
     lmdb_k,
+    redis_k,
 };
+
 
 inline std::shared_ptr<db_t> make_db(db_brand_t db_brand, bool transactional) {
     if (transactional) {
@@ -32,6 +35,7 @@ inline std::shared_ptr<db_t> make_db(db_brand_t db_brand, bool transactional) {
         case db_brand_t::leveldb_k: return std::make_shared<google::leveldb_t>();
         case db_brand_t::wiredtiger_k: return std::make_shared<mongodb::wiredtiger_t>();
         case db_brand_t::lmdb_k: return std::make_shared<symas::lmdb_t>();
+        case db_brand_t::redis_k: return std::make_shared<redis::redis_t>();
         default: break;
         }
     }
@@ -47,6 +51,8 @@ inline db_brand_t parse_db_brand(std::string const& name) {
         return db_brand_t::wiredtiger_k;
     if (name == "lmdb")
         return db_brand_t::lmdb_k;
+    if (name == "redis")
+        return db_brand_t::redis_k;
     return db_brand_t::unknown_k;
 }
 
