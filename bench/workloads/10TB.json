@@ -1,8 +1,8 @@
 [
     {
         "name": "Init",
-        "records_count": 100000000,
-        "operations_count": 1000,
+        "records_count": 10000000000,
+        "operations_count": 100000,
         "value_length": 1024,
         "bulk_load_proportion": 1.0,
         "bulk_load_min_length": 100000,
@@ -10,37 +10,37 @@
     },
     {
         "name": "Read",
-        "records_count": 100000000,
-        "operations_count": 100000000,
+        "records_count": 10000000000,
+        "operations_count": 2000000000,
         "read_proportion": 1.0,
         "key_dist": "zipfian",
         "value_length": 1024
     },
     {
         "name": "BatchRead",
-        "records_count": 100000000,
+        "records_count": 10000000000,
         "operations_count": 50000,
         "batch_read_proportion": 1.0,
         "key_dist": "zipfian",
         "value_length": 1024,
-        "batch_read_min_length": 256,
-        "batch_read_max_length": 256,
+        "batch_read_min_length": 1024,
+        "batch_read_max_length": 1024,
         "batch_read_length_dist": "uniform"
     },
     {
         "name": "RangeSelect",
-        "records_count": 100000000,
+        "records_count": 10000000000,
         "operations_count": 100000,
         "range_select_proportion": 1.0,
         "key_dist": "zipfian",
         "value_length": 1024,
-        "range_select_min_length": 100,
-        "range_select_max_length": 100,
+        "range_select_min_length": 200,
+        "range_select_max_length": 200,
         "range_select_length_dist": "uniform"
     },
     {
         "name": "Scan",
-        "records_count": 100000000,
+        "records_count": 10000000000,
         "operations_count": 1,
         "scan_proportion": 1.0,
         "key_dist": "zipfian",
@@ -48,8 +48,8 @@
     },
     {
         "name": "ReadUpdate_50_50",
-        "records_count": 100000000,
-        "operations_count": 100000000,
+        "records_count": 10000000000,
+        "operations_count": 2000000000,
         "read_proportion": 0.5,
         "update_proportion": 0.5,
         "key_dist": "zipfian",
@@ -57,8 +57,8 @@
     },
     {
         "name": "ReadUpsert_95_5",
-        "records_count": 100000000,
-        "operations_count": 100000000,
+        "records_count": 10000000000,
+        "operations_count": 2000000000,
         "read_proportion": 0.95,
         "upsert_proportion": 0.05,
         "key_dist": "latest",
@@ -66,8 +66,8 @@
     },
     {
         "name": "BatchUpsert",
-        "records_count": 100000000,
-        "operations_count": 1000,
+        "records_count": 10000000000,
+        "operations_count": 20000,
         "value_length": 1024,
         "batch_upsert_proportion": 1.0,
         "batch_upsert_min_length": 10000,
@@ -75,8 +75,8 @@
     },
     {
         "name": "Remove",
-        "records_count": 100000000,
-        "operations_count": 15000000,
+        "records_count": 10000000000,
+        "operations_count": 300000000,
         "remove_proportion": 1.0,
         "key_dist": "zipfian"
     }

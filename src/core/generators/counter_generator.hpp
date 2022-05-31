@@ -3,11 +3,9 @@
 
 #include "src/core/generators/generator.hpp"
 
-namespace ucsb
-{
+namespace ucsb {
 
-  struct counter_generator_t : public generator_gt<size_t>
-  {
+struct counter_generator_t : public generator_gt<size_t> {
     inline counter_generator_t(size_t start) : counter_(start) {}
 
     inline size_t generate() override { return counter_++; }
@@ -15,6 +13,6 @@ namespace ucsb
 
   protected:
     size_t counter_;
-  };
+};
 
 } // namespace ucsb

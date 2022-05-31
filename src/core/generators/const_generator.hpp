@@ -3,12 +3,10 @@
 
 #include "src/core/generators/generator.hpp"
 
-namespace ucsb
-{
+namespace ucsb {
 
-  template <typename value_at>
-  struct const_generator_gt : generator_gt<value_at>
-  {
+template <typename value_at>
+struct const_generator_gt : generator_gt<value_at> {
     using value_t = value_at;
 
     inline const_generator_gt(value_t constant) : constant_(constant) {}
@@ -18,6 +16,6 @@ namespace ucsb
 
   private:
     value_t constant_;
-  };
+};
 
 } // namespace ucsb

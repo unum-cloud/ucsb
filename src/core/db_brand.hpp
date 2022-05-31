@@ -69,20 +69,5 @@ namespace ucsb
             return db_brand_t::lmdb_k;
         return db_brand_t::unknown_k;
     }
+
 } // namespace ucsb
-    // return {};
-// }
-
-
-// inline db_brand_t parse_db_brand(std::string const& name)
-//     {
-//     if (name == "rocksdb")
-//         return db_brand_t::rocksdb_k;
-//     if (name == "leveldb")
-//         return db_brand_t::leveldb_k;
-//     if (name == "wiredtiger")
-//         return db_brand_t::wiredtiger_k;
-//     if (name == "lmdb")
-//         return db_brand_t::lmdb_k;
-//     return db_brand_t::unknown_k;
-//     }

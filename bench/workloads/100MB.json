@@ -56,22 +56,22 @@
         "value_length": 1024
     },
     {
-        "name": "ReadInsert_95_5",
+        "name": "ReadUpsert_95_5",
         "records_count": 100000,
         "operations_count": 100000,
         "read_proportion": 0.95,
-        "insert_proportion": 0.05,
+        "upsert_proportion": 0.05,
         "key_dist": "latest",
         "value_length": 1024
     },
     {
-        "name": "BatchInsert",
+        "name": "BatchUpsert",
         "records_count": 100000,
         "operations_count": 10,
         "value_length": 1024,
-        "batch_insert_proportion": 1.0,
-        "batch_insert_min_length": 1000,
-        "batch_insert_max_length": 1000
+        "batch_upsert_proportion": 1.0,
+        "batch_upsert_min_length": 1000,
+        "batch_upsert_max_length": 1000
     },
     {
         "name": "Remove",

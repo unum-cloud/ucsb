@@ -16,23 +16,38 @@ template <>
 struct fmt::formatter<ucsb::printable_bytes_t> {
 
     size_t suffix_idx = 0;
+    unsigned char precision = 2;
 
     template <typename ctx_at>
     inline constexpr auto parse(ctx_at& ctx) {
         auto it = ctx.begin();
-        if (it != ctx.end()) {
-            switch (*it) {
-            case 'B': suffix_idx = 1; break;
-            case 'K': suffix_idx = 2; break;
-            case 'M': suffix_idx = 3; break;
-            case 'G': suffix_idx = 4; break;
-            case 'T': suffix_idx = 5; break;
-            case 'P': suffix_idx = 6; break;
-            case 'E': suffix_idx = 7; break;
-            default: throw format_error("invalid unit");
-            }
+        if (it == ctx.end())
+            return it;
+
+        if (*it == '.') {
+            ++it;
+            if (it != ctx.end() && *it >= '0' && *it <= '9')
+                precision = (int)(*it) - (int)48;
+            else
+                throw format_error("invalid precision");
             ++it;
         }
+
+        if (it == ctx.end())
+            return it;
+
+        switch (*it) {
+        case 'B': suffix_idx = 1; break;
+        case 'K': suffix_idx = 2; break;
+        case 'M': suffix_idx = 3; break;
+        case 'G': suffix_idx = 4; break;
+        case 'T': suffix_idx = 5; break;
+        case 'P': suffix_idx = 6; break;
+        case 'E': suffix_idx = 7; break;
+        default: throw format_error("invalid unit");
+        }
+        ++it;
+
         if (it != ctx.end() && *it == 'B')
             ++it;
         if (it != ctx.end() && *it != '}')
@@ -59,7 +74,9 @@ struct fmt::formatter<ucsb::printable_bytes_t> {
 
         if (suffix_idx == 1)
             return fmt::format_to(ctx.out(), "{}B", bytes);
-        else
-            return fmt::format_to(ctx.out(), "{:02.2f}{}", float_bytes, suffix_k[suffix_idx]);
+        else {
+            std::string format = fmt::format("{{:02.{}f}}{{}}", precision);
+            return fmt::format_to(ctx.out(), fmt::runtime(format), float_bytes, suffix_k[suffix_idx]);
+        }
     }
 };

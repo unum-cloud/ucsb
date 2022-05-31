@@ -5,7 +5,6 @@ import time
 import shutil
 import pexpect
 import pathlib
-import subprocess
 
 drop_caches = False
 transactional = False
@@ -37,6 +36,7 @@ sizes = [
     # '10GB',
     # '100GB',
     # '1TB',
+    # '10TB',
 ]
 
 workload_names = [
@@ -103,6 +103,7 @@ def launch_db(db_name: str, config_path: os.PathLike) -> None:
 def run(db_name: str, size: int, threads_count: int, workload_names: list) -> None:
     config_path = get_db_config_file_path(db_name, size)
     workloads_path = get_worklods_file_path(size)
+    db_path = get_db_path(db_name, size)
     results_path = get_results_dir_path()
 
     transactional_flag = '-t' if transactional else ''
@@ -114,9 +115,10 @@ def run(db_name: str, size: int, threads_count: int, workload_names: list) -> No
         runner = './build_release/bin/ucsb_bench'
     child = pexpect.spawn(f'{runner} \
                             -db {db_name} \
-                            {transactional_flag}\
+                            {transactional_flag} \
                             -c {config_path} \
                             -w {workloads_path} \
+                            -wd {db_path} \
                             -r {results_path} \
                             -threads {threads_count} \
                             -filter {filter}'
@@ -158,7 +160,7 @@ def main() -> None:
                             print('Dropping caches...')
                             drop_system_caches()
                             time.sleep(8)
-                            run(db_name, size, threads_count, [workload_name])
+                        run(db_name, size, threads_count, [workload_name])
                 else:
                     run(db_name, size, threads_count, workload_names)
 
