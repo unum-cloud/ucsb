@@ -23,11 +23,11 @@ threads = [
 ]
 
 db_names = [
-    # 'rocksdb',
-    'mongodb',
-    # 'leveldb',
-    # 'wiredtiger',
-    # 'lmdb',
+    'rocksdb',
+    'leveldb',
+    'wiredtiger',
+    'lmdb',
+    'redis'
 ]
 
 sizes = [
@@ -43,14 +43,13 @@ workload_names = [
     'Init',
     'Read',
     'BatchRead',
-    # 'RangeSelect',
-    # 'Scan',
-    # 'ReadUpdate_50_50',
-    # 'ReadInsert_95_5',
-    # 'BatchInsert',
-    # 'Remove',
-    # 'Insert',
-
+    'RangeSelect',
+    'Scan',
+    'ReadUpdate_50_50',
+    'ReadUpsert_95_5',
+    'BatchUpsert',
+    'Remove',
+  
     # Aditional workloads
     # BulkImport: Imports whole DB equal to the workload size
     # BatchInsert: Do batch inserts equal to 10% of the workload size
@@ -113,22 +112,15 @@ def run(db_name: str, size: int, threads_count: int, workload_names: list) -> No
         runner = f'docker run -v {os.getcwd()}/bench:/ucsb/bench -v {os.getcwd()}/tmp:/ucsb/tmp -it ucsb-image-dev'
     else:
         runner = './build_release/bin/ucsb_bench'
-    child = pexpect.spawn(f'{runner} \
-                            -db {db_name} \
-                            {transactional_flag} \
-                            -c {config_path} \
-                            -w {workloads_path} \
-                            -wd {db_path} \
-                            -r {results_path} \
-                            -threads {threads_count} \
-                            -filter {filter}'
-                          )
+
+    cmd = f'{runner} -db {db_name} {transactional_flag} -c {config_path} -w {workloads_path} -wd {db_path} -r {results_path} -threads {threads_count} -filter {filter}'
+    child = pexpect.spawn(cmd)
     child.interact()
 
 
 def main() -> None:
-    if os.geteuid() != 0:
-        sys.exit('Run as sudo!')
+    # if os.geteuid() != 0:
+    #     sys.exit('Run as sudo!')
 
     if cleanup_previous:
         print('Cleanup...')
@@ -158,7 +150,7 @@ def main() -> None:
                     for workload_name in workload_names:
                         if not run_docker_image:
                             print('Dropping caches...')
-                            drop_system_caches()
+                            # drop_system_caches()
                             time.sleep(8)
                         run(db_name, size, threads_count, [workload_name])
                 else:
