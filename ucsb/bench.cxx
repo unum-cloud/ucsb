@@ -2,8 +2,6 @@
 #include <memory>
 #include <string>
 #include <vector>
-#include <barrier>
-
 #include <fmt/format.h>
 #include <nlohmann/json.hpp>
 #include <benchmark/benchmark.h>
@@ -20,6 +18,7 @@
 #include "ucsb/core/exception.hpp"
 #include "ucsb/core/printable.hpp"
 #include "ucsb/core/results.hpp"
+#include "ucsb/core/threads_fence.hpp"
 
 namespace bm = benchmark;
 
@@ -39,6 +38,7 @@ using operation_chooser_t = std::unique_ptr<ucsb::operation_chooser_t>;
 using cpu_profiler_t = ucsb::cpu_profiler_t;
 using mem_profiler_t = ucsb::mem_profiler_t;
 using printable_bytes_t = ucsb::printable_bytes_t;
+using threads_fence_t = ucsb::threads_fence_t;
 
 inline void usage_message(const char* command) {
     fmt::print("Usage: {} [options]\n", command);
@@ -428,13 +428,13 @@ void bench(bm::State& state, workload_t const& workload, db_t& db, data_accessor
     }
 }
 
-void bench(bm::State& state, workload_t const& workload, db_t& db, bool transactional, std::barrier& fence) {
+void bench(bm::State& state, workload_t const& workload, db_t& db, bool transactional, threads_fence_t& fence) {
 
     if (state.thread_index() == 0) {
         if (!db.open())
             throw ucsb::exception_t("Failed to open DB");
     }
-    fence.arrive_and_wait();
+    fence.sync();
 
     if (transactional) {
         auto transaction = db.create_transaction();
@@ -445,7 +445,7 @@ void bench(bm::State& state, workload_t const& workload, db_t& db, bool transact
     else
         bench(state, workload, db, db);
 
-    fence.arrive_and_wait();
+    fence.sync();
     if (state.thread_index() == 0) {
         if (!db.close())
             throw ucsb::exception_t("Failed to close DB");
@@ -507,7 +507,7 @@ int main(int argc, char** argv) {
         }
         db->set_config(settings.db_config_path, settings.working_dir_path.string());
 
-        std::barrier fence(settings.threads_count);
+        threads_fence_t fence(settings.threads_count);
 
         // Register benchmarks
         register_section(section_name(settings, workloads));
