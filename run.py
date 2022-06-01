@@ -108,7 +108,7 @@ def run(db_name: str, size: int, threads_count: int, workload_names: list) -> No
     if run_docker_image:
         runner = f'docker run -v {os.getcwd()}/bench:/ucsb/bench -v {os.getcwd()}/tmp:/ucsb/tmp -it ucsb-image-dev'
     else:
-        runner = './build_release/bin/_ucsb_bench'
+        runner = './build_release/bin/_ucsb_bench_cxx'
     child = pexpect.spawn(f'{runner} \
                             -db {db_name} \
                             {transactional_flag} \
