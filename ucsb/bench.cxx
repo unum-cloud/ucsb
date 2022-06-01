@@ -304,17 +304,27 @@ void validate_workload(workload_t const& workload, size_t threads_count) {
     proportion += workload.scan_proportion;
     assert(proportion > 0.0 && proportion <= 1.0);
 
+    assert(workload.value_length > 0);
+
     assert(workload.key_dist != distribution_kind_t::unknown_k);
 
+    assert(workload.batch_upsert_proportion == 0.0 ||
+           workload.batch_upsert_proportion > 0.0 && workload.batch_upsert_min_length > 0);
     assert(workload.batch_upsert_min_length <= workload.batch_upsert_max_length);
     assert(workload.batch_upsert_max_length <= workload.db_records_count / threads_count);
 
+    assert(workload.batch_read_proportion == 0.0 ||
+           workload.batch_read_proportion > 0.0 && workload.batch_read_min_length > 0);
     assert(workload.batch_read_min_length <= workload.batch_read_max_length);
     assert(workload.batch_read_max_length <= workload.db_records_count / threads_count);
 
+    assert(workload.bulk_load_proportion == 0.0 ||
+           workload.bulk_load_proportion > 0.0 && workload.bulk_load_min_length > 0);
     assert(workload.bulk_load_min_length <= workload.bulk_load_max_length);
     assert(workload.bulk_load_max_length <= workload.db_records_count / threads_count);
 
+    assert(workload.range_select_proportion == 0.0 ||
+           workload.range_select_proportion > 0.0 && workload.range_select_min_length > 0);
     assert(workload.range_select_min_length <= workload.range_select_max_length);
     assert(workload.range_select_max_length <= workload.db_records_count / threads_count);
 }
