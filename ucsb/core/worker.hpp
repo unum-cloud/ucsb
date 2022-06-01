@@ -93,8 +93,11 @@ inline worker_t::worker_t(workload_t const& workload, data_accessor_t& data_acce
         key_generator_ = create_key_generator(workload, *acknowledged_key_generator);
         upsert_key_sequence_generator = std::move(acknowledged_key_generator);
     }
-    size_t elements_max_count = std::max(
-        {workload.batch_upsert_max_length, workload.batch_read_max_length, workload.bulk_load_max_length, size_t(1)});
+    size_t elements_max_count = std::max({workload.batch_upsert_max_length,
+                                          workload.batch_read_max_length,
+                                          workload.bulk_load_max_length,
+                                          workload.range_select_max_length,
+                                          size_t(1)});
     keys_buffer_ = keys_t(elements_max_count);
 
     value_length_generator_ = create_value_length_generator(workload);
