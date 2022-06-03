@@ -142,10 +142,12 @@ bool rocksdb_t::open() {
     if (!load_aditional_options())
         return false;
 
-    for (auto const& db_paths : options_.db_paths)
-        if (!fs::exists(db_paths.path))
-            if (!fs::create_directories(db_paths.path))
-                return false;
+    for (auto const& db_paths : options_.db_paths) {
+        if (fs::exists(db_paths.path))
+            continue;
+        if (!fs::create_directories(db_paths.path))
+            return false;
+    }
 
     rocksdb::BlockBasedTableOptions table_options;
     table_options.block_cache = rocksdb::NewLRUCache(options_.target_file_size_base * 10);

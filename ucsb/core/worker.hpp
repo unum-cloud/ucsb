@@ -23,7 +23,7 @@ namespace ucsb {
 
 /**
  * @brief Performs a single workload on a single DB.
- * Responsible for generating the synthtic dataset and
+ * Responsible for generating the synthetic dataset and
  * managing most of memory allocations outside of the DB.
  */
 struct worker_t {
@@ -87,7 +87,7 @@ inline worker_t::worker_t(workload_t const& workload, data_accessor_t& data_acce
     : workload_(workload), data_accessor_(&data_accessor), timer_(timer) {
 
     if (workload.upsert_proportion == 1.0 || workload.batch_upsert_proportion == 1.0 ||
-        workload.bulk_load_proportion == 1.0) // Initialization case
+        workload.bulk_load_proportion == 1.0)
         upsert_key_sequence_generator = std::make_unique<counter_generator_t>(workload.start_key);
     else {
         acknowledged_key_generator = std::make_unique<acknowledged_counter_generator_t>(workload.db_records_count);
