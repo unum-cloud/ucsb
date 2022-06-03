@@ -42,7 +42,7 @@ size_t size_on_disk(fs::path const& path) {
     for (auto const& entry : fs::directory_iterator(path)) {
         if (entry.is_directory())
             total_size += size_on_disk(entry.path());
-        else
+        else if (fs::is_regular_file(entry.path()))
             total_size += fs::file_size(entry.path());
     }
     return total_size;
