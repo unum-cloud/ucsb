@@ -12,6 +12,14 @@ inline void add_atomic(at& value, at delta) noexcept {
     __atomic_add_fetch(&value, delta, __ATOMIC_RELAXED);
 }
 
+template <size_t multiple_ak>
+constexpr size_t roundup_to_multiple(size_t number) noexcept {
+    static_assert((multiple_ak != 0) && !(multiple_ak & (multiple_ak - 1)));
+    constexpr size_t one_less = multiple_ak - 1;
+    constexpr size_t negative_mask = -multiple_ak;
+    return (number + one_less) & negative_mask;
+}
+
 inline bool start_with(const char* str, const char* prefix) {
     return strncmp(str, prefix, strlen(prefix)) == 0;
 }

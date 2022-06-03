@@ -1,15 +1,15 @@
 #pragma once
-#include <set>
 #include <vector>
 #include <memory>
 #include <utility>
-
+#include <set>
 #include <fmt/format.h>
 
 #include "src/core/types.hpp"
 #include "src/core/data_accessor.hpp"
 #include "src/core/workload.hpp"
 #include "src/core/timer.hpp"
+#include "src/core/helper.hpp"
 #include "src/core/generators/generator.hpp"
 #include "src/core/generators/const_generator.hpp"
 #include "src/core/generators/counter_generator.hpp"
@@ -87,19 +87,23 @@ inline worker_t::worker_t(workload_t const& workload, data_accessor_t& data_acce
     : workload_(workload), data_accessor_(&data_accessor), timer_(timer) {
 
     if (workload.upsert_proportion == 1.0 || workload.batch_upsert_proportion == 1.0 ||
-        workload.bulk_load_proportion == 1.0) // Initialization case
+        workload.bulk_load_proportion == 1.0)
         upsert_key_sequence_generator = std::make_unique<counter_generator_t>(workload.start_key);
     else {
         acknowledged_key_generator = std::make_unique<acknowledged_counter_generator_t>(workload.db_records_count);
         key_generator_ = create_key_generator(workload, *acknowledged_key_generator);
         upsert_key_sequence_generator = std::move(acknowledged_key_generator);
     }
-    size_t elements_max_count = std::max(
-        {workload.batch_upsert_max_length, workload.batch_read_max_length, workload.bulk_load_max_length, size_t(1)});
+    size_t elements_max_count = std::max({workload.batch_upsert_max_length,
+                                          workload.batch_read_max_length,
+                                          workload.bulk_load_max_length,
+                                          workload.range_select_max_length,
+                                          size_t(1)});
     keys_buffer_ = keys_t(elements_max_count);
 
     value_length_generator_ = create_value_length_generator(workload);
-    values_buffer_ = values_buffer_t(elements_max_count * workload.value_length);
+    size_t value_aligned_length = roundup_to_multiple<values_buffer_t::alignment_k>(workload_.value_length);
+    values_buffer_ = values_buffer_t(elements_max_count * value_aligned_length);
     value_sizes_buffer_ = value_lengths_t(elements_max_count, 0);
 
     batch_upsert_length_generator_ = create_batch_upsert_length_generator(workload);
@@ -371,7 +375,8 @@ inline value_span_t worker_t::value_buffer() {
 }
 
 inline values_span_t worker_t::values_buffer(size_t count) {
-    size_t total_length = count * workload_.value_length;
+    size_t value_aligned_length = roundup_to_multiple<values_buffer_t::alignment_k>(workload_.value_length);
+    size_t total_length = count * value_aligned_length;
     return values_span_t(values_buffer_.data(), total_length);
 }
 

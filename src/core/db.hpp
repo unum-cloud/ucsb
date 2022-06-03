@@ -1,6 +1,5 @@
 #pragma once
 #include <memory>
-#include <set>
 
 #include "src/core/types.hpp"
 #include "src/core/data_accessor.hpp"

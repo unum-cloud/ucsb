@@ -134,15 +134,15 @@ bool load(fs::path const& path, workloads_t& workloads) {
             return false;
         }
 
-        workload.value_length = (*j_workload).value("value_length", 1024);
+        workload.value_length = (*j_workload).value("value_length", 0);
         workload.value_length_dist = parse_distribution((*j_workload).value("value_length_dist", "const"));
         if (workload.value_length_dist == distribution_kind_t::unknown_k) {
             workloads.clear();
             return false;
         }
 
-        workload.batch_upsert_min_length = (*j_workload).value("batch_upsert_min_length", 256);
-        workload.batch_upsert_max_length = (*j_workload).value("batch_upsert_max_length", 256);
+        workload.batch_upsert_min_length = (*j_workload).value("batch_upsert_min_length", 0);
+        workload.batch_upsert_max_length = (*j_workload).value("batch_upsert_max_length", 0);
         workload.batch_upsert_length_dist =
             parse_distribution((*j_workload).value("batch_upsert_length_dist", "uniform"));
         if (workload.batch_upsert_length_dist == distribution_kind_t::unknown_k) {
@@ -150,24 +150,24 @@ bool load(fs::path const& path, workloads_t& workloads) {
             return false;
         }
 
-        workload.batch_read_min_length = (*j_workload).value("batch_read_min_length", 256);
-        workload.batch_read_max_length = (*j_workload).value("batch_read_max_length", 256);
+        workload.batch_read_min_length = (*j_workload).value("batch_read_min_length", 0);
+        workload.batch_read_max_length = (*j_workload).value("batch_read_max_length", 0);
         workload.batch_read_length_dist = parse_distribution((*j_workload).value("batch_read_length_dist", "uniform"));
         if (workload.batch_read_length_dist == distribution_kind_t::unknown_k) {
             workloads.clear();
             return false;
         }
 
-        workload.bulk_load_min_length = (*j_workload).value("bulk_load_min_length", 256);
-        workload.bulk_load_max_length = (*j_workload).value("bulk_load_max_length", 256);
+        workload.bulk_load_min_length = (*j_workload).value("bulk_load_min_length", 0);
+        workload.bulk_load_max_length = (*j_workload).value("bulk_load_max_length", 0);
         workload.bulk_load_length_dist = parse_distribution((*j_workload).value("bulk_load_length_dist", "uniform"));
         if (workload.bulk_load_length_dist == distribution_kind_t::unknown_k) {
             workloads.clear();
             return false;
         }
 
-        workload.range_select_min_length = (*j_workload).value("range_select_min_length", 100);
-        workload.range_select_max_length = (*j_workload).value("range_select_max_length", 100);
+        workload.range_select_min_length = (*j_workload).value("range_select_min_length", 0);
+        workload.range_select_max_length = (*j_workload).value("range_select_max_length", 0);
         workload.range_select_length_dist =
             parse_distribution((*j_workload).value("range_select_length_dist", "uniform"));
         if (workload.key_dist == distribution_kind_t::unknown_k) {
