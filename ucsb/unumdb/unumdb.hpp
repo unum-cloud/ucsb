@@ -209,21 +209,23 @@ operation_result_t unumdb_t::batch_read(keys_spanc_t keys, values_span_t values)
 
     size_t found_cnt = 0;
     size_t current_idx = 0;
+    size_t buffer_offset = 0;
     while (current_idx < fingerprints.size()) {
-        size_t batch_size = std::min(config_.uring_queue_depth, keys.size() - current_idx);
+        size_t batch_size = std::min(config_.uring_queue_depth, fingerprints.size() - current_idx);
         size_t found_buffer_size = 0;
         darray_gt<citizen_location_t> locations(batch_size);
         region_.find(fingerprints.view().subspan(current_idx, batch_size), locations.span(), found_buffer_size);
 
         if (found_buffer_size) {
             countdown_t countdown(batch_size);
-            span_gt<byte_t> buffer_span(reinterpret_cast<byte_t*>(values.data()), found_buffer_size);
+            span_gt<byte_t> buffer_span(reinterpret_cast<byte_t*>(values.data()) + buffer_offset, found_buffer_size);
             region_.select(locations.view(), buffer_span, countdown);
             if (!countdown.wait(*fibers))
                 return {0, operation_status_t::error_k};
             found_cnt += batch_size;
         }
         current_idx += batch_size;
+        buffer_offset += found_buffer_size;
     };
 
     if (!found_cnt)
