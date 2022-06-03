@@ -9,6 +9,7 @@
 #include "ucsb/core/data_accessor.hpp"
 #include "ucsb/core/workload.hpp"
 #include "ucsb/core/timer.hpp"
+#include "ucsb/core/helper.hpp"
 #include "ucsb/core/generators/generator.hpp"
 #include "ucsb/core/generators/const_generator.hpp"
 #include "ucsb/core/generators/counter_generator.hpp"
@@ -101,7 +102,8 @@ inline worker_t::worker_t(workload_t const& workload, data_accessor_t& data_acce
     keys_buffer_ = keys_t(elements_max_count);
 
     value_length_generator_ = create_value_length_generator(workload);
-    values_buffer_ = values_buffer_t(elements_max_count * workload.value_length);
+    size_t value_aligned_length = roundup_to_multiple<values_buffer_t::alignment_k>(workload_.value_length);
+    values_buffer_ = values_buffer_t(elements_max_count * value_aligned_length);
     value_sizes_buffer_ = value_lengths_t(elements_max_count, 0);
 
     batch_upsert_length_generator_ = create_batch_upsert_length_generator(workload);
@@ -373,7 +375,8 @@ inline value_span_t worker_t::value_buffer() {
 }
 
 inline values_span_t worker_t::values_buffer(size_t count) {
-    size_t total_length = count * workload_.value_length;
+    size_t value_aligned_length = roundup_to_multiple<values_buffer_t::alignment_k>(workload_.value_length);
+    size_t total_length = count * value_aligned_length;
     return values_span_t(values_buffer_.data(), total_length);
 }
 

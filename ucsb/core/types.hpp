@@ -3,7 +3,10 @@
 #include <vector>
 #include <cstddef>
 #include <cstdint>
+#include <cstdlib>
 #include <filesystem>
+
+#include "ucsb/core/aligned_buffer.hpp"
 
 namespace ucsb {
 
@@ -18,7 +21,7 @@ using value_t = std::vector<std::byte>;
 using values_t = std::vector<value_t>;
 using value_span_t = std::span<std::byte>;
 using value_spanc_t = std::span<std::byte const>;
-using values_buffer_t = std::vector<std::byte>;
+using values_buffer_t = aligned_buffer_t;
 using values_span_t = std::span<std::byte>;
 using values_spanc_t = std::span<std::byte const>;
 using value_lengths_t = std::vector<value_length_t>;
