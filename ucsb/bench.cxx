@@ -268,8 +268,7 @@ std::vector<workload_t> split_workload_into_threads(workload_t const& workload, 
         leftover_operations_count -= bool(leftover_operations_count);
 
         if (workload.upsert_proportion == 1.0 || workload.batch_upsert_proportion == 1.0 ||
-            workload.bulk_load_proportion == 1.0) // Initialization case
-        {
+            workload.bulk_load_proportion == 1.0) {
             size_t new_records_count =
                 bool(workload.upsert_proportion) * thread_workload.operations_count +
                 bool(workload.bulk_load_proportion) * thread_workload.operations_count * workload.bulk_load_max_length +
