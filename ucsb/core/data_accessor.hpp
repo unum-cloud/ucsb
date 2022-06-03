@@ -17,6 +17,9 @@ namespace ucsb {
  * under the hood, we pass a view to raw bytes forming the integer key.
  * For order consistency it's also recommended to provide a custom
  * comparator.
+ * @section Values.
+ * The Value buffer can be bigger than actual value because of memory aligment
+ * Note: This is done for read workloads only
  */
 struct data_accessor_t {
     virtual ~data_accessor_t() {}

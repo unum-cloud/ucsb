@@ -14,7 +14,7 @@ struct aligned_buffer_t {
     inline aligned_buffer_t() noexcept : buffer_(nullptr), size_(0) {}
     inline aligned_buffer_t(size_t size) : buffer_(nullptr), size_(size) {
         assert(size % alignment_k == 0);
-        buffer_ = std::aligned_alloc(alignment_k, size);
+        buffer_ = reinterpret_cast<std::byte*>(std::aligned_alloc(alignment_k, size));
     }
 
     inline aligned_buffer_t(aligned_buffer_t const& other) : aligned_buffer_t(other.size_) {
@@ -29,9 +29,9 @@ struct aligned_buffer_t {
     inline ~aligned_buffer_t() { std::free(buffer_); }
 
     inline aligned_buffer_t operator=(aligned_buffer_t const& other) {
-        buffer_ = std::aligned_alloc(alignment_k, other.size_);
-        size_ = other.size_;
-        memcpy(buffer_, other.buffer_, size_);
+        aligned_buffer_t copy(other);
+        std::swap(buffer_, copy.buffer_);
+        std::swap(size_, copy.size_);
         return *this;
     }
     inline aligned_buffer_t operator=(aligned_buffer_t&& other) {
