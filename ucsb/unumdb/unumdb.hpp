@@ -264,16 +264,19 @@ operation_result_t unumdb_t::range_select(key_t key, size_t length, values_span_
     size_t selected_records_count = 0;
     size_t task_cnt = 0;
     size_t batch_size = std::min(length, config_.uring_queue_depth);
+    citizen_size_t citizen_aligned_max_size =
+        roundup_to_multiple<values_buffer_t::alignment_k>(config_.user_config.unfixed_citizen_max_size);
 
     region_.lock_shared();
+    size_t buffer_offset = 0;
     auto it = region_.find(key);
     for (size_t i = 0; it != region_.end() && i < length; ++it, ++i) {
         if (!it.is_removed()) {
-            citizen_size_t citizen_size = it.size();
-            citizen_span_t citizen {reinterpret_cast<byte_t*>(values.data()) + i * citizen_size, citizen_size};
+            citizen_span_t citizen {reinterpret_cast<byte_t*>(values.data()) + buffer_offset, citizen_aligned_max_size};
             countdown.increment(1);
             it.get(citizen, countdown);
             ++task_cnt;
+            buffer_offset += citizen_aligned_max_size;
         }
 
         if ((task_cnt == batch_size) | (read_notifier.has_failed())) {
