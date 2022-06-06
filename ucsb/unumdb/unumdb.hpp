@@ -265,7 +265,7 @@ operation_result_t unumdb_t::range_select(key_t key, size_t length, values_span_
     size_t task_cnt = 0;
     size_t batch_size = std::min(length, config_.uring_queue_depth);
     citizen_size_t citizen_aligned_max_size =
-        roundup_to_multiple<values_buffer_t::alignment_k>(config_.user_config.unfixed_citizen_max_size);
+        ucsb::roundup_to_multiple<ucsb::values_buffer_t::alignment_k>(config_.user_config.unfixed_citizen_max_size);
 
     region_.lock_shared();
     size_t buffer_offset = 0;
