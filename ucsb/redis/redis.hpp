@@ -2,16 +2,12 @@
 
 #include <string>
 #include <vector>
-#include <fmt/format.h>
-#include <iostream>
 
 #include <sw/redis++/redis++.h>
 
 #include "ucsb/core/types.hpp"
 #include "ucsb/core/db.hpp"
 #include "ucsb/core/helper.hpp"
-
-#include <sys/wait.h>
 
 namespace redis {
 
@@ -38,32 +34,26 @@ struct redis_t : public ucsb::db_t {
   public:
     inline redis_t() : redis_(sw::redis::Redis("tcp://127.0.0.1:6379")) {};
     inline ~redis_t() { close(); }
+
     void set_config(fs::path const& config_path, fs::path const& dir_path) override;
     bool open() override;
     bool close() override;
     void destroy() override;
 
     operation_result_t upsert(key_t key, value_spanc_t value) override;
-
     operation_result_t update(key_t key, value_spanc_t value) override;
-
     operation_result_t remove(key_t key) override;
 
     operation_result_t read(key_t key, value_span_t value) const override;
-
     operation_result_t batch_upsert(keys_spanc_t keys, values_spanc_t values, value_lengths_spanc_t sizes) override;
-
     operation_result_t batch_read(keys_spanc_t keys, values_span_t values) const override;
 
     operation_result_t bulk_load(keys_spanc_t keys, values_spanc_t values, value_lengths_spanc_t sizes) override;
-
     operation_result_t range_select(key_t key, size_t length, values_span_t values) const override;
-
     operation_result_t scan(key_t key, size_t length, value_span_t single_value) const override;
 
     void flush() override;
     size_t size_on_disk() const override;
-
     std::unique_ptr<transaction_t> create_transaction() override;
 
   private:
@@ -121,57 +111,43 @@ operation_result_t redis_t::remove(key_t key) {
 
 operation_result_t redis_t::read(key_t key, value_span_t value) const {
     auto val = redis_.get(to_string_view(key));
-    if (val) {
-        memcpy(value.data(), &val, sizeof(val));
-        return {1, operation_status_t::ok_k};
-    }
-    else
+    if (!val)
         return {0, operation_status_t::error_k};
+
+    memcpy(value.data(), &val, sizeof(val));
+    return {1, operation_status_t::ok_k};
 }
 
 operation_result_t redis_t::batch_upsert(keys_spanc_t keys, values_spanc_t values, value_lengths_spanc_t sizes) {
-    // TODO: Same as bulk_load but UpateType = ALWAYS.
+    std::unordered_map<sw::redis::StringView, sw::redis::StringView> kv_map(keys.size());
     size_t offset = 0;
-    auto pipe = redis_.pipeline(false);
-    for (size_t i = 0; i < keys.size(); i++)
-        pipe.set(to_string_view(keys[i]),
-                 to_string_view(&values[i], sizes[i]),
-                 std::chrono::milliseconds(0),
-                 sw::redis::UpdateType::ALWAYS);
-
-    auto pipe_replies = pipe.exec();
-
-    size_t cnt = 0;
-    for (size_t i = 0; i < keys.size(); i++)
-        cnt += pipe_replies.get<bool>(i);
-
-    return {cnt, cnt == keys.size() ? operation_status_t::ok_k : operation_status_t::error_k};
+    for (size_t i = 0; i != keys.size(); ++i) {
+        kv_map.emplace(std::make_pair(to_string_view(keys[i]), to_string_view(values.data() + offset, sizes[i])));
+        offset += sizes[i];
+    }
+    redis_.mset(kv_map.begin(), kv_map.end());
+    return {keys.size(), operation_status_t::ok_k};
 }
 
 operation_result_t redis_t::batch_read(keys_spanc_t keys, values_span_t values) const {
-    auto pipe = redis_.pipeline(false);
-    for (size_t i = 0; i < keys.size(); i++)
-        pipe.get(to_string_view(keys[i]));
-
-    auto pipe_replies = pipe.exec();
-
-    size_t cnt = 0;
+    std::vector<sw::redis::StringView> input(keys.size());
+    for (size_t i = 0; i < keys.size(); ++i)
+        input[i] = to_string_view(keys[i]);
+    std::vector<sw::redis::Optional<std::string>> output;
+    redis_.mget(input.begin(), input.end(), std::back_inserter(output));
     size_t offset = 0;
-    for (size_t i = 0; i < keys.size(); i++) {
-        auto val = pipe_replies.get<sw::redis::OptionalString>(i);
+    size_t cnt = 0;
+    for (const auto& val : output) {
         if (val) {
             memcpy(values.data() + offset, &val, sizeof(val));
-            cnt += 1;
             offset += sizeof(val);
+            cnt++;
         }
-        else
-            break;
     }
-    return {cnt, cnt == keys.size() ? operation_status_t::ok_k : operation_status_t::error_k};
+    return {cnt, operation_status_t::ok_k};
 }
 
 operation_result_t redis_t::bulk_load(keys_spanc_t keys, values_spanc_t values, value_lengths_spanc_t sizes) {
-    size_t offset = 0;
     auto data_offset = 0;
     auto pipe = redis_.pipeline(false);
     for (size_t i = 0; i != keys.size(); i++) {
@@ -192,37 +168,24 @@ operation_result_t redis_t::bulk_load(keys_spanc_t keys, values_spanc_t values, 
 }
 
 operation_result_t redis_t::range_select(key_t key, size_t length, values_span_t values) const {
-    // TODO: Assumption that keys are increasing doesn't work.
-    //     auto pipe = (*redis_).pipeline(false);
-    //     for (size_t i = key; i < key + length; i++)
-    //         pipe.get(to_string_view(&i, sizeof(key_t)));
-
-    //     auto pipe_replies = pipe.exec();
-
-    //     size_t cnt = 0;
-    //     size_t offset = 0;
-    //     for (size_t i = 0; i < length; i++)
-    //     {
-    //         auto val = pipe_replies.get<sw::redis::OptionalString>(i);
-    //         if (val)
-    //         {
-    //             cnt += 1;
-    //             memcpy(values.data() + offset, &val, sizeof(val));
-    //         }
-    //         offset += sizeof(val);
-    //     }
-
-    //     return {cnt, cnt == length ? operation_status_t::ok_k : operation_status_t::error_k};
     return {0, operation_status_t::not_implemented_k};
 }
 
 operation_result_t redis_t::scan(key_t key, size_t length, value_span_t single_value) const {
-    // TODO: scan, but it returns only keys.
-    return {0, operation_status_t::not_implemented_k};
+    auto cursor = 0LL;
+    size_t cnt = 0;
+    std::unordered_set<sw::redis::Optional<std::string>> keys;
+    while (true) {
+        cursor = redis_.scan(cursor, "*", length, std::inserter(keys, keys.begin()));
+        if (cursor == 0) {
+            break;
+        }
+        cnt++;
+    }
+    return {cnt, cnt ? operation_status_t::ok_k : operation_status_t::error_k};
 }
 
 void redis_t::flush() {
-    // (*redis_).flushall();
 }
 
 size_t redis_t::size_on_disk() const {
