@@ -13,6 +13,7 @@ dependencies:
     - snappy/1.1.9
     - zlib/1.2.11
     - mongo-cxx-driver/3.6.6
+    - redis-plus-plus/1.3.3
 
   packages:
     pkg-config:

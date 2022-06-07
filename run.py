@@ -29,7 +29,8 @@ db_names = [
     'leveldb',
     'wiredtiger',
     'lmdb',
-    'mongodb'
+    'mongodb',
+    'redis'
 ]
 
 sizes = [
@@ -94,6 +95,9 @@ def launch_db(db_name: str, config_path: os.PathLike) -> None:
         time.sleep(2)
         subprocess.Popen(["sudo", "mongod", "--config",
                          config_path], stdout=subprocess.DEVNULL)
+    if db_name == "redis":
+        subprocess.Popen("redis-server", stdout=subprocess.DEVNULL)
+        time.sleep(5)
 
 
 def run(db_name: str, size: int, threads_count: int, workload_names: list) -> None:
