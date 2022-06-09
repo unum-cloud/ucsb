@@ -93,7 +93,7 @@ operation_result_t redis_t::upsert(key_t key, value_spanc_t value) {
                              to_string_view(value.data(), value.size()),
                              std::chrono::milliseconds(0),
                              sw::redis::UpdateType::ALWAYS);
-    return {status, status ? operation_status_t::ok_k : operation_status_t::not_implemented_k};
+    return {status, status ? operation_status_t::ok_k : operation_status_t::error_k};
 }
 
 operation_result_t redis_t::update(key_t key, value_spanc_t value) {
@@ -101,48 +101,83 @@ operation_result_t redis_t::update(key_t key, value_spanc_t value) {
                              to_string_view(value.data(), value.size()),
                              std::chrono::milliseconds(0),
                              sw::redis::UpdateType::EXIST);
-    return {status, status ? operation_status_t::ok_k : operation_status_t::not_implemented_k};
+    return {status, status ? operation_status_t::ok_k : operation_status_t::not_found_k};
 }
 
 operation_result_t redis_t::remove(key_t key) {
     auto cnt = redis_.del(to_string_view(key));
-    return {cnt, cnt ? operation_status_t::ok_k : operation_status_t::error_k};
+    return {cnt, cnt ? operation_status_t::ok_k : operation_status_t::not_found_k};
 }
 
 operation_result_t redis_t::read(key_t key, value_span_t value) const {
     auto val = redis_.get(to_string_view(key));
     if (!val)
-        return {0, operation_status_t::error_k};
+        return {0, operation_status_t::not_found_k};
 
     memcpy(value.data(), &val, sizeof(val));
     return {1, operation_status_t::ok_k};
 }
 
 operation_result_t redis_t::batch_upsert(keys_spanc_t keys, values_spanc_t values, value_lengths_spanc_t sizes) {
-    std::unordered_map<sw::redis::StringView, sw::redis::StringView> kv_map(keys.size());
-    size_t offset = 0;
-    for (size_t i = 0; i != keys.size(); ++i) {
-        kv_map.emplace(std::make_pair(to_string_view(keys[i]), to_string_view(values.data() + offset, sizes[i])));
-        offset += sizes[i];
-    }
-    redis_.mset(kv_map.begin(), kv_map.end());
+    struct kv_iterator {
+        using pair_t = std::pair<sw::redis::StringView, sw::redis::StringView>;
+        keys_spanc_t keys_;
+        values_spanc_t values_;
+        value_lengths_spanc_t sizes_;
+        size_t index_;
+        size_t offset_;
+        pair_t pair_;
+
+        kv_iterator(
+            keys_spanc_t keys, values_spanc_t values, value_lengths_spanc_t sizes, size_t index = 0, size_t offset = 0)
+            : keys_(keys), values_(values), sizes_(sizes), index_(index), offset_(offset),
+              pair_(std::make_pair(to_string_view(keys_[index_]),
+                                   to_string_view(values_.data() + offset_, sizes_[index_]))) {}
+
+        pair_t const& operator*() const noexcept { return pair_; }
+        pair_t const* operator->() const noexcept { return &pair_; }
+        bool operator==(kv_iterator const& other) const noexcept { return other.index_ == index_; }
+
+        kv_iterator& operator++() noexcept {
+            offset_ += sizes_[index_];
+            index_++;
+            pair_.first = to_string_view(keys_[index_]);
+            pair_.second = to_string_view(values_.data() + offset_, sizes_[index_]);
+            return *this;
+        }
+    };
+
+    redis_.mset(kv_iterator(keys, values, sizes), kv_iterator(keys, values, sizes, keys.size(), values.size()));
     return {keys.size(), operation_status_t::ok_k};
 }
 
 operation_result_t redis_t::batch_read(keys_spanc_t keys, values_span_t values) const {
-    std::vector<sw::redis::StringView> input(keys.size());
-    for (size_t i = 0; i < keys.size(); ++i)
-        input[i] = to_string_view(keys[i]);
+    struct key_iterator {
+        keys_spanc_t keys_;
+        size_t index_;
+
+        key_iterator(keys_spanc_t keys, size_t index = 0) : keys_(keys), index_(index) {}
+
+        sw::redis::StringView operator*() const noexcept { return to_string_view(keys_[index_]); }
+        bool operator==(key_iterator const& other) const noexcept { return index_ == other.index_; }
+
+        key_iterator& operator++() noexcept {
+            index_++;
+            return *this;
+        }
+    };
+
     std::vector<sw::redis::Optional<std::string>> output;
-    redis_.mget(input.begin(), input.end(), std::back_inserter(output));
+    redis_.mget(key_iterator(keys), key_iterator(keys, keys.size()), std::back_inserter(output));
+
     size_t offset = 0;
     size_t cnt = 0;
     for (const auto& val : output) {
-        if (val) {
-            memcpy(values.data() + offset, &val, sizeof(val));
-            offset += sizeof(val);
-            cnt++;
-        }
+        if (!val)
+            continue;
+        memcpy(values.data() + offset, &val, sizeof(val));
+        offset += sizeof(val);
+        cnt++;
     }
     return {cnt, operation_status_t::ok_k};
 }
@@ -172,17 +207,11 @@ operation_result_t redis_t::range_select(key_t key, size_t length, values_span_t
 }
 
 operation_result_t redis_t::scan(key_t key, size_t length, value_span_t single_value) const {
-    auto cursor = 0LL;
-    size_t cnt = 0;
-    std::unordered_set<sw::redis::Optional<std::string>> keys;
-    while (true) {
-        cursor = redis_.scan(cursor, "*", length, std::inserter(keys, keys.begin()));
-        if (cursor == 0) {
-            break;
-        }
-        cnt++;
-    }
-    return {cnt, cnt ? operation_status_t::ok_k : operation_status_t::error_k};
+    // auto cursor = 0LL;
+    // std::unordered_set<std::string> keys;
+    // cursor = redis_.scan(cursor, "*", length, std::inserter(keys, keys.begin()));
+    // return {keys.size(), keys.size() ? operation_status_t::ok_k : operation_status_t::error_k};
+    return {0, operation_status_t::not_implemented_k};
 }
 
 void redis_t::flush() {
