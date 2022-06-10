@@ -285,7 +285,7 @@ void redis_t::flush() {
 }
 
 size_t redis_t::size_on_disk() const {
-    return ucsb::size_on_disk(dir_path_);
+    return 0;
 }
 
 std::unique_ptr<transaction_t> redis_t::create_transaction() {
