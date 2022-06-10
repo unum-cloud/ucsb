@@ -171,7 +171,7 @@ operation_result_t redis_t::batch_upsert(keys_spanc_t keys, values_spanc_t value
         value_length_t* size_ptr_;
         pair_t pair_;
 
-        kv_iterator_t(key_t* key_ptr, val_t* val_ptr, value_length_t* size_ptr)
+        kv_iterator_t(key_t* key_ptr, val_t* val_ptr, value_length_t* size_ptr) noexcept
             : key_ptr_(key_ptr), val_ptr_(val_ptr), size_ptr_(size_ptr),
               pair_(std::make_pair(to_string_view(*key_ptr_), to_string_view(val_ptr_, *size_ptr_))) {}
 
@@ -199,8 +199,7 @@ operation_result_t redis_t::batch_read(keys_spanc_t keys, values_span_t values) 
     struct key_iterator_t {
         key_t* key_ptr_;
 
-        key_iterator_t(key_t* key_ptr) : key_ptr_(key_ptr) {}
-
+        key_iterator_t(key_t* key_ptr) noexcept : key_ptr_(key_ptr) {}
         sw::redis::StringView operator*() const noexcept { return to_string_view(*key_ptr_); }
         bool operator==(key_iterator_t const& other) const noexcept { return key_ptr_ == other.key_ptr_; }
 
@@ -218,7 +217,7 @@ operation_result_t redis_t::batch_read(keys_spanc_t keys, values_span_t values) 
         size_t count = 0;
         size_t offset = 0;
 
-        iterator push_back(value_type value) {
+        iterator push_back(value_type value) noexcept {
             if (!value)
                 return values.data() + offset;
             memcpy(values.data() + offset, &value, sizeof(value));
@@ -236,7 +235,7 @@ operation_result_t redis_t::batch_read(keys_spanc_t keys, values_span_t values) 
 operation_result_t redis_t::bulk_load(keys_spanc_t keys, values_spanc_t values, value_lengths_spanc_t sizes) {
     auto data_offset = 0;
     auto pipe = (*redis_).pipeline(false);
-    for (size_t i = 0; i != keys.size(); i++) {
+    for (size_t i = 0; i != keys.size(); ++i) {
         pipe.set(to_string_view(keys[i]),
                  to_string_view(values.data() + data_offset, sizes[i]),
                  std::chrono::milliseconds(0),
@@ -247,7 +246,7 @@ operation_result_t redis_t::bulk_load(keys_spanc_t keys, values_spanc_t values, 
     auto pipe_replies = pipe.exec();
 
     size_t count = 0;
-    for (size_t i = 0; i != keys.size(); i++)
+    for (size_t i = 0; i != keys.size(); ++i)
         count += pipe_replies.get<bool>(i);
 
     return {count, operation_status_t::ok_k};
