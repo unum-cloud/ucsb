@@ -192,7 +192,7 @@ operation_result_t unumdb_transaction_t::range_select(key_t key, size_t length, 
     auto it = transaction_->find(key);
     for (size_t i = 0; it != transaction_->end() && i < length; ++it, ++i) {
         if (!it.is_removed()) {
-            citizen_size_t citizen_size = it.size();
+            citizen_size_t citizen_size = it.passport().size;
             citizen_span_t citizen {reinterpret_cast<byte_t*>(values.data()) + i * citizen_size, citizen_size};
             countdown.increment(1);
             it.get(citizen, countdown);
