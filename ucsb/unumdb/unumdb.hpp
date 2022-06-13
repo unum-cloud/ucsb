@@ -37,7 +37,7 @@ using building_holder_t = building_holder_gt<fingerprint_t>;
  */
 struct unumdb_t : public ucsb::db_t {
   public:
-    inline unumdb_t() : region_("", "./", region_config_t()), thread_idx_(0) {}
+    inline unumdb_t() : region_("", "./", region_config_t(), {}), thread_idx_(0) {}
     inline ~unumdb_t() { close(); }
 
     void set_config(fs::path const& config_path, fs::path const& dir_path) override;
@@ -65,18 +65,26 @@ struct unumdb_t : public ucsb::db_t {
 
   private:
     struct db_config_t {
-        user_region_config_t user_config;
+        size_t mem_limit = 0;
+        size_t gpu_mem_limit = 0;
+
         string_t io_device_name;
         size_t uring_max_files_count = 0;
         size_t uring_queue_depth = 0;
         darray_gt<string_t> paths;
 
+        user_region_config_t user_config;
+
         inline void clear() {
-            user_config = user_region_config_t();
+            mem_limit = 0;
+            gpu_mem_limit = 0;
+
             io_device_name.clear();
             uring_max_files_count = 0;
             uring_queue_depth = 0;
             paths.clear();
+
+            user_config = user_region_config_t();
         }
     };
 
@@ -87,6 +95,7 @@ struct unumdb_t : public ucsb::db_t {
     fs::path dir_path_;
     db_config_t config_;
 
+    resources_ptr_t resources_;
     region_t region_;
 
     // for every thread we use different darray to collect buildings
@@ -114,6 +123,9 @@ bool unumdb_t::open() {
                 return false;
     }
 
+    // Create resources
+    resources_ = std::make_shared<resources_t>(config_.mem_limit, config_.gpu_mem_limit);
+
     darray_gt<string_t> paths = config_.paths;
     if (config_.paths.empty())
         paths.push_back(dir_path_.c_str());
@@ -126,7 +138,7 @@ bool unumdb_t::open() {
         return false;
 
     auto region_config = create_region_config(config_.user_config);
-    region_ = region_t("Kovkas", dir_path_.c_str(), region_config);
+    region_ = region_t("Kovkas", dir_path_.c_str(), region_config, resources_);
     import_data_.resize(config_.user_config.threads_max_cnt);
 
     // Cleanup directories
@@ -142,10 +154,11 @@ bool unumdb_t::close() {
     if (router) {
         if (!region_.name().empty())
             region_.flush();
-        region_ = region_t("", "./", region_config_t());
+        region_ = region_t("", "./", region_config_t(), {});
         cleanup_file_io();
     }
     config_.clear();
+    resources_.reset();
     return true;
 }
 
@@ -249,7 +262,8 @@ operation_result_t unumdb_t::bulk_load(keys_spanc_t keys, values_spanc_t values,
         region_t::building_constructor_t::build(config,
                                                 fingerprints,
                                                 {reinterpret_cast<byte_t const*>(values.data()), values.size()},
-                                                {sizes.data(), sizes.size()});
+                                                {sizes.data(), sizes.size()},
+                                                resources_);
     auto holder = building.export_and_destroy();
     auto thread_idx = building_idx % import_data_.size();
     import_data_[thread_idx].push_back(holder);
@@ -354,9 +368,24 @@ bool unumdb_t::load_config() {
     nlohmann::json j_config;
     i_config >> j_config;
 
+    // Resource limits
+    config_.mem_limit = j_config["mem_limit"].get<size_t>();
+    config_.gpu_mem_limit = j_config["gpu_mem_limit"].get<size_t>();
+
+    // Disk config
+    config_.io_device_name = j_config["io_device_name"].get<std::string>().c_str();
+    config_.uring_max_files_count = j_config["uring_max_files_count"].get<size_t>();
+    config_.uring_queue_depth = j_config["uring_queue_depth"].get<size_t>();
+    std::vector<std::string> paths = j_config["paths"].get<std::vector<std::string>>();
+    for (auto const& path : paths)
+        if (!path.empty())
+            config_.paths.push_back(path.c_str());
+
+    // Transaction config
     config_.user_config.txn_cache_elements_max_cnt = j_config["txn_cache_elements_max_cnt"].get<size_t>();
     config_.user_config.txn_cache_elements_capacity_bytes = j_config["txn_cache_elements_capacity_bytes"].get<size_t>();
 
+    // Region config
     config_.user_config.threads_max_cnt = j_config["threads_max_cnt"].get<size_t>();
     config_.user_config.cache_elements_max_cnt = j_config["cache_elements_max_cnt"].get<size_t>();
     config_.user_config.cache_elements_capacity_bytes = j_config["cache_elements_capacity_bytes"].get<size_t>();
@@ -368,15 +397,6 @@ bool unumdb_t::load_config() {
 #if dev_m
     config_.user_config.name = "Kovkas";
 #endif
-
-    config_.io_device_name = j_config["io_device_name"].get<std::string>().c_str();
-    config_.uring_max_files_count = j_config["uring_max_files_count"].get<size_t>();
-    config_.uring_queue_depth = j_config["uring_queue_depth"].get<size_t>();
-
-    std::vector<std::string> paths = j_config["paths"].get<std::vector<std::string>>();
-    for (auto const& path : paths)
-        if (!path.empty())
-            config_.paths.push_back(path.c_str());
 
     return true;
 }
