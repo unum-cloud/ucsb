@@ -13,32 +13,32 @@ cleanup_previous = True
 run_docker_image = False
 
 threads = [
-    # 1,
+    1,
     # 2,
     # 4,
     # 8,
     # 16,
     # 32,
-    64,
+    # 64,
 ]
 
 db_names = [
-    # 'unumdb',
-    # 'rocksdb',
-    # 'leveldb',
-    # 'wiredtiger',
-    # 'lmdb',
+    'unumdb',
+    'rocksdb',
+    'leveldb',
+    'wiredtiger',
+    'lmdb',
     'mongodb',
-    # 'redis'
+    'redis'
 ]
 
 sizes = [
     '100MB',
     '1GB',
-    # '10GB',
-    # '100GB',
-    # '1TB',
-    # '10TB',
+    '10GB',
+    '100GB',
+    '1TB',
+    '10TB',
 ]
 
 workload_names = [
@@ -85,15 +85,6 @@ def get_results_dir_path() -> str:
 def drop_system_caches():
     with open('/proc/sys/vm/drop_caches', 'w') as stream:
         stream.write('3\n')
-
-
-# def launch_db(db_name: str, config_path: os.PathLike) -> None:
-    # if db_name == "mongodb":
-    #     subprocess.Popen(
-    #         ["mongo", "--eval", "db.getSiblingDB('admin').shutdownServer()"], stdout=subprocess.DEVNULL)
-    #     time.sleep(2)
-    #     subprocess.Popen(["sudo", "mongod", "--config",
-    #                      config_path], stdout=subprocess.DEVNULL)
 
 
 def run(db_name: str, size: int, threads_count: int, workload_names: list) -> None:
@@ -147,7 +138,6 @@ def main() -> None:
                 # Prepare DB enviroment
                 pathlib.Path(db_path).mkdir(parents=True, exist_ok=True)
                 config_path = get_db_config_file_path(db_name, size)
-                # launch_db(db_name, config_path)
 
                 if drop_caches:
                     for workload_name in workload_names:
