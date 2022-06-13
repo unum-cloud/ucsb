@@ -34,6 +34,12 @@ using transaction_t = ucsb::transaction_t;
 
 struct redis_t : public ucsb::db_t {
   public:
+    ~redis_t() {
+        std::string stop_cmd = "redis-cli -s ";
+        stop_cmd += connection_options_.path;
+        stop_cmd += " shutdown";
+        exec_cmd(stop_cmd.c_str());
+    }
     void set_config(fs::path const& config_path, fs::path const& dir_path) override;
     bool open() override;
     bool close() override;
@@ -56,6 +62,7 @@ struct redis_t : public ucsb::db_t {
     std::unique_ptr<transaction_t> create_transaction() override;
 
     void get_options(fs::path const& path);
+    std::string exec_cmd(const char* cmd);
 
   private:
     std::unique_ptr<sw::redis::Redis> redis_;
@@ -63,6 +70,7 @@ struct redis_t : public ucsb::db_t {
     sw::redis::ConnectionPoolOptions connection_pool_options_;
     fs::path config_path_;
     fs::path dir_path_;
+    bool is_opened_ = false;
 };
 
 inline sw::redis::StringView to_string_view(std::byte const* p, size_t size_bytes) noexcept {
@@ -73,7 +81,7 @@ inline sw::redis::StringView to_string_view(key_t const& k) noexcept {
     return {reinterpret_cast<const char*>(&k), sizeof(key_t)};
 }
 
-std::string exec_cmd(const char* cmd) {
+std::string redis_t::exec_cmd(const char* cmd) {
     using namespace std::chrono_literals;
     std::array<char, 4096> buffer;
     std::string result;
@@ -111,6 +119,8 @@ void redis_t::set_config(fs::path const& config_path, fs::path const& dir_path) 
 }
 
 bool redis_t::open() {
+    if (is_opened_)
+        return true;
     std::string start_cmd("redis-server ");
     start_cmd += config_path_;
     start_cmd += ".redis";
@@ -118,14 +128,11 @@ bool redis_t::open() {
 
     get_options(config_path_);
     redis_ = std::make_unique<sw::redis::Redis>(sw::redis::Redis(connection_options_));
+    is_opened_ = true;
     return true;
 }
 
 bool redis_t::close() {
-    std::string stop_cmd = "redis-cli -s ";
-    stop_cmd += connection_options_.path;
-    stop_cmd += " shutdown";
-    exec_cmd(stop_cmd.c_str());
     return true;
 }
 
@@ -258,26 +265,6 @@ operation_result_t redis_t::range_select(key_t key, size_t length, values_span_t
 }
 
 operation_result_t redis_t::scan(key_t key, size_t length, value_span_t single_value) const {
-    // TODO: We cant scan from key because redis is not sorted
-    // struct key_getter_t {
-    //     using value_type = std::string;
-    //     using iterator = value_span_t::pointer;
-
-    //     value_span_t single_value;
-    //     size_t count = 0;
-
-    //     iterator begin() { return nullptr; }
-    //     iterator insert(iterator, std::string key) {
-    //         single_value = value_span_t(reinterpret_cast<iterator>(key.data()), key.size());
-    //         count++;
-    //         return nullptr;
-    //     }
-    // };
-
-    // auto cursor = 0LL;
-    // key_getter_t getter(single_value);
-    // cursor = (*redis_).scan(cursor, "*", length, std::inserter(getter, getter.begin()));
-    // return {getter.count, getter.count ? operation_status_t::ok_k : operation_status_t::error_k};
     return {0, operation_status_t::not_implemented_k};
 }
 
