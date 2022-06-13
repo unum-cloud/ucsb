@@ -1,8 +1,5 @@
 #pragma once
 
-#include <vector>
-
-#include <bsoncxx/json.hpp>
 #include <bsoncxx/types.hpp>
 #include <mongocxx/client.hpp>
 #include <mongocxx/instance.hpp>
@@ -51,9 +48,7 @@ thread_local bsoncxx::builder::basic::array batch_keys_array;
 
 struct mongodb_t : public ucsb::db_t {
   public:
-    inline mongodb_t() : inst_(), pool_({"mongodb://127.0.0.1:27017/?minPoolSize=1&maxPoolSize=4"}) {}
-
-    inline ~mongodb_t() { close(); }
+    inline mongodb_t() : inst_(mongocxx::instance {}) {}
 
     void set_config(fs::path const& config_path, fs::path const& dir_path) override;
     bool open() override;
@@ -77,10 +72,10 @@ struct mongodb_t : public ucsb::db_t {
     std::unique_ptr<transaction_t> create_transaction() override;
 
   private:
-    mongocxx::collection get_collection() const;
     mongocxx::instance inst_;
-    mutable mongocxx::pool pool_;
+    std::unique_ptr<mongocxx::pool> pool_;
 
+    fs::path config_path_;
     fs::path dir_path_;
     std::string coll_name;
 };
@@ -100,29 +95,46 @@ static bsoncxx::types::b_binary make_binary(auto value, size_t size) {
     return bin_val;
 }
 
+static void exec_cmd(const char* cmd) {
+    using namespace std::chrono_literals;
+    FILE* pipe = popen(cmd, "r");
+    if (!pipe)
+        throw std::runtime_error("popen() failed!");
+    std::this_thread::sleep_for(2s);
+}
+
 void mongodb_t::set_config(fs::path const& config_path, fs::path const& dir_path) {
+    config_path_ = config_path;
     dir_path_ = dir_path;
     coll_name = dir_path.parent_path().filename();
 };
 
 bool mongodb_t::open() {
+    std::string start_cmd = "mongod --config ";
+    start_cmd += config_path_;
+    exec_cmd(start_cmd.c_str());
+    pool_ = std::make_unique<mongocxx::pool>(mongocxx::uri {"mongodb://127.0.0.1:27017/?minPoolSize=1&maxPoolSize=64"});
     return true;
 }
 
 bool mongodb_t::close() {
     batch_keys_array.clear();
     batch_keys_map.clear();
+    std::string stop_cmd = "sudo mongod -f ";
+    stop_cmd += config_path_;
+    stop_cmd += " --shutdown";
+    exec_cmd(stop_cmd.c_str());
     return true;
 }
 
 void mongodb_t::destroy() {
-    auto client = pool_.acquire();
+    auto client = (*pool_).acquire();
     auto coll = (*client)["mongodb"][coll_name];
     coll.drop();
 };
 
 operation_result_t mongodb_t::upsert(key_t key, value_spanc_t value) {
-    auto client = pool_.acquire();
+    auto client = (*pool_).acquire();
     auto coll = (*client)["mongodb"][coll_name];
     auto bin_val = make_binary(value.data(), value.size());
     mongocxx::options::update opts;
@@ -136,7 +148,7 @@ operation_result_t mongodb_t::upsert(key_t key, value_spanc_t value) {
 }
 
 operation_result_t mongodb_t::update(key_t key, value_spanc_t value) {
-    auto client = pool_.acquire();
+    auto client = (*pool_).acquire();
     auto coll = (*client)["mongodb"][coll_name];
     // TODO: Do we need upsert here?
     mongocxx::options::update opts;
@@ -151,7 +163,7 @@ operation_result_t mongodb_t::update(key_t key, value_spanc_t value) {
 };
 
 operation_result_t mongodb_t::remove(key_t key) {
-    auto client = pool_.acquire();
+    auto client = (*pool_).acquire();
     auto coll = (*client)["mongodb"][coll_name];
     if (coll.delete_one(make_document(kvp("_id", make_oid(key))))->deleted_count())
         return {1, operation_status_t::ok_k};
@@ -159,7 +171,7 @@ operation_result_t mongodb_t::remove(key_t key) {
 };
 
 operation_result_t mongodb_t::read(key_t key, value_span_t value) const {
-    auto client = pool_.acquire();
+    auto client = (*pool_).acquire();
     auto coll = (*client)["mongodb"][coll_name];
     bsoncxx::stdx::optional<bsoncxx::document::value> doc = coll.find_one(make_document(kvp("_id", make_oid(key))));
     if (!doc)
@@ -170,7 +182,7 @@ operation_result_t mongodb_t::read(key_t key, value_span_t value) const {
 }
 
 operation_result_t mongodb_t::batch_upsert(keys_spanc_t keys, values_spanc_t values, value_lengths_spanc_t sizes) {
-    auto client = pool_.acquire();
+    auto client = (*pool_).acquire();
     auto coll = (*client)["mongodb"][coll_name];
     auto bulk = mongocxx::bulk_write(coll.create_bulk_write());
     size_t data_offset = 0;
@@ -200,7 +212,7 @@ operation_result_t mongodb_t::batch_read(keys_spanc_t keys, values_span_t values
 
     size_t found_cnt = 0;
 
-    auto client = pool_.acquire();
+    auto client = (*pool_).acquire();
     auto coll = (*client)["mongodb"][coll_name];
     auto cursor = coll.find(make_document(kvp("_id", make_document(kvp("$in", batch_keys_array)))));
 
@@ -222,7 +234,7 @@ operation_result_t mongodb_t::batch_read(keys_spanc_t keys, values_span_t values
 }
 
 operation_result_t mongodb_t::bulk_load(keys_spanc_t keys, values_spanc_t values, value_lengths_spanc_t sizes) {
-    auto client = pool_.acquire();
+    auto client = (*pool_).acquire();
     auto coll = (*client)["mongodb"][coll_name];
     auto bulk = mongocxx::bulk_write(coll.create_bulk_write());
     size_t data_offset = 0;
@@ -242,7 +254,7 @@ operation_result_t mongodb_t::bulk_load(keys_spanc_t keys, values_spanc_t values
 
 operation_result_t mongodb_t::range_select(key_t key, size_t length, values_span_t values) const {
     size_t i = 0;
-    auto client = pool_.acquire();
+    auto client = (*pool_).acquire();
     auto coll = (*client)["mongodb"][coll_name];
     mongocxx::options::find opts;
     opts.limit(length);
@@ -258,7 +270,7 @@ operation_result_t mongodb_t::range_select(key_t key, size_t length, values_span
 }
 
 operation_result_t mongodb_t::scan(key_t key, size_t length, value_span_t single_value) const {
-    auto client = pool_.acquire();
+    auto client = (*pool_).acquire();
     auto coll = (*client)["mongodb"][coll_name];
     auto cursor = coll.find({});
     size_t i = 0;
