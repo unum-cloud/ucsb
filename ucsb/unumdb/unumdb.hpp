@@ -125,15 +125,16 @@ bool unumdb_t::open() {
 
     // Create resources
     resources_ = std::make_shared<resources_t>(config_.mem_limit, config_.gpu_mem_limit);
+    resources_->fibers = std::make_shared<pool::fibers_t>(1);
 
     darray_gt<string_t> paths = config_.paths;
     if (config_.paths.empty())
         paths.push_back(dir_path_.c_str());
-    init_file_io_by_pulling(paths, 256);
+
     if (config_.io_device_name == string_t("posix"))
-        init_file_io_by_posix(paths);
+        resources_->disk_router = create_posix_disk_router(paths, resources_->fibers);
     else if (config_.io_device_name == string_t("pulling"))
-        init_file_io_by_pulling(paths, config_.uring_queue_depth);
+        resources_->disk_router = create_pulling_disk_router(paths, resources_->fibers, config_.uring_queue_depth);
     else
         return false;
 
@@ -151,14 +152,16 @@ bool unumdb_t::open() {
 }
 
 bool unumdb_t::close() {
-    if (router) {
+    if (resources_) {
         if (!region_.name().empty())
             region_.flush();
         region_ = region_t("", "./", region_config_t(), {});
-        cleanup_file_io();
+        resources_->disk_router.reset();
+        resources_->fibers->stop_and_shutdown();
     }
     config_.clear();
     resources_.reset();
+
     return true;
 }
 
@@ -199,7 +202,7 @@ operation_result_t unumdb_t::read(key_t key, value_span_t value) const {
     notifier_t read_notifier(countdown);
     citizen_span_t citizen {reinterpret_cast<byte_t*>(value.data()), value.size()};
     region_.select(location, citizen, read_notifier);
-    if (!countdown.wait(*fibers))
+    if (!countdown.wait(*resources_->fibers))
         return {0, operation_status_t::error_k};
 
     return {1, operation_status_t::ok_k};
@@ -233,7 +236,7 @@ operation_result_t unumdb_t::batch_read(keys_spanc_t keys, values_span_t values)
             countdown_t countdown(batch_size);
             span_gt<byte_t> buffer_span(reinterpret_cast<byte_t*>(values.data()) + buffer_offset, found_buffer_size);
             region_.select(locations.view(), buffer_span, countdown);
-            if (!countdown.wait(*fibers))
+            if (!countdown.wait(*resources_->fibers))
                 return {0, operation_status_t::error_k};
             found_cnt += batch_size;
         }
@@ -294,7 +297,7 @@ operation_result_t unumdb_t::range_select(key_t key, size_t length, values_span_
         }
 
         if ((task_cnt == batch_size) | (read_notifier.has_failed())) {
-            selected_records_count += size_t(countdown.wait(*fibers)) * batch_size;
+            selected_records_count += size_t(countdown.wait(*resources_->fibers)) * batch_size;
             batch_size = std::min(length - i + 1, config_.uring_queue_depth);
             task_cnt = 0;
         }
@@ -316,7 +319,7 @@ operation_result_t unumdb_t::scan(key_t key, size_t length, value_span_t single_
         if (!it.is_removed()) {
             countdown.reset(1);
             it.get(citizen, countdown);
-            countdown.wait(*fibers);
+            countdown.wait(*resources_->fibers);
             ++scanned_records_count;
         }
     }
@@ -357,7 +360,7 @@ size_t unumdb_t::size_on_disk() const {
 }
 
 std::unique_ptr<transaction_t> unumdb_t::create_transaction() {
-    return std::make_unique<unumdb_transaction_t>(region_.create_transaction(), config_.uring_queue_depth);
+    return std::make_unique<unumdb_transaction_t>(region_.create_transaction(), config_.uring_queue_depth, resources_);
 }
 
 bool unumdb_t::load_config() {

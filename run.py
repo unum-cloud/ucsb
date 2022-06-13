@@ -9,7 +9,7 @@ import pathlib
 
 drop_caches = False
 transactional = False
-cleanup_previous = True
+cleanup_previous = False
 run_docker_image = False
 
 threads = [
