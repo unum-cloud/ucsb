@@ -536,6 +536,9 @@ int main(int argc, char** argv) {
         }
     }
     catch (ucsb::exception_t const& ex) {
+        fmt::print("ucsb exception: {}\n", ex.what());
+    }
+    catch (std::exception const& ex) {
         fmt::print("exception: {}\n", ex.what());
     }
     catch (...) {
