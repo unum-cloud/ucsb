@@ -125,13 +125,13 @@ bool unumdb_t::open() {
                 return false;
     }
 
-    // Create resources
-    resources_ = std::make_shared<resources_t>(config_.mem_limit, config_.gpu_mem_limit);
-    resources_->fibers = std::make_shared<pool::fibers_t>(1);
-
     darray_gt<string_t> paths = config_.paths;
     if (config_.paths.empty())
         paths.push_back(dir_path_.c_str());
+
+    // Create resources
+    resources_ = std::make_shared<resources_t>(config_.mem_limit, config_.gpu_mem_limit);
+    resources_->fibers = std::make_shared<pool::fibers_t>(paths.size());
 
     if (config_.io_device_name == string_t("posix"))
         resources_->disk_router = create_posix_disk_router(paths, resources_->fibers);
