@@ -539,7 +539,7 @@ int main(int argc, char** argv) {
         fmt::print("ucsb exception: {}\n", ex.what());
     }
     catch (std::exception const& ex) {
-        fmt::print("exception: {}\n", ex.what());
+        fmt::print("std exception: {}\n", ex.what());
     }
     catch (...) {
         fmt::print("Unknown exception was thrown\n");
