@@ -124,7 +124,6 @@ bool unumdb_t::open() {
             if (!fs::create_directories(path.c_str()))
                 return false;
     }
-
     darray_gt<string_t> paths = config_.paths;
     if (config_.paths.empty())
         paths.push_back(dir_path_.c_str());
