@@ -192,7 +192,7 @@ bool rocksdb_t::close() {
 }
 
 void rocksdb_t::destroy() {
-    bool ok = close();
+    [[maybe_unused]] bool ok = close();
     assert(ok);
     rocksdb::DestroyDB(dir_path_.string(), options_, cf_descs_);
 }
@@ -299,7 +299,7 @@ operation_result_t rocksdb_t::bulk_load(keys_spanc_t keys, values_spanc_t values
 
         for (; idx != keys.size(); ++idx) {
             auto key = keys[idx];
-            status = sst_file_writer.Add(to_slice(key), to_slice(values.subspan(data_offset, sizes[idx])));
+            status = sst_file_writer.Put(to_slice(key), to_slice(values.subspan(data_offset, sizes[idx])));
             if (!status.ok())
                 break;
             data_offset += sizes[idx];

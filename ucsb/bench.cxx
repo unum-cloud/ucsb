@@ -260,7 +260,6 @@ std::vector<workload_t> split_workload_into_threads(workload_t const& workload, 
         thread_workload.records_count = records_count_per_thread + bool(leftover_records_count);
         thread_workload.operations_count = operations_count_per_thread + bool(leftover_operations_count);
         thread_workload.operations_count = std::max(size_t(1), thread_workload.operations_count);
-        auto prev_thread_records_count = idx == 0 ? 0 : workloads[idx - 1].records_count;
         thread_workload.start_key = start_key;
         workloads.push_back(thread_workload);
 
@@ -283,7 +282,7 @@ std::vector<workload_t> split_workload_into_threads(workload_t const& workload, 
     return workloads;
 }
 
-void validate_workload(workload_t const& workload, size_t threads_count) {
+void validate_workload(workload_t const& workload, [[maybe_unused]] size_t threads_count) {
 
     assert(threads_count > 0);
     assert(!workload.name.empty());
@@ -308,22 +307,22 @@ void validate_workload(workload_t const& workload, size_t threads_count) {
     assert(workload.key_dist != distribution_kind_t::unknown_k);
 
     assert(workload.batch_upsert_proportion == 0.0 ||
-           workload.batch_upsert_proportion > 0.0 && workload.batch_upsert_min_length > 0);
+           (workload.batch_upsert_proportion > 0.0 && workload.batch_upsert_min_length > 0));
     assert(workload.batch_upsert_min_length <= workload.batch_upsert_max_length);
     assert(workload.batch_upsert_max_length <= workload.db_records_count / threads_count);
 
     assert(workload.batch_read_proportion == 0.0 ||
-           workload.batch_read_proportion > 0.0 && workload.batch_read_min_length > 0);
+           (workload.batch_read_proportion > 0.0 && workload.batch_read_min_length > 0));
     assert(workload.batch_read_min_length <= workload.batch_read_max_length);
     assert(workload.batch_read_max_length <= workload.db_records_count / threads_count);
 
     assert(workload.bulk_load_proportion == 0.0 ||
-           workload.bulk_load_proportion > 0.0 && workload.bulk_load_min_length > 0);
+           (workload.bulk_load_proportion > 0.0 && workload.bulk_load_min_length > 0));
     assert(workload.bulk_load_min_length <= workload.bulk_load_max_length);
     assert(workload.bulk_load_max_length <= workload.db_records_count / threads_count);
 
     assert(workload.range_select_proportion == 0.0 ||
-           workload.range_select_proportion > 0.0 && workload.range_select_min_length > 0);
+           (workload.range_select_proportion > 0.0 && workload.range_select_min_length > 0));
     assert(workload.range_select_min_length <= workload.range_select_max_length);
     assert(workload.range_select_max_length <= workload.db_records_count / threads_count);
 }
@@ -357,6 +356,7 @@ void bench(bm::State& state, workload_t const& workload, db_t& db, data_accessor
     mem_profiler_t mem_stat;
 
     // Progress
+    size_t const threads_count = state.threads();
     static size_t done_iterations_count = 0;
     size_t last_printed_iterations_count = 0;
     size_t const iterations_total_count = workload.db_operations_count;
@@ -404,7 +404,7 @@ void bench(bm::State& state, workload_t const& workload, db_t& db, data_accessor
             // Print progress
             ucsb::add_atomic(done_iterations_count, size_t(1));
             if (done_iterations_count - last_printed_iterations_count > printable_iterations_distance ||
-                done_iterations_count <= state.threads() || done_iterations_count == iterations_total_count) {
+                done_iterations_count <= threads_count || done_iterations_count == iterations_total_count) {
 
                 last_printed_iterations_count = done_iterations_count;
                 float percent = 100.f * done_iterations_count / iterations_total_count;

@@ -155,7 +155,7 @@ bool leveldb_t::close() {
 }
 
 void leveldb_t::destroy() {
-    bool ok = close();
+    [[maybe_unused]] bool ok = close();
     assert(ok);
     leveldb::DestroyDB(dir_path_.string(), options_);
 }
@@ -257,7 +257,7 @@ operation_result_t leveldb_t::scan(key_t key, size_t length, value_span_t single
     size_t i = 0;
     leveldb::ReadOptions scan_options = read_options_;
     scan_options.fill_cache = false;
-    std::unique_ptr<leveldb::Iterator> it(db_->NewIterator(read_options_));
+    std::unique_ptr<leveldb::Iterator> it(db_->NewIterator(scan_options));
     it->Seek(to_slice(key));
     for (; it->Valid() && i != length; i++, it->Next())
         memcpy(single_value.data(), it->value().data(), it->value().size());

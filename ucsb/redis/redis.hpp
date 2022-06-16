@@ -157,7 +157,7 @@ operation_result_t redis_t::update(key_t key, value_spanc_t value) {
 
 operation_result_t redis_t::remove(key_t key) {
     auto count = (*redis_).del(to_string_view(key));
-    return {count, count ? operation_status_t::ok_k : operation_status_t::not_found_k};
+    return {static_cast<size_t>(count), count ? operation_status_t::ok_k : operation_status_t::not_found_k};
 }
 
 operation_result_t redis_t::read(key_t key, value_span_t value) const {
@@ -173,12 +173,12 @@ operation_result_t redis_t::batch_upsert(keys_spanc_t keys, values_spanc_t value
     struct kv_iterator_t {
         using pair_t = std::pair<sw::redis::StringView, sw::redis::StringView>;
         using val_t = typename values_spanc_t::element_type;
-        key_t* key_ptr_;
-        val_t* val_ptr_;
-        value_length_t* size_ptr_;
+        key_t const* key_ptr_;
+        val_t const* val_ptr_;
+        value_length_t const* size_ptr_;
         pair_t pair_;
 
-        kv_iterator_t(key_t* key_ptr, val_t* val_ptr, value_length_t* size_ptr) noexcept
+        kv_iterator_t(key_t const* key_ptr, val_t const* val_ptr, value_length_t const* size_ptr) noexcept
             : key_ptr_(key_ptr), val_ptr_(val_ptr), size_ptr_(size_ptr),
               pair_(std::make_pair(to_string_view(*key_ptr_), to_string_view(val_ptr_, *size_ptr_))) {}
 
@@ -204,9 +204,9 @@ operation_result_t redis_t::batch_upsert(keys_spanc_t keys, values_spanc_t value
 
 operation_result_t redis_t::batch_read(keys_spanc_t keys, values_span_t values) const {
     struct key_iterator_t {
-        key_t* key_ptr_;
+        key_t const* key_ptr_;
 
-        key_iterator_t(key_t* key_ptr) noexcept : key_ptr_(key_ptr) {}
+        key_iterator_t(key_t const* key_ptr) noexcept : key_ptr_(key_ptr) {}
         sw::redis::StringView operator*() const noexcept { return to_string_view(*key_ptr_); }
         bool operator==(key_iterator_t const& other) const noexcept { return key_ptr_ == other.key_ptr_; }
 
@@ -259,11 +259,11 @@ operation_result_t redis_t::bulk_load(keys_spanc_t keys, values_spanc_t values, 
     return {count, operation_status_t::ok_k};
 }
 
-operation_result_t redis_t::range_select(key_t key, size_t length, values_span_t values) const {
+operation_result_t redis_t::range_select(key_t /*key*/, size_t /*length*/, values_span_t /*values*/) const {
     return {0, operation_status_t::not_implemented_k};
 }
 
-operation_result_t redis_t::scan(key_t key, size_t length, value_span_t single_value) const {
+operation_result_t redis_t::scan(key_t /*key*/, size_t /*length*/, value_span_t /*single_value*/) const {
     return {0, operation_status_t::not_implemented_k};
 }
 

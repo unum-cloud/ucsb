@@ -252,7 +252,7 @@ operation_result_t mongodb_t::bulk_load(keys_spanc_t keys, values_spanc_t values
     return {inserted_count, operation_status_t::error_k};
 }
 
-operation_result_t mongodb_t::range_select(key_t key, size_t length, values_span_t values) const {
+operation_result_t mongodb_t::range_select(key_t key, size_t length, [[maybe_unused]] values_span_t values) const {
     size_t i = 0;
     auto client = (*pool_).acquire();
     auto coll = (*client)["mongodb"][coll_name];
@@ -263,13 +263,15 @@ operation_result_t mongodb_t::range_select(key_t key, size_t length, values_span
     if (cursor.begin() == cursor.end())
         return {0, operation_status_t::error_k};
 
-    for (auto&& doc : cursor)
+    for (auto&& doc : cursor) {
+        (void)doc;
         i++;
+    }
 
     return {i, operation_status_t::ok_k};
 }
 
-operation_result_t mongodb_t::scan(key_t key, size_t length, value_span_t single_value) const {
+operation_result_t mongodb_t::scan([[maybe_unused]] key_t key, size_t length, value_span_t single_value) const {
     auto client = (*pool_).acquire();
     auto coll = (*client)["mongodb"][coll_name];
     auto cursor = coll.find({});

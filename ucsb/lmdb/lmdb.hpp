@@ -169,7 +169,7 @@ void lmdb_t::destroy() {
     res = mdb_txn_commit(txn);
     assert(res == 0);
 
-    bool ok = close();
+    [[maybe_unused]] bool ok = close();
     assert(ok);
 
     ucsb::clear_directory(dir_path_);

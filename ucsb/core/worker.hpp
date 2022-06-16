@@ -324,7 +324,6 @@ inline keys_spanc_t worker_t::generate_batch_upsert_keys() {
 inline keys_spanc_t worker_t::generate_batch_read_keys() {
     size_t batch_length = batch_read_length_generator_->generate();
     keys_span_t keys(keys_buffer_.data(), batch_length);
-    size_t i = 0;
     size_t unique_keys_count = 0;
     std::set<key_t> unique_keys;
     while (unique_keys_count != batch_length) {

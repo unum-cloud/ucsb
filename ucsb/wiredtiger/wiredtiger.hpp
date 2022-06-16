@@ -158,7 +158,7 @@ void wiredtiger_t::destroy() {
     if (session_)
         session_->drop(session_, table_name_.c_str(), "key_format=Q,value_format=u");
 
-    bool ok = close();
+    [[maybe_unused]] bool ok = close();
     assert(ok);
 
     ucsb::clear_directory(dir_path_);

@@ -55,13 +55,13 @@ struct unumdb_transaction_t : public ucsb::transaction_t {
     operation_result_t scan(key_t key, size_t length, value_span_t single_value) const override;
 
   private:
-    size_t uring_queue_depth_;
     std::unique_ptr<region_transaction_t> transaction_;
+    size_t uring_queue_depth_;
     resources_ptr_t resources_;
 };
 
 inline unumdb_transaction_t::~unumdb_transaction_t() {
-    auto status = transaction_->commit();
+    [[maybe_unused]] auto status = transaction_->commit();
     assert(status == status_t::ok_k);
 }
 
