@@ -296,6 +296,7 @@ operation_result_t unumdb_t::range_select(key_t key, size_t length, values_span_
         auto current = *read_ahead_it;
         memcpy(values.data() + buffer_offset, current.second.data(), current.second.size());
         buffer_offset += citizen_aligned_max_size;
+        ++read_ahead_it;
         ++scanned_records_count;
     }
 
@@ -320,6 +321,7 @@ operation_result_t unumdb_t::scan(key_t key, size_t length, value_span_t single_
     while (read_ahead_it != end_sentinel_t {} && scanned_records_count != length) {
         auto current = *read_ahead_it;
         memcpy(single_value.data(), current.second.data(), current.second.size());
+        ++read_ahead_it;
         ++scanned_records_count;
     }
 
