@@ -280,7 +280,7 @@ operation_result_t unumdb_t::bulk_load(keys_spanc_t keys, values_spanc_t values,
 
 operation_result_t unumdb_t::range_select(key_t key, size_t length, values_span_t values) const {
 
-    using read_ahead_t = read_ahead_gt<fingerprint_t, data_source_t::unfixed_size_k>;
+    using read_ahead_t = read_ahead_gt<typename region_t::iterator_t>;
 
     citizen_size_t citizen_aligned_max_size =
         ucsb::roundup_to_multiple<ucsb::values_buffer_t::alignment_k>(config_.user_config.unfixed_citizen_max_size);
@@ -306,7 +306,7 @@ operation_result_t unumdb_t::range_select(key_t key, size_t length, values_span_
 
 operation_result_t unumdb_t::scan(key_t key, size_t length, value_span_t single_value) const {
 
-    using read_ahead_t = read_ahead_gt<fingerprint_t, data_source_t::unfixed_size_k>;
+    using read_ahead_t = read_ahead_gt<typename region_t::iterator_t>;
 
     citizen_size_t citizen_aligned_max_size =
         ucsb::roundup_to_multiple<ucsb::values_buffer_t::alignment_k>(config_.user_config.unfixed_citizen_max_size);
@@ -362,7 +362,10 @@ size_t unumdb_t::size_on_disk() const {
 }
 
 std::unique_ptr<transaction_t> unumdb_t::create_transaction() {
-    return std::make_unique<unumdb_transaction_t>(region_->create_transaction(), config_.uring_queue_depth, resources_);
+    return std::make_unique<unumdb_transaction_t>(region_->create_transaction(),
+                                                  config_.user_config.unfixed_citizen_max_size,
+                                                  config_.uring_queue_depth,
+                                                  resources_);
 }
 
 bool unumdb_t::load_config() {
