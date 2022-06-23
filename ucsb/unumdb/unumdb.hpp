@@ -362,7 +362,7 @@ size_t unumdb_t::size_on_disk() const {
 }
 
 std::unique_ptr<transaction_t> unumdb_t::create_transaction() {
-    return std::make_unique<unumdb_transaction_t>(region_->create_transaction(),
+    return std::make_unique<unumdb_transaction_t>(region_->create_transaction(uuid_generator()),
                                                   config_.user_config.unfixed_citizen_max_size,
                                                   config_.uring_queue_depth,
                                                   resources_);
