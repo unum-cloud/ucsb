@@ -61,7 +61,7 @@ def get_db_config_file_path(db_name: str, size: int) -> str:
     return path
 
 
-def get_worklods_file_path(size: int) -> str:
+def get_workloads_file_path(size: int) -> str:
     return f'./bench/workloads/{size}.json'
 
 
@@ -89,7 +89,7 @@ def drop_system_caches():
 
 def run(db_name: str, size: int, threads_count: int, workload_names: list) -> None:
     config_path = get_db_config_file_path(db_name, size)
-    workloads_path = get_worklods_file_path(size)
+    workloads_path = get_workloads_file_path(size)
     db_path = get_db_path(db_name, size)
     results_path = get_results_dir_path()
 
@@ -135,7 +135,7 @@ def main() -> None:
                 if len(threads) > 1 and cleanup_previous:
                     if os.path.exists(db_path):
                         shutil.rmtree(db_path)
-                # Prepare DB enviroment
+                # Prepare DB environment
                 pathlib.Path(db_path).mkdir(parents=True, exist_ok=True)
                 config_path = get_db_config_file_path(db_name, size)
 
