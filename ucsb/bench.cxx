@@ -2,7 +2,6 @@
 #include <memory>
 #include <string>
 #include <vector>
-#include <chrono>
 #include <fmt/format.h>
 #include <fmt/chrono.h>
 #include <nlohmann/json.hpp>
@@ -30,7 +29,7 @@ using workloads_t = ucsb::workloads_t;
 using db_t = ucsb::db_t;
 using data_accessor_t = ucsb::data_accessor_t;
 using db_brand_t = ucsb::db_brand_t;
-using timer_ref_t = ucsb::timer_ref_t;
+using bench_timer_t = ucsb::timer_t;
 using worker_t = ucsb::worker_t;
 using distribution_kind_t = ucsb::distribution_kind_t;
 using operation_kind_t = ucsb::operation_kind_t;
@@ -41,8 +40,6 @@ using cpu_profiler_t = ucsb::cpu_profiler_t;
 using mem_profiler_t = ucsb::mem_profiler_t;
 using printable_bytes_t = ucsb::printable_bytes_t;
 using threads_fence_t = ucsb::threads_fence_t;
-using high_resolution_clock_t = std::chrono::high_resolution_clock;
-using time_point_t = std::chrono::time_point<high_resolution_clock_t>;
 
 inline void usage_message(const char* command) {
     fmt::print("Usage: {} [options]\n", command);
@@ -390,26 +387,24 @@ struct progress_t {
         return done_iterations - last_printed_iterations >= print_distance || done_iterations == total_iterations;
     }
 
-    void print(std::string const& bench_name) {
+    void print(std::string const& bench_name,
+               ucsb::elapsed_time_t operations_elapsed_time,
+               ucsb::elapsed_time_t elapsed_time) {
+
         auto done_percent = 100.f * done_iterations / total_iterations;
         auto fails_percent = entries_touched ? fails * 100.0 / entries_touched : 100.0;
-        auto now = high_resolution_clock_t::now();
-        auto duration = std::chrono::duration<double>(now - start_time_);
-        auto seconds_elapsed = duration.count();
-        auto ops_per_second = (entries_touched - fails) / seconds_elapsed;
+        auto ops_per_second = (entries_touched - fails) / operations_elapsed_time.count();
 
         fmt::print("\33[2K\r");
-        fmt::print("{}: {:.2f}% [{}/s, fails: {:.2f}%, elapsed: {:%H:%M:%S}]\r",
+        fmt::print("{}: {:.2f}% [{}/s, fails: {:.2f}%, elapsed: {:%Hh:%Mm:%Ss}]\r",
                    bench_name,
                    done_percent,
                    ucsb::printable_float_t {ops_per_second},
                    fails_percent,
-                   duration);
+                   elapsed_time);
         fflush(stdout);
         last_printed_iterations = done_iterations;
     }
-
-    void start_timer() { start_time_ = high_resolution_clock_t::now(); }
 
     void clear() {
         fails = 0;
@@ -419,18 +414,14 @@ struct progress_t {
         last_printed_iterations = 0;
         total_iterations = 0;
         print_distance = 0;
-        start_time_ = time_point_t::max();
     }
-
-  private:
-    time_point_t start_time_;
 };
 
 void bench(bm::State& state, workload_t const& workload, db_t& db, data_accessor_t& data_accessor) {
 
     // Bench components
     auto chooser = create_operation_chooser(workload);
-    timer_ref_t timer(state);
+    bench_timer_t timer(state);
     worker_t worker(workload, data_accessor, timer);
     std::atomic_bool do_flash = true;
 
@@ -448,7 +439,7 @@ void bench(bm::State& state, workload_t const& workload, db_t& db, data_accessor
         progress.total_iterations = workload.db_operations_count;
         progress.print_distance = workload.db_operations_count / 10;
         progress.print_start(workload.name);
-        progress.start_timer();
+        timer.start();
     }
 
     // Bench
@@ -481,7 +472,7 @@ void bench(bm::State& state, workload_t const& workload, db_t& db, data_accessor
             ucsb::add_atomic(progress.done_iterations, size_t(1));
 
             if (progress.is_time_to_print())
-                progress.print(workload.name);
+                progress.print(workload.name, timer.operations_elapsed_time(), timer.elapsed_time());
 
             // Last thread flushes the DB
             bool only_once = true;

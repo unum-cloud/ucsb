@@ -33,7 +33,7 @@ struct worker_t {
     using length_generator_t = std::unique_ptr<generator_gt<size_t>>;
     using values_and_sizes_spansc_t = std::pair<values_spanc_t, value_lengths_spanc_t>;
 
-    inline worker_t(workload_t const& workload, data_accessor_t& data_accessor, timer_ref_t timer);
+    inline worker_t(workload_t const& workload, data_accessor_t& data_accessor, timer_t& timer);
 
     inline operation_result_t do_upsert();
     inline operation_result_t do_update();
@@ -65,7 +65,7 @@ struct worker_t {
 
     workload_t workload_;
     data_accessor_t* data_accessor_;
-    timer_ref_t timer_;
+    timer_t* timer_;
 
     key_generator_t upsert_key_sequence_generator;
     acknowledged_key_generator_t acknowledged_key_generator;
@@ -83,8 +83,8 @@ struct worker_t {
     length_generator_t range_select_length_generator_;
 };
 
-inline worker_t::worker_t(workload_t const& workload, data_accessor_t& data_accessor, timer_ref_t timer)
-    : workload_(workload), data_accessor_(&data_accessor), timer_(timer) {
+inline worker_t::worker_t(workload_t const& workload, data_accessor_t& data_accessor, timer_t& timer)
+    : workload_(workload), data_accessor_(&data_accessor), timer_(&timer) {
 
     if (workload.upsert_proportion == 1.0 || workload.batch_upsert_proportion == 1.0 ||
         workload.bulk_load_proportion == 1.0)
@@ -149,29 +149,29 @@ inline operation_result_t worker_t::do_read_modify_write() {
 
 inline operation_result_t worker_t::do_batch_upsert() {
     // Note: Pause benchmark timer to do data preparation, to measure batch upsert time only
-    timer_.pause();
+    timer_->pause();
     keys_spanc_t keys = generate_batch_upsert_keys();
     values_and_sizes_spansc_t values_and_sizes = generate_values(keys.size());
-    timer_.resume();
+    timer_->resume();
 
     return data_accessor_->batch_upsert(keys, values_and_sizes.first, values_and_sizes.second);
 }
 
 inline operation_result_t worker_t::do_batch_read() {
     // Note: Pause benchmark timer to do data preparation, to measure batch read time only
-    timer_.pause();
+    timer_->pause();
     keys_spanc_t keys = generate_batch_read_keys();
     values_span_t values = values_buffer(keys.size());
-    timer_.resume();
+    timer_->resume();
     return data_accessor_->batch_read(keys, values);
 }
 
 inline operation_result_t worker_t::do_bulk_load() {
     // Note: Pause benchmark timer to do data preparation, to measure bulk load time only
-    timer_.pause();
+    timer_->pause();
     keys_spanc_t keys = generate_bulk_load_keys();
     values_and_sizes_spansc_t values_and_sizes = generate_values(keys.size());
-    timer_.resume();
+    timer_->resume();
 
     return data_accessor_->bulk_load(keys, values_and_sizes.first, values_and_sizes.second);
 }
