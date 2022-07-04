@@ -254,7 +254,7 @@ std::vector<workload_t> split_workload_into_threads(workload_t const& workload, 
     auto leftover_records_count = workload.db_records_count % threads_count;
     auto leftover_operations_count = workload.db_operations_count % threads_count;
 
-    size_t start_key = workload.start_key;
+    key_t start_key = workload.start_key;
     for (size_t idx = 0; idx < threads_count; ++idx) {
         workload_t thread_workload = workload;
         thread_workload.records_count = records_count_per_thread + bool(leftover_records_count);
