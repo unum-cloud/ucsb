@@ -254,7 +254,7 @@ std::vector<workload_t> split_workload_into_threads(workload_t const& workload, 
     auto leftover_records_count = workload.db_records_count % threads_count;
     auto leftover_operations_count = workload.db_operations_count % threads_count;
 
-    key_t start_key = workload.start_key;
+    auto start_key = workload.start_key;
     for (size_t idx = 0; idx < threads_count; ++idx) {
         workload_t thread_workload = workload;
         thread_workload.records_count = records_count_per_thread + bool(leftover_records_count);
@@ -342,44 +342,92 @@ inline operation_chooser_t create_operation_chooser(workload_t const& workload) 
     return chooser;
 }
 
-void bench(bm::State& state, workload_t const& workload, db_t& db, data_accessor_t& data_accessor) {
+struct progress_t {
+    size_t fails = 0;
+    size_t entries_touched = 0;
+    size_t bytes_processed = 0;
 
-    auto chooser = create_operation_chooser(workload);
-    timer_ref_t timer(state);
-    worker_t worker(workload, data_accessor, timer);
+    size_t done_iterations = 0;
+    size_t last_printed_iterations = 0;
+    size_t total_iterations = 0;
+    size_t print_distance = 0;
 
-    // Stats
-    static size_t fails_count = 0;
-    static size_t entries_touched = 0;
-    static size_t bytes_processed_count = 0;
-    cpu_profiler_t cpu_stat;
-    mem_profiler_t mem_stat;
-
-    // Progress
-    size_t const threads_count = state.threads();
-    static size_t done_iterations_count = 0;
-    size_t last_printed_iterations_count = 0;
-    size_t const iterations_total_count = workload.db_operations_count;
-    size_t const printable_iterations_distance = iterations_total_count / 10;
-    std::atomic_bool do_flash = true;
-
-    if (state.thread_index() == 0) {
-        fails_count = 0;
-        entries_touched = 0;
-        bytes_processed_count = 0;
-        done_iterations_count = 0;
-        last_printed_iterations_count = 0;
-        cpu_stat.start();
-        mem_stat.start();
-
-        // Print initial progress
-        fmt::print("{}: {:>6.2f}%\r", workload.name, 0.0);
+    static void print_db_open() {
+        fmt::print("Opening DB...\r");
         fflush(stdout);
     }
 
+    static void print_db_close() {
+        fmt::print("Closing DB...\r");
+        fflush(stdout);
+    }
+
+    static void print_db_flush() {
+        fmt::print("Flushing DB...\r");
+        fflush(stdout);
+    }
+
+    void print_start(std::string const& bench_name) {
+        fmt::print("{}: {:>6.2f}%\r", bench_name, 0.0);
+        fflush(stdout);
+    }
+
+    void print_end() {
+        fmt::print("Completed       \r");
+        fflush(stdout);
+    }
+
+    bool is_time_to_print() {
+        return done_iterations - last_printed_iterations >= print_distance || done_iterations == total_iterations;
+    }
+
+    void print(std::string const& bench_name) {
+        float percent = 100.f * done_iterations / total_iterations;
+        fmt::print("{}: {:>6.2f}%\r", bench_name, percent);
+        fflush(stdout);
+        last_printed_iterations = done_iterations;
+    }
+
+    void clear() {
+        fails = 0;
+        entries_touched = 0;
+        bytes_processed = 0;
+        done_iterations = 0;
+        last_printed_iterations = 0;
+        total_iterations = 0;
+        print_distance = 0;
+    }
+};
+
+void bench(bm::State& state, workload_t const& workload, db_t& db, data_accessor_t& data_accessor) {
+
+    // Bench components
+    auto chooser = create_operation_chooser(workload);
+    timer_ref_t timer(state);
+    worker_t worker(workload, data_accessor, timer);
+    std::atomic_bool do_flash = true;
+
+    // Monitoring
+    cpu_profiler_t cpu_prof;
+    mem_profiler_t mem_prof;
+    static progress_t progress; // Shared between threads
+
+    // Bench initialization
+    if (state.thread_index() == 0) {
+        cpu_prof.start();
+        mem_prof.start();
+
+        progress.clear();
+        progress.total_iterations = workload.db_operations_count;
+        progress.print_distance = workload.db_operations_count / 10;
+        progress.print_start(workload.name);
+    }
+
+    // Bench
     while (state.KeepRunningBatch(workload.operations_count)) {
-        size_t iterations_per_thread = workload.operations_count;
-        while (iterations_per_thread) {
+        size_t thread_iterations = workload.operations_count;
+        while (thread_iterations) {
+            // Do operation
             operation_result_t result;
             auto operation = chooser->choose();
             switch (operation) {
@@ -396,43 +444,47 @@ void bench(bm::State& state, workload_t const& workload, db_t& db, data_accessor
             default: throw ucsb::exception_t("Unknown operation"); break;
             }
 
+            // Update progress
             bool success = result.status == operation_status_t::ok_k;
-            ucsb::add_atomic(entries_touched, result.entries_touched);
-            ucsb::add_atomic(fails_count, size_t(!success) * result.entries_touched);
-            ucsb::add_atomic(bytes_processed_count, size_t(success) * workload.value_length * result.entries_touched);
+            auto bytes_processed = size_t(success) * workload.value_length * result.entries_touched;
+            ucsb::add_atomic(progress.entries_touched, result.entries_touched);
+            ucsb::add_atomic(progress.fails, size_t(!success) * result.entries_touched);
+            ucsb::add_atomic(progress.bytes_processed, bytes_processed);
+            ucsb::add_atomic(progress.done_iterations, size_t(1));
 
-            // Print progress
-            ucsb::add_atomic(done_iterations_count, size_t(1));
-            if (done_iterations_count - last_printed_iterations_count > printable_iterations_distance ||
-                done_iterations_count <= threads_count || done_iterations_count == iterations_total_count) {
+            if (progress.is_time_to_print())
+                progress.print(workload.name);
 
-                last_printed_iterations_count = done_iterations_count;
-                float percent = 100.f * done_iterations_count / iterations_total_count;
-                fmt::print("{}: {:>6.2f}%\r", workload.name, percent);
-                fflush(stdout);
+            // Last thread flushes the DB
+            bool only_once = true;
+            bool is_last_iteration = progress.done_iterations == progress.total_iterations;
+            if (is_last_iteration && do_flash.compare_exchange_weak(only_once, false)) {
+                progress_t::print_db_flush();
+                db.flush();
             }
 
-            // Last thread will flush the DB
-            bool only_once = true;
-            if (done_iterations_count == iterations_total_count && do_flash.compare_exchange_weak(only_once, false))
-                db.flush();
-            --iterations_per_thread;
+            --thread_iterations;
         }
     }
 
+    // Conclusion
     if (state.thread_index() == 0) {
-        cpu_stat.stop();
-        mem_stat.stop();
+        progress.print_end();
+        cpu_prof.stop();
+        mem_prof.stop();
 
-        state.SetBytesProcessed(bytes_processed_count);
-        state.counters["fails,%"] = bm::Counter(entries_touched ? fails_count * 100.0 / entries_touched : 100.0);
-        state.counters["operations/s"] = bm::Counter(entries_touched - fails_count, bm::Counter::kIsRate);
-        state.counters["cpu_max,%"] = bm::Counter(cpu_stat.percent().max);
-        state.counters["cpu_avg,%"] = bm::Counter(cpu_stat.percent().avg);
-        state.counters["mem_max,bytes"] = bm::Counter(mem_stat.rss().max, bm::Counter::kDefaults, bm::Counter::kIs1024);
-        state.counters["mem_avg,bytes"] = bm::Counter(mem_stat.rss().avg, bm::Counter::kDefaults, bm::Counter::kIs1024);
-        state.counters["processed,bytes"] =
-            bm::Counter(bytes_processed_count, bm::Counter::kDefaults, bm::Counter::kIs1024);
+        auto fails = progress.entries_touched ? progress.fails * 100.0 / progress.entries_touched : 100.0;
+        auto ops = progress.entries_touched - progress.fails;
+        auto bytes_processed = progress.bytes_processed;
+
+        state.SetBytesProcessed(bytes_processed);
+        state.counters["fails,%"] = bm::Counter(fails);
+        state.counters["operations/s"] = bm::Counter(ops, bm::Counter::kIsRate);
+        state.counters["cpu_max,%"] = bm::Counter(cpu_prof.percent().max);
+        state.counters["cpu_avg,%"] = bm::Counter(cpu_prof.percent().avg);
+        state.counters["mem_max,bytes"] = bm::Counter(mem_prof.rss().max, bm::Counter::kDefaults, bm::Counter::kIs1024);
+        state.counters["mem_avg,bytes"] = bm::Counter(mem_prof.rss().avg, bm::Counter::kDefaults, bm::Counter::kIs1024);
+        state.counters["processed,bytes"] = bm::Counter(bytes_processed, bm::Counter::kDefaults, bm::Counter::kIs1024);
         state.counters["disk,bytes"] = bm::Counter(db.size_on_disk(), bm::Counter::kDefaults, bm::Counter::kIs1024);
     }
 }
@@ -440,6 +492,7 @@ void bench(bm::State& state, workload_t const& workload, db_t& db, data_accessor
 void bench(bm::State& state, workload_t const& workload, db_t& db, bool transactional, threads_fence_t& fence) {
 
     if (state.thread_index() == 0) {
+        progress_t::print_db_open();
         if (!db.open())
             throw ucsb::exception_t("Failed to open DB");
     }
@@ -456,6 +509,7 @@ void bench(bm::State& state, workload_t const& workload, db_t& db, bool transact
 
     fence.sync();
     if (state.thread_index() == 0) {
+        progress_t::print_db_close();
         if (!db.close())
             throw ucsb::exception_t("Failed to close DB");
     }
@@ -479,7 +533,7 @@ int main(int argc, char** argv) {
         else
             settings.results_path = results_file_path;
 
-        // Prepare worklods
+        // Prepare workloads
         workloads_t workloads;
         if (!ucsb::load(settings.workloads_path, workloads)) {
             fmt::print("Failed to load workloads. path: {}\n", settings.workloads_path.c_str());
@@ -491,14 +545,14 @@ int main(int argc, char** argv) {
         }
         workloads = filter_workloads(workloads, settings.workload_filter);
         if (workloads.empty()) {
-            fmt::print("Filter dones't match any workload. filter: {}\n", settings.workload_filter);
+            fmt::print("Filter doesn't match any workload. filter: {}\n", settings.workload_filter);
             return 1;
         }
         std::vector<workloads_t> threads_workloads;
         for (auto const& workload : workloads) {
             validate_workload(workload, settings.threads_count);
-            std::vector<workload_t> splited_workloads = split_workload_into_threads(workload, settings.threads_count);
-            threads_workloads.push_back(splited_workloads);
+            std::vector<workload_t> splitted_workloads = split_workload_into_threads(workload, settings.threads_count);
+            threads_workloads.push_back(splitted_workloads);
         }
 
         ucsb::fs::create_directories(settings.working_dir_path.string());
@@ -520,10 +574,10 @@ int main(int argc, char** argv) {
 
         // Register benchmarks
         register_section(section_name(settings, workloads));
-        for (auto const& splited_workloads : threads_workloads) {
-            std::string bench_name = splited_workloads.front().name;
+        for (auto const& splitted_workloads : threads_workloads) {
+            std::string bench_name = splitted_workloads.front().name;
             register_benchmark(bench_name, settings.threads_count, [&](bm::State& state) {
-                auto const& workload = splited_workloads[state.thread_index()];
+                auto const& workload = splitted_workloads[state.thread_index()];
                 bench(state, workload, *db, settings.transactional, fence);
             });
         }

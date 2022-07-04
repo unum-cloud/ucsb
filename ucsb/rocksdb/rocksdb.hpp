@@ -92,7 +92,7 @@ struct rocksdb_t : public ucsb::db_t {
     fs::path config_path_;
     fs::path dir_path_;
 
-    bool load_aditional_options();
+    bool load_additional_options();
 
     struct key_comparator_t final : public rocksdb::Comparator {
         int Compare(rocksdb::Slice const& left, rocksdb::Slice const& right) const override {
@@ -139,7 +139,7 @@ bool rocksdb_t::open() {
         rocksdb::LoadOptionsFromFile(config_path_.string(), rocksdb::Env::Default(), &options_, &cf_descs_);
     if (!status.ok() || cf_descs_.empty())
         return false;
-    if (!load_aditional_options())
+    if (!load_additional_options())
         return false;
 
     for (auto const& db_paths : options_.db_paths) {
@@ -376,7 +376,7 @@ std::unique_ptr<transaction_t> rocksdb_t::create_transaction() {
     return std::make_unique<rocksdb_transaction_t>(std::move(raw), cf_handles_);
 }
 
-bool rocksdb_t::load_aditional_options() {
+bool rocksdb_t::load_additional_options() {
     if (!fs::exists(config_path_))
         return false;
 

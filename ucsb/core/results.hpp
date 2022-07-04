@@ -26,18 +26,18 @@ void marge_results(ucsb::fs::path const& source_file_path, ucsb::fs::path const&
         return;
 
     std::ifstream ifstream(source_file_path);
-    ordered_json j_sourace;
-    ifstream >> j_sourace;
+    ordered_json j_source;
+    ifstream >> j_source;
 
-    ordered_json j_destinatino;
+    ordered_json j_destination;
     if (ucsb::fs::exists(destination_file_path)) {
         ifstream = std::ifstream(destination_file_path);
-        ifstream >> j_destinatino;
+        ifstream >> j_destination;
     }
 
-    if (!j_destinatino.empty()) {
-        auto j_source_benchmarks = j_sourace["benchmarks"];
-        auto j_destination_benchmarks = j_destinatino["benchmarks"];
+    if (!j_destination.empty()) {
+        auto j_source_benchmarks = j_source["benchmarks"];
+        auto j_destination_benchmarks = j_destination["benchmarks"];
         std::vector<ordered_json> results;
         // Take olds
         for (auto it = j_destination_benchmarks.begin(); it != j_destination_benchmarks.end(); ++it)
@@ -58,13 +58,13 @@ void marge_results(ucsb::fs::path const& source_file_path, ucsb::fs::path const&
             if (idx == results.size())
                 results.push_back(*it);
         }
-        j_destinatino["benchmarks"] = results;
+        j_destination["benchmarks"] = results;
     }
     else
-        j_destinatino = j_sourace;
+        j_destination = j_source;
 
     std::ofstream ofstream(destination_file_path);
-    ofstream << std::setw(2) << j_destinatino << std::endl;
+    ofstream << std::setw(2) << j_destination << std::endl;
 }
 
 } // namespace ucsb
