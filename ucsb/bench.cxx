@@ -2,7 +2,9 @@
 #include <memory>
 #include <string>
 #include <vector>
+#include <chrono>
 #include <fmt/format.h>
+#include <fmt/chrono.h>
 #include <nlohmann/json.hpp>
 #include <benchmark/benchmark.h>
 
@@ -39,6 +41,8 @@ using cpu_profiler_t = ucsb::cpu_profiler_t;
 using mem_profiler_t = ucsb::mem_profiler_t;
 using printable_bytes_t = ucsb::printable_bytes_t;
 using threads_fence_t = ucsb::threads_fence_t;
+using high_resolution_clock_t = std::chrono::high_resolution_clock;
+using time_point_t = std::chrono::time_point<high_resolution_clock_t>;
 
 inline void usage_message(const char* command) {
     fmt::print("Usage: {} [options]\n", command);
@@ -353,27 +357,32 @@ struct progress_t {
     size_t print_distance = 0;
 
     static void print_db_open() {
+        fmt::print("\33[2K\r");
         fmt::print("Opening DB...\r");
         fflush(stdout);
     }
 
     static void print_db_close() {
+        fmt::print("\33[2K\r");
         fmt::print("Closing DB...\r");
         fflush(stdout);
     }
 
     static void print_db_flush() {
+        fmt::print("\33[2K\r");
         fmt::print("Flushing DB...\r");
         fflush(stdout);
     }
 
     void print_start(std::string const& bench_name) {
-        fmt::print("{}: {:>6.2f}%\r", bench_name, 0.0);
+        fmt::print("\33[2K\r");
+        fmt::print("{}: {:.2f}%\r", bench_name, 0.0);
         fflush(stdout);
     }
 
     void print_end() {
-        fmt::print("Completed       \r");
+        fmt::print("\33[2K\r");
+        fmt::print("Completed\r");
         fflush(stdout);
     }
 
@@ -382,11 +391,25 @@ struct progress_t {
     }
 
     void print(std::string const& bench_name) {
-        float percent = 100.f * done_iterations / total_iterations;
-        fmt::print("{}: {:>6.2f}%\r", bench_name, percent);
+        auto done_percent = 100.f * done_iterations / total_iterations;
+        auto fails_percent = entries_touched ? fails * 100.0 / entries_touched : 100.0;
+        auto now = high_resolution_clock_t::now();
+        auto duration = std::chrono::duration<double>(now - start_time_);
+        auto seconds_elapsed = duration.count();
+        auto ops_per_second = (entries_touched - fails) / seconds_elapsed;
+
+        fmt::print("\33[2K\r");
+        fmt::print("{}: {:.2f}% [{}/s, fails: {:.2f}%, elapsed: {:%H:%M:%S}]\r",
+                   bench_name,
+                   done_percent,
+                   ucsb::printable_float_t {ops_per_second},
+                   fails_percent,
+                   duration);
         fflush(stdout);
         last_printed_iterations = done_iterations;
     }
+
+    void start_timer() { start_time_ = high_resolution_clock_t::now(); }
 
     void clear() {
         fails = 0;
@@ -396,7 +419,11 @@ struct progress_t {
         last_printed_iterations = 0;
         total_iterations = 0;
         print_distance = 0;
+        start_time_ = time_point_t::max();
     }
+
+  private:
+    time_point_t start_time_;
 };
 
 void bench(bm::State& state, workload_t const& workload, db_t& db, data_accessor_t& data_accessor) {
@@ -421,6 +448,7 @@ void bench(bm::State& state, workload_t const& workload, db_t& db, data_accessor
         progress.total_iterations = workload.db_operations_count;
         progress.print_distance = workload.db_operations_count / 10;
         progress.print_start(workload.name);
+        progress.start_timer();
     }
 
     // Bench
@@ -473,12 +501,12 @@ void bench(bm::State& state, workload_t const& workload, db_t& db, data_accessor
         cpu_prof.stop();
         mem_prof.stop();
 
-        auto fails = progress.entries_touched ? progress.fails * 100.0 / progress.entries_touched : 100.0;
         auto ops = progress.entries_touched - progress.fails;
         auto bytes_processed = progress.bytes_processed;
+        auto fails_percent = progress.entries_touched ? progress.fails * 100.0 / progress.entries_touched : 100.0;
 
         state.SetBytesProcessed(bytes_processed);
-        state.counters["fails,%"] = bm::Counter(fails);
+        state.counters["fails,%"] = bm::Counter(fails_percent);
         state.counters["operations/s"] = bm::Counter(ops, bm::Counter::kIsRate);
         state.counters["cpu_max,%"] = bm::Counter(cpu_prof.percent().max);
         state.counters["cpu_avg,%"] = bm::Counter(cpu_prof.percent().avg);
