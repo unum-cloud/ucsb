@@ -507,7 +507,6 @@ void bench(bm::State& state, workload_t const& workload, db_t& db, data_accessor
         state.counters["mem_avg,bytes"] = bm::Counter(mem_prof.rss().avg, bm::Counter::kDefaults, bm::Counter::kIs1024);
         state.counters["processed,bytes"] = bm::Counter(bytes_processed, bm::Counter::kDefaults, bm::Counter::kIs1024);
         state.counters["disk,bytes"] = bm::Counter(db.size_on_disk(), bm::Counter::kDefaults, bm::Counter::kIs1024);
-        state.counters["elapsed,sec"] = bm::Counter(timer.elapsed_time().count());
     }
 }
 
