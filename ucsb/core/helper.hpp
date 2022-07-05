@@ -8,8 +8,18 @@
 namespace ucsb {
 
 template <typename at>
-inline void add_atomic(at& value, at delta) noexcept {
+inline void atomic_add(at& value, at delta) noexcept {
     __atomic_add_fetch(&value, delta, __ATOMIC_RELAXED);
+}
+
+template <typename at>
+inline at atomic_load(at& value) noexcept {
+    return __atomic_load_n(&value, __ATOMIC_RELAXED);
+}
+
+template <typename at>
+inline void atomic_store(at& value, at desired) noexcept {
+    __atomic_store_n(&value, desired, __ATOMIC_RELAXED);
 }
 
 template <size_t multiple_ak>

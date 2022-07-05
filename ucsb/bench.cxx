@@ -29,7 +29,6 @@ using workloads_t = ucsb::workloads_t;
 using db_t = ucsb::db_t;
 using data_accessor_t = ucsb::data_accessor_t;
 using db_brand_t = ucsb::db_brand_t;
-using bench_timer_t = ucsb::timer_t;
 using worker_t = ucsb::worker_t;
 using distribution_kind_t = ucsb::distribution_kind_t;
 using operation_kind_t = ucsb::operation_kind_t;
@@ -384,12 +383,15 @@ struct progress_t {
     }
 
     bool is_time_to_print() {
-        return done_iterations - last_printed_iterations >= print_distance || done_iterations == total_iterations;
+        auto done_its = ucsb::atomic_load(done_iterations);
+        return done_its - ucsb::atomic_load(last_printed_iterations) >= print_distance || done_its == total_iterations;
     }
 
     void print(std::string const& bench_name,
                ucsb::elapsed_time_t operations_elapsed_time,
                ucsb::elapsed_time_t elapsed_time) {
+
+        ucsb::atomic_store(last_printed_iterations, done_iterations);
 
         auto done_percent = 100.f * done_iterations / total_iterations;
         auto fails_percent = entries_touched ? fails * 100.0 / entries_touched : 100.0;
@@ -403,7 +405,6 @@ struct progress_t {
                    fails_percent,
                    elapsed_time);
         fflush(stdout);
-        last_printed_iterations = done_iterations;
     }
 
     void clear() {
@@ -421,13 +422,13 @@ void bench(bm::State& state, workload_t const& workload, db_t& db, data_accessor
 
     // Bench components
     auto chooser = create_operation_chooser(workload);
-    bench_timer_t timer(state);
+    ucsb::timer_t timer(state);
     worker_t worker(workload, data_accessor, timer);
     std::atomic_bool do_flash = true;
 
     // Monitoring
-    cpu_profiler_t cpu_prof;
-    mem_profiler_t mem_prof;
+    cpu_profiler_t cpu_prof;    // Only one thread profiles
+    mem_profiler_t mem_prof;    // Only one thread profiles
     static progress_t progress; // Shared between threads
 
     // Bench initialization
@@ -439,10 +440,10 @@ void bench(bm::State& state, workload_t const& workload, db_t& db, data_accessor
         progress.total_iterations = workload.db_operations_count;
         progress.print_distance = workload.db_operations_count / 10;
         progress.print_start(workload.name);
-        timer.start();
     }
 
     // Bench
+    timer.start();
     while (state.KeepRunningBatch(workload.operations_count)) {
         size_t thread_iterations = workload.operations_count;
         while (thread_iterations) {
@@ -466,10 +467,10 @@ void bench(bm::State& state, workload_t const& workload, db_t& db, data_accessor
             // Update progress
             bool success = result.status == operation_status_t::ok_k;
             auto bytes_processed = size_t(success) * workload.value_length * result.entries_touched;
-            ucsb::add_atomic(progress.entries_touched, result.entries_touched);
-            ucsb::add_atomic(progress.fails, size_t(!success) * result.entries_touched);
-            ucsb::add_atomic(progress.bytes_processed, bytes_processed);
-            ucsb::add_atomic(progress.done_iterations, size_t(1));
+            ucsb::atomic_add(progress.entries_touched, result.entries_touched);
+            ucsb::atomic_add(progress.fails, size_t(!success) * result.entries_touched);
+            ucsb::atomic_add(progress.bytes_processed, bytes_processed);
+            ucsb::atomic_add(progress.done_iterations, size_t(1));
 
             if (progress.is_time_to_print())
                 progress.print(workload.name, timer.operations_elapsed_time(), timer.elapsed_time());
@@ -485,6 +486,7 @@ void bench(bm::State& state, workload_t const& workload, db_t& db, data_accessor
             --thread_iterations;
         }
     }
+    timer.stop();
 
     // Conclusion
     if (state.thread_index() == 0) {
@@ -505,6 +507,7 @@ void bench(bm::State& state, workload_t const& workload, db_t& db, data_accessor
         state.counters["mem_avg,bytes"] = bm::Counter(mem_prof.rss().avg, bm::Counter::kDefaults, bm::Counter::kIs1024);
         state.counters["processed,bytes"] = bm::Counter(bytes_processed, bm::Counter::kDefaults, bm::Counter::kIs1024);
         state.counters["disk,bytes"] = bm::Counter(db.size_on_disk(), bm::Counter::kDefaults, bm::Counter::kIs1024);
+        state.counters["elapsed,sec"] = bm::Counter(timer.elapsed_time().count());
     }
 }
 
