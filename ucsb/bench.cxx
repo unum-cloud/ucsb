@@ -403,7 +403,7 @@ struct progress_t {
                    done_percent,
                    ucsb::printable_float_t {ops_per_second},
                    fails_percent,
-                   elapsed_time);
+                   std::chrono::seconds(size_t(elapsed_time.count())));
         fflush(stdout);
     }
 
