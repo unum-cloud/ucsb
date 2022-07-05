@@ -396,14 +396,16 @@ struct progress_t {
         auto done_percent = 100.f * done_iterations / total_iterations;
         auto fails_percent = entries_touched ? fails * 100.0 / entries_touched : 100.0;
         auto ops_per_second = (entries_touched - fails) / operations_elapsed_time.count();
+        auto remaining = (elapsed_time.count() / done_percent) * (100.f - done_percent);
 
         fmt::print("\33[2K\r");
-        fmt::print("{}: {:.2f}% [{}/s, fails: {:.2f}%, elapsed: {:%Hh:%Mm:%Ss}]\r",
+        fmt::print("{}: {:.2f}% [{}/s, fails: {:.2f}%, elapsed: {:%Hh:%Mm:%Ss}, remaining: {:%Hh:%Mm:%Ss}]\r",
                    bench_name,
                    done_percent,
                    ucsb::printable_float_t {ops_per_second},
                    fails_percent,
-                   std::chrono::seconds(size_t(elapsed_time.count())));
+                   std::chrono::seconds(size_t(elapsed_time.count())),
+                   std::chrono::seconds(size_t(remaining)));
         fflush(stdout);
     }
 
@@ -438,7 +440,7 @@ void bench(bm::State& state, workload_t const& workload, db_t& db, data_accessor
 
         progress.clear();
         progress.total_iterations = workload.db_operations_count;
-        progress.print_distance = workload.db_operations_count / 10;
+        progress.print_distance = workload.db_operations_count / 20;
         progress.print_start(workload.name);
     }
 
