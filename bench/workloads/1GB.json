@@ -30,12 +30,12 @@
     {
         "name": "RangeSelect",
         "records_count": 1000000,
-        "operations_count": 2000,
+        "operations_count": 781,
         "range_select_proportion": 1.0,
         "key_dist": "zipfian",
         "value_length": 1024,
-        "range_select_min_length": 100,
-        "range_select_max_length": 100,
+        "range_select_min_length": 256,
+        "range_select_max_length": 256,
         "range_select_length_dist": "uniform"
     },
     {
