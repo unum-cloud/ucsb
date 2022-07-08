@@ -344,6 +344,7 @@ void unumdb_t::flush() {
         });
 
         region_->import(import_data.view());
+        region_->compact();
         import_data.clear();
         import_data_.clear();
     }
