@@ -187,31 +187,30 @@ operation_result_t unumdb_transaction_t::bulk_load(keys_spanc_t keys,
 
 operation_result_t unumdb_transaction_t::range_select(key_t key, size_t length, values_span_t values) const {
 
-    using read_ahead_t = read_ahead_gt<typename region_transaction_t::iterator_t>;
+    size_t task_cnt = 0;
+    size_t selected_records_count = 0;
+    size_t batch_size = std::min(length, uring_queue_depth_);
+    citizen_size_t citizen_max_size = ucsb::roundup_to_multiple<ucsb::values_buffer_t::alignment_k>(citizen_max_size_);
 
-    citizen_size_t citizen_aligned_max_size =
-        ucsb::roundup_to_multiple<ucsb::values_buffer_t::alignment_k>(citizen_max_size_);
-    size_t const it_batch_size = std::bit_ceil(length);
-    size_t const it_buffer_size = it_batch_size * citizen_aligned_max_size;
-
+    countdown_t countdown(0);
     transaction_->lock_commit_shared();
-    auto read_ahead_it = read_ahead_t {transaction_->find(key),
-                                       it_batch_size,
-                                       it_buffer_size,
-                                       resources_->fibers,
-                                       resources_->disk_router};
-    size_t buffer_offset = 0;
-    size_t scanned_records_count = 0;
-    while (read_ahead_it != end_sentinel_t {} && scanned_records_count != length) {
-        auto current = *read_ahead_it;
-        memcpy(values.data() + buffer_offset, current.second.data(), current.second.size());
-        buffer_offset += citizen_aligned_max_size;
-        ++read_ahead_it;
-        ++scanned_records_count;
-    }
+    auto it = transaction_->find(key);
+    for (size_t i = 0; it != transaction_->end() && i < length; ++it, ++i) {
+        citizen_span_t citizen {reinterpret_cast<byte_t*>(values.data()) + i * citizen_max_size, citizen_max_size};
+        countdown.increment(1);
+        it.get(citizen, countdown);
+        ++task_cnt;
 
+        if ((task_cnt == batch_size) | countdown.has_failed()) {
+            selected_records_count += size_t(countdown.wait(*resources_->fibers)) * batch_size;
+            batch_size = std::min(length - i + 1, uring_queue_depth_);
+            task_cnt = 0;
+            countdown.reset(0);
+        }
+    }
     transaction_->unlock_commit_shared();
-    return {scanned_records_count, operation_status_t::ok_k};
+
+    return {selected_records_count, operation_status_t::ok_k};
 }
 
 operation_result_t unumdb_transaction_t::scan(key_t key, size_t length, value_span_t single_value) const {
