@@ -116,9 +116,7 @@ bool unumdb_t::open() {
     if (!load_config())
         return false;
 
-    if (issues_t issues; !validator_t::validate(config_.user_config, issues))
-        return false;
-
+    // Resolve paths
     countdown_t silenced_countdown(1);
     unum::io::nix::make_path(dir_path_.c_str(), silenced_countdown);
     for (auto const& path : config_.paths) {
@@ -133,7 +131,6 @@ bool unumdb_t::open() {
     // Create resources
     resources_ = std::make_shared<resources_t>(config_.mem_limit, config_.gpu_mem_limit);
     resources_->fibers = std::make_shared<pool::fibers_t>(paths.size());
-
     if (config_.io_device_name == string_t("posix"))
         resources_->disk_router = create_posix_disk_router(paths, resources_->fibers);
     else if (config_.io_device_name == string_t("pulling"))
@@ -141,6 +138,11 @@ bool unumdb_t::open() {
     else
         return false;
 
+    // Check resources & config
+    if (issues_t issues; !validator_t::validate(resources_, config_.user_config, issues))
+        return false;
+
+    // Create DB
     auto region_config = create_region_config(config_.user_config);
     region_ = std::make_unique<region_t>("Kovkas", dir_path_.c_str(), region_config, resources_);
     import_data_.resize(config_.user_config.threads_max_cnt);
