@@ -116,27 +116,34 @@ bool unumdb_t::open() {
     if (!load_config())
         return false;
 
-    // Resolve paths
-    countdown_t silenced_countdown(1);
-    unum::io::nix::make_path(dir_path_.c_str(), silenced_countdown);
+    // Make main path
+    if (!fs::create_directories(dir_path_))
+        return false;
+    // Make storage paths
     for (auto const& path : config_.paths) {
         if (!fs::exists(path.c_str()))
             if (!fs::create_directories(path.c_str()))
                 return false;
     }
+    // Resolve paths
     darray_gt<string_t> paths = config_.paths;
     if (config_.paths.empty())
         paths.push_back(dir_path_.c_str());
+    auto log_file_path = dir_path_.append("Kovkas.log");
 
     // Create resources
+    countdown_t countdown;
     resources_ = std::make_shared<resources_t>(config_.mem_limit, config_.gpu_mem_limit);
     resources_->fibers = std::make_shared<pool::fibers_t>(paths.size());
     if (config_.io_device_name == string_t("posix"))
-        resources_->disk_router = create_posix_disk_router(paths, resources_->fibers);
+        resources_->disk_router = create_posix_disk_router(paths, resources_->fibers, countdown);
     else if (config_.io_device_name == string_t("pulling"))
-        resources_->disk_router = create_pulling_disk_router(paths, resources_->fibers, config_.uring_queue_depth);
+        resources_->disk_router =
+            create_pulling_disk_router(paths, resources_->fibers, config_.uring_queue_depth, countdown);
     else
         return false;
+    resources_->logger = std::make_shared<logger_t>(log_file_path.c_str());
+    countdown.throw_unhandled(*resources_->logger);
 
     // Check resources & config
     if (issues_t issues; !validator_t::validate(resources_, config_.user_config, issues))
