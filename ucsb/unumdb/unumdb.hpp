@@ -117,8 +117,9 @@ bool unumdb_t::open() {
         return false;
 
     // Make main path
-    if (!fs::create_directories(dir_path_))
-        return false;
+    if (!fs::exists(dir_path_))
+        if (!fs::create_directories(dir_path_))
+            return false;
     // Make storage paths
     for (auto const& path : config_.paths) {
         if (!fs::exists(path.c_str()))
