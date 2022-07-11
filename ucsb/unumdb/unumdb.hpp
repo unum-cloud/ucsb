@@ -416,7 +416,7 @@ bool unumdb_t::load_config() {
     config_.user_config.unfixed_citizen_max_size = j_config["unfixed_citizen_max_size"].get<size_t>();
 
 #if dev_m
-    config_.user_config.name = "Kovkas";
+    config_.user_config.file_prefix = "Kovkas";
 #endif
 
     return true;
