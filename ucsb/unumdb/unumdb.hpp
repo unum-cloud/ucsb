@@ -130,7 +130,8 @@ bool unumdb_t::open() {
     darray_gt<string_t> paths = config_.paths;
     if (config_.paths.empty())
         paths.push_back(dir_path_.c_str());
-    auto log_file_path = dir_path_.append("Kovkas.log");
+    auto log_file_path = dir_path_;
+    log_file_path.append("Kovkas.log");
 
     // Create resources
     countdown_t countdown;
@@ -147,8 +148,11 @@ bool unumdb_t::open() {
     countdown.throw_unhandled(*resources_->logger);
 
     // Check resources & config
-    if (issues_t issues; !validator_t::validate(resources_, config_.user_config, issues))
+    if (issues_t issues; !validator_t::validate(resources_, config_.user_config, issues)) {
+        for (auto const& issue : issues)
+            fmt::print("issue: {}\n", issue.description);
         return false;
+    }
 
     // Create DB
     auto region_config = create_region_config(config_.user_config);
