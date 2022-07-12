@@ -15,6 +15,10 @@ namespace mongodb {
 
 namespace fs = ucsb::fs;
 
+struct session_deleter_t {
+    void operator()(WT_SESSION* session) { session->close(session, NULL); }
+};
+
 using key_t = ucsb::key_t;
 using keys_spanc_t = ucsb::keys_spanc_t;
 using value_span_t = ucsb::value_span_t;
@@ -25,16 +29,13 @@ using value_lengths_spanc_t = ucsb::value_lengths_spanc_t;
 using operation_status_t = ucsb::operation_status_t;
 using operation_result_t = ucsb::operation_result_t;
 using transaction_t = ucsb::transaction_t;
+using session_uptr_t = std::unique_ptr<WT_SESSION, session_deleter_t>;
 
 /**
  * @brief WiredTiger wrapper for the UCSB benchmark.
  * WiredTiger is the core key-value engine of MongoDB.
  * https://github.com/wiredtiger/wiredtiger
  */
-
-struct session_deleter {
-    void operator()(WT_SESSION* session) { session->close(session, NULL); }
-};
 
 struct wiredtiger_t : public ucsb::db_t {
 
@@ -65,7 +66,7 @@ struct wiredtiger_t : public ucsb::db_t {
 
     std::unique_ptr<transaction_t> create_transaction() override;
 
-    std::unique_ptr<WT_SESSION, session_deleter> start_session() const;
+    session_uptr_t start_session() const;
     WT_CURSOR* get_cursor(WT_SESSION* session, const char* config) const;
 
   private:
@@ -80,7 +81,7 @@ struct wiredtiger_t : public ucsb::db_t {
     fs::path dir_path_;
 
     WT_CONNECTION* conn_;
-    std::unique_ptr<WT_SESSION, session_deleter> bulk_load_session_;
+    session_uptr_t bulk_load_session_;
     WT_CURSOR* bulk_load_cursor_;
     std::string table_name_;
 };
@@ -103,7 +104,7 @@ void wiredtiger_t::set_config(fs::path const& config_path, fs::path const& dir_p
     dir_path_ = dir_path;
 }
 
-std::unique_ptr<WT_SESSION, session_deleter> wiredtiger_t::start_session() const {
+session_uptr_t wiredtiger_t::start_session() const {
 
     WT_SESSION* session = nullptr;
     auto res = conn_->open_session(conn_, NULL, NULL, &session);
@@ -114,7 +115,7 @@ std::unique_ptr<WT_SESSION, session_deleter> wiredtiger_t::start_session() const
     if (res)
         return nullptr;
 
-    return std::unique_ptr<WT_SESSION, session_deleter>(session, session_deleter());
+    return session_uptr_t(session, session_deleter_t {});
 }
 
 WT_CURSOR* wiredtiger_t::get_cursor(WT_SESSION* session, const char* config) const {
