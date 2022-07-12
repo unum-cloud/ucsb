@@ -2,7 +2,6 @@
 
 #include <string>
 #include <vector>
-#include <mutex>
 #include <fmt/format.h>
 
 #include <wiredtiger.h>
@@ -34,7 +33,8 @@ using transaction_t = ucsb::transaction_t;
  */
 struct wiredtiger_t : public ucsb::db_t {
 
-    inline wiredtiger_t() : conn_(nullptr), table_name_("table:access") {}
+    inline wiredtiger_t()
+        : conn_(nullptr), bulk_session_(nullptr), bulk_cursor_(nullptr), table_name_("table:access") {}
     inline ~wiredtiger_t() override = default;
 
     void set_config(fs::path const& config_path, fs::path const& dir_path) override;
@@ -60,6 +60,9 @@ struct wiredtiger_t : public ucsb::db_t {
 
     std::unique_ptr<transaction_t> create_transaction() override;
 
+    WT_SESSION* start_session() const;
+    WT_CURSOR* get_cursor(WT_SESSION* session) const;
+
   private:
     struct config_t {
         size_t cache_size = 0;
@@ -72,6 +75,8 @@ struct wiredtiger_t : public ucsb::db_t {
     fs::path dir_path_;
 
     WT_CONNECTION* conn_;
+    WT_SESSION* bulk_session_;
+    WT_CURSOR* bulk_cursor_;
     std::string table_name_;
 };
 
@@ -91,6 +96,30 @@ WT_COLLATOR key_comparator = {compare_keys, nullptr, nullptr};
 void wiredtiger_t::set_config(fs::path const& config_path, fs::path const& dir_path) {
     config_path_ = config_path;
     dir_path_ = dir_path;
+}
+
+WT_SESSION* wiredtiger_t::start_session() const {
+
+    WT_SESSION* session = nullptr;
+    auto res = conn_->open_session(conn_, NULL, NULL, &session);
+    if (res)
+        return nullptr;
+
+    res = session->create(session, table_name_.c_str(), "key_format=Q,value_format=u");
+    if (res)
+        return nullptr;
+
+    return session;
+}
+
+WT_CURSOR* wiredtiger_t::get_cursor(WT_SESSION* session) const {
+
+    WT_CURSOR* cursor = nullptr;
+    auto res = session->open_cursor(session, table_name_.c_str(), NULL, NULL, &cursor);
+    if (res)
+        return nullptr;
+
+    return cursor;
 }
 
 bool wiredtiger_t::open() {
@@ -118,6 +147,8 @@ bool wiredtiger_t::close() {
     if (res)
         return false;
 
+    bulk_session_ = nullptr;
+    bulk_cursor_ = nullptr;
     conn_ = nullptr;
     return true;
 }
@@ -131,27 +162,15 @@ void wiredtiger_t::destroy() {
 
 operation_result_t wiredtiger_t::upsert(key_t key, value_spanc_t value) {
 
-    WT_SESSION* session = nullptr;
-    WT_CURSOR* cursor = nullptr;
-
-    auto res = conn_->open_session(conn_, NULL, NULL, &session);
-    if (res)
-        return {0, operation_status_t::error_k};
-
-    res = session->create(session, table_name_.c_str(), "key_format=Q,value_format=u");
-    if (res)
-        return {0, operation_status_t::error_k};
-
-    res = session->open_cursor(session, table_name_.c_str(), NULL, NULL, &cursor);
-    if (res)
-        return {0, operation_status_t::error_k};
+    WT_SESSION* session = start_session();
+    WT_CURSOR* cursor = get_cursor(session);
 
     cursor->set_key(cursor, key);
     WT_ITEM db_value;
     db_value.data = value.data();
     db_value.size = value.size();
     cursor->set_value(cursor, &db_value);
-    res = cursor->insert(cursor);
+    auto res = cursor->insert(cursor);
     cursor->reset(cursor);
 
     session->close(session, NULL);
@@ -161,27 +180,15 @@ operation_result_t wiredtiger_t::upsert(key_t key, value_spanc_t value) {
 
 operation_result_t wiredtiger_t::update(key_t key, value_spanc_t value) {
 
-    WT_SESSION* session = nullptr;
-    WT_CURSOR* cursor = nullptr;
-
-    auto res = conn_->open_session(conn_, NULL, NULL, &session);
-    if (res)
-        return {0, operation_status_t::error_k};
-
-    res = session->create(session, table_name_.c_str(), "key_format=Q,value_format=u");
-    if (res)
-        return {0, operation_status_t::error_k};
-
-    res = session->open_cursor(session, table_name_.c_str(), NULL, NULL, &cursor);
-    if (res)
-        return {0, operation_status_t::error_k};
+    WT_SESSION* session = start_session();
+    WT_CURSOR* cursor = get_cursor(session);
 
     cursor->set_key(cursor, key);
     WT_ITEM db_value;
     db_value.data = value.data();
     db_value.size = value.size();
     cursor->set_value(cursor, &db_value);
-    res = cursor->update(cursor);
+    auto res = cursor->update(cursor);
     cursor->reset(cursor);
     session->close(session, NULL);
 
@@ -190,23 +197,11 @@ operation_result_t wiredtiger_t::update(key_t key, value_spanc_t value) {
 
 operation_result_t wiredtiger_t::remove(key_t key) {
 
-    WT_SESSION* session = nullptr;
-    WT_CURSOR* cursor = nullptr;
-
-    auto res = conn_->open_session(conn_, NULL, NULL, &session);
-    if (res)
-        return {0, operation_status_t::error_k};
-
-    res = session->create(session, table_name_.c_str(), "key_format=Q,value_format=u");
-    if (res)
-        return {0, operation_status_t::error_k};
-
-    res = session->open_cursor(session, table_name_.c_str(), NULL, NULL, &cursor);
-    if (res)
-        return {0, operation_status_t::error_k};
+    WT_SESSION* session = start_session();
+    WT_CURSOR* cursor = get_cursor(session);
 
     cursor->set_key(cursor, key);
-    res = cursor->remove(cursor);
+    auto res = cursor->remove(cursor);
     cursor->reset(cursor);
     session->close(session, NULL);
 
@@ -215,23 +210,11 @@ operation_result_t wiredtiger_t::remove(key_t key) {
 
 operation_result_t wiredtiger_t::read(key_t key, value_span_t value) const {
 
-    WT_SESSION* session = nullptr;
-    WT_CURSOR* cursor = nullptr;
-
-    auto res = conn_->open_session(conn_, NULL, NULL, &session);
-    if (res)
-        return {0, operation_status_t::error_k};
-
-    res = session->create(session, table_name_.c_str(), "key_format=Q,value_format=u");
-    if (res)
-        return {0, operation_status_t::error_k};
-
-    res = session->open_cursor(session, table_name_.c_str(), NULL, NULL, &cursor);
-    if (res)
-        return {0, operation_status_t::error_k};
+    WT_SESSION* session = start_session();
+    WT_CURSOR* cursor = get_cursor(session);
 
     cursor->set_key(cursor, key);
-    res = cursor->search(cursor);
+    auto res = cursor->search(cursor);
     if (res)
         return {0, operation_status_t::error_k};
     WT_ITEM db_value;
@@ -248,20 +231,8 @@ operation_result_t wiredtiger_t::read(key_t key, value_span_t value) const {
 
 operation_result_t wiredtiger_t::batch_upsert(keys_spanc_t keys, values_spanc_t values, value_lengths_spanc_t sizes) {
 
-    WT_SESSION* session = nullptr;
-    WT_CURSOR* cursor = nullptr;
-
-    auto res = conn_->open_session(conn_, NULL, NULL, &session);
-    if (res)
-        return {0, operation_status_t::error_k};
-
-    res = session->create(session, table_name_.c_str(), "key_format=Q,value_format=u");
-    if (res)
-        return {0, operation_status_t::error_k};
-
-    res = session->open_cursor(session, table_name_.c_str(), NULL, NULL, &cursor);
-    if (res)
-        return {0, operation_status_t::error_k};
+    WT_SESSION* session = start_session();
+    WT_CURSOR* cursor = get_cursor(session);
 
     size_t offset = 0;
     for (size_t idx = 0; idx < keys.size(); ++idx) {
@@ -283,20 +254,8 @@ operation_result_t wiredtiger_t::batch_upsert(keys_spanc_t keys, values_spanc_t 
 
 operation_result_t wiredtiger_t::batch_read(keys_spanc_t keys, values_span_t values) const {
 
-    WT_SESSION* session = nullptr;
-    WT_CURSOR* cursor = nullptr;
-
-    auto res = conn_->open_session(conn_, NULL, NULL, &session);
-    if (res)
-        return {0, operation_status_t::error_k};
-
-    res = session->create(session, table_name_.c_str(), "key_format=Q,value_format=u");
-    if (res)
-        return {0, operation_status_t::error_k};
-
-    res = session->open_cursor(session, table_name_.c_str(), NULL, NULL, &cursor);
-    if (res)
-        return {0, operation_status_t::error_k};
+    WT_SESSION* session = start_session();
+    WT_CURSOR* cursor = get_cursor(session);
 
     // Note: imitation of batch read!
     size_t offset = 0;
@@ -321,28 +280,39 @@ operation_result_t wiredtiger_t::batch_read(keys_spanc_t keys, values_span_t val
 }
 
 operation_result_t wiredtiger_t::bulk_load(keys_spanc_t keys, values_spanc_t values, value_lengths_spanc_t sizes) {
-    return batch_upsert(keys, values, sizes);
+    // Warnings:
+    //   DB must be empty
+    //   No other cursors while doing bulk load
+
+    if (bulk_session_ == nullptr) {
+        bulk_session_ = start_session();
+
+        auto res = bulk_session_->open_cursor(bulk_session_, table_name_.c_str(), NULL, "bulk", &bulk_cursor_);
+        if (res)
+            return {0, operation_status_t::error_k};
+    }
+
+    size_t offset = 0;
+    for (size_t idx = 0; idx < keys.size(); ++idx) {
+        bulk_cursor_->set_key(bulk_cursor_, keys[idx]);
+        WT_ITEM db_value;
+        db_value.data = &values[offset];
+        db_value.size = sizes[idx];
+        bulk_cursor_->set_value(bulk_cursor_, &db_value);
+        bulk_cursor_->insert(bulk_cursor_);
+        offset += sizes[idx];
+    }
+
+    return {keys.size(), operation_status_t::ok_k};
 }
 
 operation_result_t wiredtiger_t::range_select(key_t key, size_t length, values_span_t values) const {
 
-    WT_SESSION* session = nullptr;
-    WT_CURSOR* cursor = nullptr;
-
-    auto res = conn_->open_session(conn_, NULL, NULL, &session);
-    if (res)
-        return {0, operation_status_t::error_k};
-
-    res = session->create(session, table_name_.c_str(), "key_format=Q,value_format=u");
-    if (res)
-        return {0, operation_status_t::error_k};
-
-    res = session->open_cursor(session, table_name_.c_str(), NULL, NULL, &cursor);
-    if (res)
-        return {0, operation_status_t::error_k};
+    WT_SESSION* session = start_session();
+    WT_CURSOR* cursor = get_cursor(session);
 
     cursor->set_key(cursor, key);
-    res = cursor->search(cursor);
+    auto res = cursor->search(cursor);
     if (res)
         return {0, operation_status_t::error_k};
 
@@ -367,23 +337,11 @@ operation_result_t wiredtiger_t::range_select(key_t key, size_t length, values_s
 
 operation_result_t wiredtiger_t::scan(key_t key, size_t length, value_span_t single_value) const {
 
-    WT_SESSION* session = nullptr;
-    WT_CURSOR* cursor = nullptr;
-
-    auto res = conn_->open_session(conn_, NULL, NULL, &session);
-    if (res)
-        return {0, operation_status_t::error_k};
-
-    res = session->create(session, table_name_.c_str(), "key_format=Q,value_format=u");
-    if (res)
-        return {0, operation_status_t::error_k};
-
-    res = session->open_cursor(session, table_name_.c_str(), NULL, NULL, &cursor);
-    if (res)
-        return {0, operation_status_t::error_k};
+    WT_SESSION* session = start_session();
+    WT_CURSOR* cursor = get_cursor(session);
 
     cursor->set_key(cursor, key);
-    res = cursor->search(cursor);
+    auto res = cursor->search(cursor);
     if (res)
         return {0, operation_status_t::error_k};
 
@@ -405,6 +363,10 @@ operation_result_t wiredtiger_t::scan(key_t key, size_t length, value_span_t sin
 }
 
 void wiredtiger_t::flush() {
+    if (bulk_cursor_) {
+        bulk_cursor_->close(bulk_cursor_);
+        bulk_cursor_ = nullptr;
+    }
 }
 
 size_t wiredtiger_t::size_on_disk() const {
