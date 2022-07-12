@@ -80,7 +80,7 @@ struct wiredtiger_t : public ucsb::db_t {
     fs::path dir_path_;
 
     WT_CONNECTION* conn_;
-    WT_SESSION* bulk_load_session_;
+    std::unique_ptr<WT_SESSION, session_deleter> bulk_load_session_;
     WT_CURSOR* bulk_load_cursor_;
     std::string table_name_;
 };
@@ -297,17 +297,9 @@ operation_result_t wiredtiger_t::bulk_load(keys_spanc_t keys, values_spanc_t val
     //   No other cursors while doing bulk load
 
     if (bulk_load_cursor_ == nullptr) {
-        auto res = conn_->open_session(conn_, NULL, NULL, &bulk_load_session_);
-        if (res)
-            return {keys.size(), operation_status_t::error_k};
-
-        res = bulk_load_session_->create(bulk_load_session_, table_name_.c_str(), "key_format=Q,value_format=u");
-        if (res)
-            return {keys.size(), operation_status_t::error_k};
-
-        res =
-            bulk_load_session_->open_cursor(bulk_load_session_, table_name_.c_str(), NULL, "bulk", &bulk_load_cursor_);
-        if (res)
+        bulk_load_session_ = start_session();
+        bulk_load_cursor_ = get_cursor(bulk_load_session_.get(), "bulk");
+        if (!bulk_load_cursor_)
             return {keys.size(), operation_status_t::error_k};
     }
 
@@ -389,7 +381,7 @@ void wiredtiger_t::flush() {
         bulk_load_cursor_ = nullptr;
     }
     if (bulk_load_session_) {
-        bulk_load_session_->close(bulk_load_session_, NULL);
+        bulk_load_session_.reset();
         bulk_load_session_ = nullptr;
     }
 }
