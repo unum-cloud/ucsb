@@ -19,7 +19,7 @@
     {
         "name": "BatchRead",
         "records_count": 1000000,
-        "operations_count": 400,
+        "operations_count": 800,
         "batch_read_proportion": 1.0,
         "key_dist": "zipfian",
         "value_length": 1024,
@@ -67,7 +67,7 @@
     {
         "name": "BatchUpsert",
         "records_count": 1005000,
-        "operations_count": 100,
+        "operations_count": 50,
         "start_key": 1005000,
         "value_length": 1024,
         "batch_upsert_proportion": 1.0,
@@ -76,8 +76,8 @@
     },
     {
         "name": "Remove",
-        "records_count": 1105000,
-        "operations_count": 105000,
+        "records_count": 1055000,
+        "operations_count": 55000,
         "value_length": 1024,
         "remove_proportion": 1.0,
         "key_dist": "zipfian"
