@@ -127,7 +127,7 @@ bool redis_t::open() {
     exec_cmd(start_cmd.c_str());
 
     get_options(config_path_);
-    redis_ = std::make_unique<sw::redis::Redis>(sw::redis::Redis(connection_options_));
+    redis_ = std::make_unique<sw::redis::Redis>(sw::redis::Redis(connection_options_, connection_pool_options_));
     is_opened_ = true;
     return true;
 }
@@ -140,28 +140,22 @@ void redis_t::destroy() {
 }
 
 operation_result_t redis_t::upsert(key_t key, value_spanc_t value) {
-    auto status = (*redis_).set(to_string_view(key),
-                                to_string_view(value.data(), value.size()),
-                                std::chrono::milliseconds(0),
-                                sw::redis::UpdateType::ALWAYS);
+    auto status = (*redis_).hset("hash", to_string_view(key), to_string_view(value.data(), value.size()));
     return {status, status ? operation_status_t::ok_k : operation_status_t::error_k};
 }
 
 operation_result_t redis_t::update(key_t key, value_spanc_t value) {
-    auto status = (*redis_).set(to_string_view(key),
-                                to_string_view(value.data(), value.size()),
-                                std::chrono::milliseconds(0),
-                                sw::redis::UpdateType::EXIST);
+    auto status = (*redis_).hset("hash", to_string_view(key), to_string_view(value.data(), value.size()));
     return {status, status ? operation_status_t::ok_k : operation_status_t::not_found_k};
 }
 
 operation_result_t redis_t::remove(key_t key) {
-    auto count = (*redis_).del(to_string_view(key));
-    return {static_cast<size_t>(count), count ? operation_status_t::ok_k : operation_status_t::not_found_k};
+    size_t count = (*redis_).hdel("hash", to_string_view(key));
+    return {count, count ? operation_status_t::ok_k : operation_status_t::not_found_k};
 }
 
 operation_result_t redis_t::read(key_t key, value_span_t value) const {
-    auto val = (*redis_).get(to_string_view(key));
+    auto val = (*redis_).hget("hash", to_string_view(key));
     if (!val)
         return {0, operation_status_t::not_found_k};
 
@@ -174,7 +168,7 @@ operation_result_t redis_t::batch_upsert(keys_spanc_t keys, values_spanc_t value
         using pair_t = std::pair<sw::redis::StringView, sw::redis::StringView>;
         using val_t = typename values_spanc_t::element_type;
         key_t const* key_ptr_;
-        val_t const* val_ptr_;
+        val_t* val_ptr_;
         value_length_t const* size_ptr_;
         pair_t pair_;
 
@@ -196,7 +190,8 @@ operation_result_t redis_t::batch_upsert(keys_spanc_t keys, values_spanc_t value
         }
     };
 
-    (*redis_).mset(
+    (*redis_).hmset(
+        "hash",
         kv_iterator_t(keys.data(), values.data(), sizes.data()),
         kv_iterator_t(keys.data() + keys.size(), values.data() + values.size(), sizes.data() + sizes.size()));
     return {keys.size(), operation_status_t::ok_k};
@@ -235,7 +230,10 @@ operation_result_t redis_t::batch_read(keys_spanc_t keys, values_span_t values) 
     };
 
     value_getter_t getter(values);
-    (*redis_).mget(key_iterator_t(keys.data()), key_iterator_t(keys.data() + keys.size()), std::back_inserter(getter));
+    (*redis_).hmget("hash",
+                    key_iterator_t(keys.data()),
+                    key_iterator_t(keys.data() + keys.size()),
+                    std::back_inserter(getter));
     return {getter.count, getter.count ? operation_status_t::ok_k : operation_status_t::error_k};
 }
 
@@ -243,10 +241,7 @@ operation_result_t redis_t::bulk_load(keys_spanc_t keys, values_spanc_t values, 
     auto data_offset = 0;
     auto pipe = (*redis_).pipeline(false);
     for (size_t i = 0; i != keys.size(); ++i) {
-        pipe.set(to_string_view(keys[i]),
-                 to_string_view(values.data() + data_offset, sizes[i]),
-                 std::chrono::milliseconds(0),
-                 sw::redis::UpdateType::ALWAYS);
+        pipe.hset("hash", to_string_view(keys[i]), to_string_view(values.data() + data_offset, sizes[i]));
         data_offset += sizes[i];
     }
 
@@ -259,11 +254,11 @@ operation_result_t redis_t::bulk_load(keys_spanc_t keys, values_spanc_t values, 
     return {count, operation_status_t::ok_k};
 }
 
-operation_result_t redis_t::range_select(key_t /*key*/, size_t /*length*/, values_span_t /*values*/) const {
+operation_result_t redis_t::range_select(key_t /* key */, size_t /* length */, values_span_t /* values */) const {
     return {0, operation_status_t::not_implemented_k};
 }
 
-operation_result_t redis_t::scan(key_t /*key*/, size_t /*length*/, value_span_t /*single_value*/) const {
+operation_result_t redis_t::scan(key_t /* key */, size_t /* length */, value_span_t /* single_value */) const {
     return {0, operation_status_t::not_implemented_k};
 }
 
