@@ -68,6 +68,8 @@ struct unumdb_t : public ucsb::db_t {
     std::unique_ptr<transaction_t> create_transaction() override;
 
   private:
+    using citizen_location_t = typename region_transaction_t::citizen_location_t;
+
     struct db_config_t {
         size_t mem_limit = 0;
         size_t gpu_mem_limit = 0;

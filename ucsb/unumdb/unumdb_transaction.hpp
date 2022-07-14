@@ -56,6 +56,8 @@ struct unumdb_transaction_t : public ucsb::transaction_t {
     operation_result_t scan(key_t key, size_t length, value_span_t single_value) const override;
 
   private:
+    using citizen_location_t = typename region_transaction_t::citizen_location_t;
+
     std::unique_ptr<region_transaction_t> transaction_;
     resources_ptr_t resources_;
     size_t uring_queue_depth_;
@@ -63,19 +65,19 @@ struct unumdb_transaction_t : public ucsb::transaction_t {
 };
 
 inline unumdb_transaction_t::~unumdb_transaction_t() {
-    [[maybe_unused]] auto status = transaction_->commit();
-    assert(status == status_t::ok_k);
+    [[maybe_unused]] auto errc = transaction_->commit();
+    assert(!errc);
 }
 
 operation_result_t unumdb_transaction_t::upsert(key_t key, value_spanc_t value) {
     citizen_view_t citizen {reinterpret_cast<byte_t const*>(value.data()), value.size()};
-    auto status = transaction_->insert(key, citizen);
-    if (status != status_t::ok_k) {
-        assert(status == status_t::not_enough_ram_k);
-        status = transaction_->commit();
-        assert(status == status_t::ok_k);
-        status = transaction_->insert(key, citizen);
-        assert(status == status_t::ok_k);
+    auto errc = transaction_->insert(key, citizen);
+    if (errc) {
+        assert(errc == error_t::not_enough_resource_k);
+        errc = transaction_->commit();
+        assert(!errc);
+        errc = transaction_->insert(key, citizen);
+        assert(!errc);
     }
     return {1, operation_status_t::ok_k};
 }
@@ -88,25 +90,25 @@ operation_result_t unumdb_transaction_t::update(key_t key, value_spanc_t value) 
         return {1, operation_status_t::not_found_k};
 
     citizen_view_t citizen {reinterpret_cast<byte_t const*>(value.data()), value.size()};
-    auto status = transaction_->insert(key, citizen);
-    if (status != status_t::ok_k) {
-        assert(status == status_t::not_enough_ram_k);
-        status = transaction_->commit();
-        assert(status == status_t::ok_k);
-        status = transaction_->insert(key, citizen);
-        assert(status == status_t::ok_k);
+    auto errc = transaction_->insert(key, citizen);
+    if (errc) {
+        assert(errc == error_t::not_enough_resource_k);
+        errc = transaction_->commit();
+        assert(!errc);
+        errc = transaction_->insert(key, citizen);
+        assert(!errc);
     }
     return {1, operation_status_t::ok_k};
 }
 
 operation_result_t unumdb_transaction_t::remove(key_t key) {
-    auto status = transaction_->remove(key);
-    if (status != status_t::ok_k) {
-        assert(status == status_t::not_enough_ram_k);
-        status = transaction_->commit();
-        assert(status == status_t::ok_k);
-        status = transaction_->remove(key);
-        assert(status == status_t::ok_k);
+    auto errc = transaction_->remove(key);
+    if (errc) {
+        assert(errc == error_t::not_enough_resource_k);
+        errc = transaction_->commit();
+        assert(!errc);
+        errc = transaction_->remove(key);
+        assert(!errc);
     }
     return {1, operation_status_t::ok_k};
 }
@@ -133,13 +135,13 @@ operation_result_t unumdb_transaction_t::batch_upsert(keys_spanc_t keys,
     size_t offset = 0;
     for (size_t idx = 0; idx < keys.size(); ++idx) {
         citizen_view_t citizen {reinterpret_cast<byte_t const*>(values.data() + offset), sizes[idx]};
-        auto status = transaction_->insert(keys[idx], citizen);
-        if (status != status_t::ok_k) {
-            assert(status == status_t::not_enough_ram_k);
-            status = transaction_->commit();
-            assert(status == status_t::ok_k);
-            status = transaction_->insert(keys[idx], citizen);
-            assert(status == status_t::ok_k);
+        auto errc = transaction_->insert(keys[idx], citizen);
+        if (errc) {
+            assert(errc == error_t::not_enough_resource_k);
+            errc = transaction_->commit();
+            assert(!errc);
+            errc = transaction_->insert(keys[idx], citizen);
+            assert(!errc);
         }
         offset += sizes[idx];
     }
