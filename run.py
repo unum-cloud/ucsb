@@ -6,7 +6,6 @@ import time
 import shutil
 import pexpect
 import pathlib
-import subprocess
 
 drop_caches = False
 transactional = False
@@ -29,7 +28,8 @@ db_names = [
     'leveldb',
     'wiredtiger',
     'lmdb',
-    'mongodb'
+    'mongodb',
+    'redis'
 ]
 
 sizes = [
@@ -38,6 +38,7 @@ sizes = [
     # '10GB',
     # '100GB',
     # '1TB',
+    # '10TB',
 ]
 
 workload_names = [
@@ -47,8 +48,8 @@ workload_names = [
     'RangeSelect',
     'Scan',
     'ReadUpdate_50_50',
-    'ReadInsert_95_5',
-    'BatchInsert',
+    'ReadUpsert_95_5',
+    'BatchUpsert',
     'Remove',
 ]
 
@@ -60,7 +61,7 @@ def get_db_config_file_path(db_name: str, size: int) -> str:
     return path
 
 
-def get_worklods_file_path(size: int) -> str:
+def get_workloads_file_path(size: int) -> str:
     return f'./bench/workloads/{size}.json'
 
 
@@ -86,18 +87,10 @@ def drop_system_caches():
         stream.write('3\n')
 
 
-def launch_db(db_name: str, config_path: os.PathLike) -> None:
-    if db_name == "mongodb":
-        subprocess.Popen(
-            ["mongo", "--eval", "db.getSiblingDB('admin').shutdownServer()"], stdout=subprocess.DEVNULL)
-        time.sleep(2)
-        subprocess.Popen(["sudo", "mongod", "--config",
-                         config_path], stdout=subprocess.DEVNULL)
-
-
 def run(db_name: str, size: int, threads_count: int, workload_names: list) -> None:
     config_path = get_db_config_file_path(db_name, size)
-    workloads_path = get_worklods_file_path(size)
+    workloads_path = get_workloads_file_path(size)
+    db_path = get_db_path(db_name, size)
     results_path = get_results_dir_path()
 
     transactional_flag = '-t' if transactional else ''
@@ -106,12 +99,13 @@ def run(db_name: str, size: int, threads_count: int, workload_names: list) -> No
     if run_docker_image:
         runner = f'docker run -v {os.getcwd()}/bench:/ucsb/bench -v {os.getcwd()}/tmp:/ucsb/tmp -it ucsb-image-dev'
     else:
-        runner = './build_release/bin/_ucsb_bench'
+        runner = './build_release/bin/_ucsb_bench_cxx'
     child = pexpect.spawn(f'{runner} \
                             -db {db_name} \
-                            {transactional_flag}\
+                            {transactional_flag} \
                             -c {config_path} \
                             -w {workloads_path} \
+                            -wd {db_path} \
                             -r {results_path} \
                             -threads {threads_count} \
                             -filter {filter}'
@@ -141,10 +135,9 @@ def main() -> None:
                 if len(threads) > 1 and cleanup_previous:
                     if os.path.exists(db_path):
                         shutil.rmtree(db_path)
-                # Prepare DB enviroment
+                # Prepare DB environment
                 pathlib.Path(db_path).mkdir(parents=True, exist_ok=True)
                 config_path = get_db_config_file_path(db_name, size)
-                launch_db(db_name, config_path)
 
                 if drop_caches:
                     for workload_name in workload_names:

@@ -8,8 +8,26 @@
 namespace ucsb {
 
 template <typename at>
-inline void add_atomic(at& value, at delta) noexcept {
+inline void atomic_add(at& value, at delta) noexcept {
     __atomic_add_fetch(&value, delta, __ATOMIC_RELAXED);
+}
+
+template <typename at>
+inline at atomic_load(at& value) noexcept {
+    return __atomic_load_n(&value, __ATOMIC_RELAXED);
+}
+
+template <typename at>
+inline void atomic_store(at& value, at desired) noexcept {
+    __atomic_store_n(&value, desired, __ATOMIC_RELAXED);
+}
+
+template <size_t multiple_ak>
+constexpr size_t roundup_to_multiple(size_t number) noexcept {
+    static_assert((multiple_ak != 0) && !(multiple_ak & (multiple_ak - 1)));
+    constexpr size_t one_less = multiple_ak - 1;
+    constexpr size_t negative_mask = -multiple_ak;
+    return (number + one_less) & negative_mask;
 }
 
 inline bool start_with(const char* str, const char* prefix) {

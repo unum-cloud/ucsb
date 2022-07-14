@@ -57,12 +57,12 @@ struct rocksdb_transaction_t : public ucsb::transaction_t {
     }
     inline ~rocksdb_transaction_t();
 
-    operation_result_t insert(key_t key, value_spanc_t value) override;
+    operation_result_t upsert(key_t key, value_spanc_t value) override;
     operation_result_t update(key_t key, value_spanc_t value) override;
     operation_result_t remove(key_t key) override;
 
     operation_result_t read(key_t key, value_span_t value) const override;
-    operation_result_t batch_insert(keys_spanc_t keys, values_spanc_t values, value_lengths_spanc_t sizes) override;
+    operation_result_t batch_upsert(keys_spanc_t keys, values_spanc_t values, value_lengths_spanc_t sizes) override;
     operation_result_t batch_read(keys_spanc_t keys, values_span_t values) const override;
 
     operation_result_t bulk_load(keys_spanc_t keys, values_spanc_t values, value_lengths_spanc_t sizes) override;
@@ -87,7 +87,7 @@ inline rocksdb_transaction_t::~rocksdb_transaction_t() {
     assert(status.ok());
 }
 
-operation_result_t rocksdb_transaction_t::insert(key_t key, value_spanc_t value) {
+operation_result_t rocksdb_transaction_t::upsert(key_t key, value_spanc_t value) {
     rocksdb::Status status = transaction_->Put(to_slice(key), to_slice(value));
     if (!status.ok()) {
         assert(status.IsTryAgain());
@@ -145,7 +145,7 @@ operation_result_t rocksdb_transaction_t::read(key_t key, value_span_t value) co
     return {1, operation_status_t::ok_k};
 }
 
-operation_result_t rocksdb_transaction_t::batch_insert(keys_spanc_t keys,
+operation_result_t rocksdb_transaction_t::batch_upsert(keys_spanc_t keys,
                                                        values_spanc_t values,
                                                        value_lengths_spanc_t sizes) {
 
@@ -201,7 +201,7 @@ operation_result_t rocksdb_transaction_t::batch_read(keys_spanc_t keys, values_s
 operation_result_t rocksdb_transaction_t::bulk_load(keys_spanc_t keys,
                                                     values_spanc_t values,
                                                     value_lengths_spanc_t sizes) {
-    return batch_insert(keys, values, sizes);
+    return batch_upsert(keys, values, sizes);
 }
 
 operation_result_t rocksdb_transaction_t::range_select(key_t key, size_t length, values_span_t values) const {

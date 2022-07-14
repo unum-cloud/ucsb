@@ -70,12 +70,12 @@ struct rocksdb_t : public ucsb::db_t {
     bool close() override;
     void destroy() override;
 
-    operation_result_t insert(key_t key, value_spanc_t value) override;
+    operation_result_t upsert(key_t key, value_spanc_t value) override;
     operation_result_t update(key_t key, value_spanc_t value) override;
     operation_result_t remove(key_t key) override;
 
     operation_result_t read(key_t key, value_span_t value) const override;
-    operation_result_t batch_insert(keys_spanc_t keys, values_spanc_t values, value_lengths_spanc_t sizes) override;
+    operation_result_t batch_upsert(keys_spanc_t keys, values_spanc_t values, value_lengths_spanc_t sizes) override;
     operation_result_t batch_read(keys_spanc_t keys, values_span_t values) const override;
 
     operation_result_t bulk_load(keys_spanc_t keys, values_spanc_t values, value_lengths_spanc_t sizes) override;
@@ -92,7 +92,7 @@ struct rocksdb_t : public ucsb::db_t {
     fs::path config_path_;
     fs::path dir_path_;
 
-    bool load_aditional_options();
+    bool load_additional_options();
 
     struct key_comparator_t final : public rocksdb::Comparator {
         int Compare(rocksdb::Slice const& left, rocksdb::Slice const& right) const override {
@@ -139,8 +139,15 @@ bool rocksdb_t::open() {
         rocksdb::LoadOptionsFromFile(config_path_.string(), rocksdb::Env::Default(), &options_, &cf_descs_);
     if (!status.ok() || cf_descs_.empty())
         return false;
-    if (!load_aditional_options())
+    if (!load_additional_options())
         return false;
+
+    for (auto const& db_paths : options_.db_paths) {
+        if (fs::exists(db_paths.path))
+            continue;
+        if (!fs::create_directories(db_paths.path))
+            return false;
+    }
 
     rocksdb::BlockBasedTableOptions table_options;
     table_options.block_cache = rocksdb::NewLRUCache(options_.target_file_size_base * 10);
@@ -185,12 +192,12 @@ bool rocksdb_t::close() {
 }
 
 void rocksdb_t::destroy() {
-    bool ok = close();
+    [[maybe_unused]] bool ok = close();
     assert(ok);
     rocksdb::DestroyDB(dir_path_.string(), options_, cf_descs_);
 }
 
-operation_result_t rocksdb_t::insert(key_t key, value_spanc_t value) {
+operation_result_t rocksdb_t::upsert(key_t key, value_spanc_t value) {
     rocksdb::Status status = db_->Put(write_options_, to_slice(key), to_slice(value));
     return {1, status.ok() ? operation_status_t::ok_k : operation_status_t::error_k};
 }
@@ -228,7 +235,7 @@ operation_result_t rocksdb_t::read(key_t key, value_span_t value) const {
     return {1, operation_status_t::ok_k};
 }
 
-operation_result_t rocksdb_t::batch_insert(keys_spanc_t keys, values_spanc_t values, value_lengths_spanc_t sizes) {
+operation_result_t rocksdb_t::batch_upsert(keys_spanc_t keys, values_spanc_t values, value_lengths_spanc_t sizes) {
 
     size_t offset = 0;
     rocksdb::WriteBatch batch;
@@ -278,8 +285,11 @@ operation_result_t rocksdb_t::bulk_load(keys_spanc_t keys, values_spanc_t values
     size_t data_offset = 0;
     std::vector<std::string> files;
 
+    size_t this_thread_id = std::hash<std::thread::id> {}(std::this_thread::get_id());
+    std::string this_thread_id_str = std::to_string(this_thread_id);
+
     while (true) {
-        std::string sst_file_path = fmt::format("/tmp/rocksdb_tmp_{}.sst", files.size());
+        std::string sst_file_path = fmt::format("/tmp/rocksdb_tmp_{}_{}.sst", this_thread_id_str, files.size());
         files.push_back(sst_file_path);
 
         rocksdb::SstFileWriter sst_file_writer(rocksdb::EnvOptions(), options_, options_.comparator);
@@ -289,7 +299,7 @@ operation_result_t rocksdb_t::bulk_load(keys_spanc_t keys, values_spanc_t values
 
         for (; idx != keys.size(); ++idx) {
             auto key = keys[idx];
-            status = sst_file_writer.Add(to_slice(key), to_slice(values.subspan(data_offset, sizes[idx])));
+            status = sst_file_writer.Put(to_slice(key), to_slice(values.subspan(data_offset, sizes[idx])));
             if (!status.ok())
                 break;
             data_offset += sizes[idx];
@@ -366,7 +376,7 @@ std::unique_ptr<transaction_t> rocksdb_t::create_transaction() {
     return std::make_unique<rocksdb_transaction_t>(std::move(raw), cf_handles_);
 }
 
-bool rocksdb_t::load_aditional_options() {
+bool rocksdb_t::load_additional_options() {
     if (!fs::exists(config_path_))
         return false;
 
@@ -376,7 +386,7 @@ bool rocksdb_t::load_aditional_options() {
     nlohmann::json j_config;
     i_config >> j_config;
 
-    std::vector<std::string> db_paths = j_config["db_paths"].get<std::vector<std::string>>();
+    std::vector<std::string> db_paths = j_config["paths"].get<std::vector<std::string>>();
     for (auto const& db_path : db_paths) {
         if (!db_path.empty()) {
             size_t files_size = 0;

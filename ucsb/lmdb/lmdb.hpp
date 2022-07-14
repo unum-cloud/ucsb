@@ -41,12 +41,12 @@ struct lmdb_t : public ucsb::db_t {
     bool close() override;
     void destroy() override;
 
-    operation_result_t insert(key_t key, value_spanc_t value) override;
+    operation_result_t upsert(key_t key, value_spanc_t value) override;
     operation_result_t update(key_t key, value_spanc_t value) override;
     operation_result_t remove(key_t key) override;
 
     operation_result_t read(key_t key, value_span_t value) const override;
-    operation_result_t batch_insert(keys_spanc_t keys, values_spanc_t values, value_lengths_spanc_t sizes) override;
+    operation_result_t batch_upsert(keys_spanc_t keys, values_spanc_t values, value_lengths_spanc_t sizes) override;
     operation_result_t batch_read(keys_spanc_t keys, values_span_t values) const override;
 
     operation_result_t bulk_load(keys_spanc_t keys, values_spanc_t values, value_lengths_spanc_t sizes) override;
@@ -169,13 +169,13 @@ void lmdb_t::destroy() {
     res = mdb_txn_commit(txn);
     assert(res == 0);
 
-    bool ok = close();
+    [[maybe_unused]] bool ok = close();
     assert(ok);
 
     ucsb::clear_directory(dir_path_);
 }
 
-operation_result_t lmdb_t::insert(key_t key, value_spanc_t value) {
+operation_result_t lmdb_t::upsert(key_t key, value_spanc_t value) {
 
     MDB_txn* txn = nullptr;
     MDB_val key_slice, val_slice;
@@ -274,7 +274,7 @@ operation_result_t lmdb_t::read(key_t key, value_span_t value) const {
     return {1, operation_status_t::ok_k};
 }
 
-operation_result_t lmdb_t::batch_insert(keys_spanc_t keys, values_spanc_t values, value_lengths_spanc_t sizes) {
+operation_result_t lmdb_t::batch_upsert(keys_spanc_t keys, values_spanc_t values, value_lengths_spanc_t sizes) {
 
     MDB_txn* txn = nullptr;
 
@@ -286,7 +286,8 @@ operation_result_t lmdb_t::batch_insert(keys_spanc_t keys, values_spanc_t values
     size_t offset = 0;
     for (size_t idx = 0; idx < keys.size(); ++idx) {
         MDB_val key_slice, val_slice;
-        key_slice.mv_data = &keys[idx];
+        auto key = keys[idx];
+        key_slice.mv_data = &key;
         key_slice.mv_size = sizeof(key_t);
         val_slice.mv_data = const_cast<void*>(reinterpret_cast<void const*>(values.data() + offset));
         val_slice.mv_size = sizes[idx];
@@ -332,8 +333,8 @@ operation_result_t lmdb_t::batch_read(keys_spanc_t keys, values_span_t values) c
 }
 
 operation_result_t lmdb_t::bulk_load(keys_spanc_t keys, values_spanc_t values, value_lengths_spanc_t sizes) {
-    // Currently this DB doesn't have bulk insert so instead we do batch insert
-    return batch_insert(keys, values, sizes);
+    // Currently this DB doesn't have bulk upsert so instead we do batch upsert
+    return batch_upsert(keys, values, sizes);
 }
 
 operation_result_t lmdb_t::range_select(key_t key, size_t length, values_span_t values) const {
@@ -430,11 +431,11 @@ bool lmdb_t::load_config(config_t& config) {
     nlohmann::json j_config;
     i_config >> j_config;
 
-    config.map_size = j_config.value("map_size", size_t(0));
-    config.no_sync = j_config.value("no_sync", true);
-    config.no_meta_sync = j_config.value("no_meta_sync", false);
-    config.no_read_a_head = j_config.value("no_read_a_head", false);
-    config.write_map = j_config.value("write_map", false);
+    config.map_size = j_config.value<size_t>("map_size", size_t(0));
+    config.no_sync = j_config.value<bool>("no_sync", true);
+    config.no_meta_sync = j_config.value<bool>("no_meta_sync", false);
+    config.no_read_a_head = j_config.value<bool>("no_read_a_head", false);
+    config.write_map = j_config.value<bool>("write_map", false);
 
     return true;
 }

@@ -56,12 +56,12 @@ struct leveldb_t : public ucsb::db_t {
     bool close() override;
     void destroy() override;
 
-    operation_result_t insert(key_t key, value_spanc_t value) override;
+    operation_result_t upsert(key_t key, value_spanc_t value) override;
     operation_result_t update(key_t key, value_spanc_t value) override;
     operation_result_t remove(key_t key) override;
 
     operation_result_t read(key_t key, value_span_t value) const override;
-    operation_result_t batch_insert(keys_spanc_t keys, values_spanc_t values, value_lengths_spanc_t sizes) override;
+    operation_result_t batch_upsert(keys_spanc_t keys, values_spanc_t values, value_lengths_spanc_t sizes) override;
     operation_result_t batch_read(keys_spanc_t keys, values_span_t values) const override;
 
     operation_result_t bulk_load(keys_spanc_t keys, values_spanc_t values, value_lengths_spanc_t sizes) override;
@@ -155,12 +155,12 @@ bool leveldb_t::close() {
 }
 
 void leveldb_t::destroy() {
-    bool ok = close();
+    [[maybe_unused]] bool ok = close();
     assert(ok);
     leveldb::DestroyDB(dir_path_.string(), options_);
 }
 
-operation_result_t leveldb_t::insert(key_t key, value_spanc_t value) {
+operation_result_t leveldb_t::upsert(key_t key, value_spanc_t value) {
     leveldb::Status status = db_->Put(write_options_, to_slice(key), to_slice(value));
     return {1, status.ok() ? operation_status_t::ok_k : operation_status_t::error_k};
 }
@@ -198,7 +198,7 @@ operation_result_t leveldb_t::read(key_t key, value_span_t value) const {
     return {1, operation_status_t::ok_k};
 }
 
-operation_result_t leveldb_t::batch_insert(keys_spanc_t keys, values_spanc_t values, value_lengths_spanc_t sizes) {
+operation_result_t leveldb_t::batch_upsert(keys_spanc_t keys, values_spanc_t values, value_lengths_spanc_t sizes) {
 
     size_t offset = 0;
     leveldb::WriteBatch batch;
@@ -236,7 +236,7 @@ operation_result_t leveldb_t::bulk_load(keys_spanc_t keys, values_spanc_t values
     // The most efficient alternative is to use `WriteBatch`, which comes with a very
     // scarce set of options.
     // https://github.com/google/leveldb/blob/main/include/leveldb/options.h
-    return batch_insert(keys, values, sizes);
+    return batch_upsert(keys, values, sizes);
 }
 
 operation_result_t leveldb_t::range_select(key_t key, size_t length, values_span_t values) const {
@@ -257,7 +257,7 @@ operation_result_t leveldb_t::scan(key_t key, size_t length, value_span_t single
     size_t i = 0;
     leveldb::ReadOptions scan_options = read_options_;
     scan_options.fill_cache = false;
-    std::unique_ptr<leveldb::Iterator> it(db_->NewIterator(read_options_));
+    std::unique_ptr<leveldb::Iterator> it(db_->NewIterator(scan_options));
     it->Seek(to_slice(key));
     for (; it->Valid() && i != length; i++, it->Next())
         memcpy(single_value.data(), it->value().data(), it->value().size());
@@ -284,12 +284,12 @@ bool leveldb_t::load_config(config_t& config) {
     nlohmann::json j_config;
     i_config >> j_config;
 
-    config.write_buffer_size = j_config.value("write_buffer_size", 67108864);
-    config.max_file_size = j_config.value("max_file_size", 67108864);
-    config.max_open_files = j_config.value("max_open_files", 1000);
-    config.compression = j_config.value("compression", "none");
-    config.cache_size = j_config.value("cache_size", 134217728);
-    config.filter_bits = j_config.value("filter_bits", 10);
+    config.write_buffer_size = j_config.value<size_t>("write_buffer_size", size_t(67108864));
+    config.max_file_size = j_config.value<size_t>("max_file_size", size_t(67108864));
+    config.max_open_files = j_config.value<size_t>("max_open_files", size_t(1000));
+    config.compression = j_config.value<std::string>("compression", "none");
+    config.cache_size = j_config.value<size_t>("cache_size", size_t(134217728));
+    config.filter_bits = j_config.value<size_t>("filter_bits", size_t(10));
 
     return true;
 }
