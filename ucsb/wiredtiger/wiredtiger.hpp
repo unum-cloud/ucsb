@@ -84,20 +84,22 @@ struct wiredtiger_t : public ucsb::db_t {
     session_uptr_t bulk_load_session_;
     WT_CURSOR* bulk_load_cursor_;
     std::string table_name_;
+
+    static inline int compare_keys( //
+        WT_COLLATOR*,
+        WT_SESSION*,
+        WT_ITEM const* left,
+        WT_ITEM const* right,
+        int* result) noexcept {
+
+        key_t left_key = *reinterpret_cast<key_t const*>(left->data);
+        key_t right_key = *reinterpret_cast<key_t const*>(right->data);
+        *result = left_key < right_key ? -1 : left_key > right_key;
+        return 0;
+    }
+
+    static WT_COLLATOR key_comparator_k = {compare_keys, nullptr, nullptr};
 };
-
-inline int compare_keys(
-    WT_COLLATOR* collator, WT_SESSION* session, WT_ITEM const* left, WT_ITEM const* right, int* res) noexcept {
-    (void)collator;
-    (void)session;
-
-    key_t left_key = *reinterpret_cast<key_t const*>(left->data);
-    key_t right_key = *reinterpret_cast<key_t const*>(right->data);
-    *res = left_key < right_key ? -1 : left_key > right_key;
-    return 0;
-}
-
-WT_COLLATOR key_comparator = {compare_keys, nullptr, nullptr};
 
 void wiredtiger_t::set_config(fs::path const& config_path, fs::path const& dir_path) {
     config_path_ = config_path;
