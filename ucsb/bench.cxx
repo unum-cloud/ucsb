@@ -548,13 +548,13 @@ int main(int argc, char** argv) {
             fmt::format("{}/cores_{}/{}/", settings.results_path.string(), settings.threads_count, settings.db_name));
         std::string results_file_path =
             fmt::format("{}{}.json", results_dir_path, settings.workloads_path.stem().c_str());
-        std::string partial_results_file_path =
-            fmt::format("{}{}_partial.json", results_dir_path, settings.workloads_path.stem().c_str());
-        bool partial_benchmark = !settings.workload_filter.empty();
-        if (partial_benchmark)
-            settings.results_path = partial_results_file_path;
-        else
+        std::string pending_results_file_path =
+            fmt::format("{}{}_pending.json", results_dir_path, settings.workloads_path.stem().c_str());
+        bool is_full_benchmark = settings.workload_filter.empty();
+        if (is_full_benchmark)
             settings.results_path = results_file_path;
+        else
+            settings.results_path = pending_results_file_path;
 
         // Prepare workloads
         workloads_t workloads;
@@ -607,9 +607,9 @@ int main(int argc, char** argv) {
 
         run_benchmarks(argc, argv, settings);
 
-        if (partial_benchmark) {
-            ucsb::marge_results(partial_results_file_path, results_file_path);
-            ucsb::fs::remove(partial_results_file_path);
+        if (!is_full_benchmark) {
+            ucsb::marge_results(pending_results_file_path, results_file_path, settings.db_name);
+            ucsb::fs::remove(pending_results_file_path);
         }
     }
     catch (ucsb::exception_t const& ex) {

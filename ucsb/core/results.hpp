@@ -20,7 +20,9 @@ std::string parse_workload_name(std::string const& benchmark_name) {
     return name;
 }
 
-void marge_results(ucsb::fs::path const& source_file_path, ucsb::fs::path const& destination_file_path) {
+void marge_results(ucsb::fs::path const& source_file_path,
+                   ucsb::fs::path const& destination_file_path,
+                   std::string const& db_name) {
 
     if (!ucsb::fs::exists(source_file_path))
         return;
@@ -40,12 +42,23 @@ void marge_results(ucsb::fs::path const& source_file_path, ucsb::fs::path const&
         auto j_destination_benchmarks = j_destination["benchmarks"];
         std::vector<ordered_json> results;
         // Take olds
-        for (auto it = j_destination_benchmarks.begin(); it != j_destination_benchmarks.end(); ++it)
-            results.push_back(*it);
+        ordered_json header;
+        for (auto it = j_destination_benchmarks.begin(); it != j_destination_benchmarks.end(); ++it) {
+            auto dest_name = (*it)["name"].get<std::string>();
+            if (dest_name.rfind(db_name, 0) == 0)
+                header = *it;
+            else
+                results.push_back(*it);
+        }
         // Update with new
         for (auto it = j_source_benchmarks.begin(); it != j_source_benchmarks.end(); ++it) {
             auto src_name = (*it)["name"].get<std::string>();
             src_name = parse_workload_name(src_name);
+            if (src_name.rfind(db_name, 0) == 0) {
+                header = *it;
+                continue;
+            }
+
             size_t idx = 0;
             for (; idx < results.size(); ++idx) {
                 auto dest_name = results[idx]["name"].get<std::string>();
@@ -58,6 +71,8 @@ void marge_results(ucsb::fs::path const& source_file_path, ucsb::fs::path const&
             if (idx == results.size())
                 results.push_back(*it);
         }
+        if (!header.is_null())
+            results.insert(results.begin(), header);
         j_destination["benchmarks"] = results;
     }
     else
