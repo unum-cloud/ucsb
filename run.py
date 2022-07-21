@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 
 import os
 import sys
@@ -8,8 +9,7 @@ import pathlib
 
 drop_caches = False
 transactional = False
-# cleanup_previous = False
-cleanup_previous = True
+cleanup_previous = False
 run_docker_image = False
 
 threads = [
@@ -27,7 +27,6 @@ db_names = [
     'leveldb',
     'wiredtiger',
     'lmdb',
-    'redis'
 ]
 
 sizes = [
@@ -49,11 +48,6 @@ workload_names = [
     'ReadUpsert_95_5',
     'BatchUpsert',
     'Remove',
-  
-    # Aditional workloads
-    # BulkImport: Imports whole DB equal to the workload size
-    # BatchInsert: Do batch inserts equal to 10% of the workload size
-    # 'BulkImport',
 ]
 
 
@@ -64,11 +58,11 @@ def get_db_config_file_path(db_name: str, size: int) -> str:
     return path
 
 
-def get_worklods_file_path(size: int) -> str:
+def get_workloads_file_path(size: int) -> str:
     return f'./bench/workloads/{size}.json'
 
 
-def get_db_path(db_name: str, size: int) -> str:
+def get_db_main_dir_path(db_name: str, size: int) -> str:
     return f'./tmp/{db_name}/{size}/'
 
 
@@ -86,23 +80,24 @@ def get_results_dir_path() -> str:
 
 
 def drop_system_caches():
-    with open('/proc/sys/vm/drop_caches', 'w') as stream:
-        stream.write('3\n')
-
-def launch_db(db_name: str, config_path: os.PathLike) -> None:
-    if db_name == "mongodb":
-        subprocess.Popen(
-            ["mongo", "--eval", "db.getSiblingDB('admin').shutdownServer()"], stdout=subprocess.DEVNULL)
-        time.sleep(2)
-        subprocess.Popen(["sudo", "mongod", "--config",
-                            config_path], stdout=subprocess.DEVNULL)
-        print(" *** Mongod is running ***")
+    print('Dropping caches...')
+    try:
+        with open('/proc/sys/vm/drop_caches', 'w') as stream:
+            stream.write('3\n')
+        time.sleep(8)
+    except KeyboardInterrupt:
+        print('\33[2K\r', end='')
+        print('Terminated')
+        exit(1)
+    except:
+        print("Failed to drop system caches")
+        exit(1)
 
 
 def run(db_name: str, size: int, threads_count: int, workload_names: list) -> None:
     config_path = get_db_config_file_path(db_name, size)
-    workloads_path = get_worklods_file_path(size)
-    db_path = get_db_path(db_name, size)
+    workloads_path = get_workloads_file_path(size)
+    db_path = get_db_main_dir_path(db_name, size)
     results_path = get_results_dir_path()
 
     transactional_flag = '-t' if transactional else ''
@@ -112,21 +107,33 @@ def run(db_name: str, size: int, threads_count: int, workload_names: list) -> No
         runner = f'docker run -v {os.getcwd()}/bench:/ucsb/bench -v {os.getcwd()}/tmp:/ucsb/tmp -it ucsb-image-dev'
     else:
         runner = './build_release/bin/ucsb_bench'
-
-    cmd = f'{runner} -db {db_name} {transactional_flag} -c {config_path} -w {workloads_path} -wd {db_path} -r {results_path} -threads {threads_count} -filter {filter}'
-    child = pexpect.spawn(cmd)
-    child.interact()
+    process = pexpect.spawn(f'{runner} \
+                            -db {db_name} \
+                            {transactional_flag} \
+                            -c {config_path} \
+                            -w {workloads_path} \
+                            -wd {db_path} \
+                            -r {results_path} \
+                            -threads {threads_count} \
+                            -filter {filter}'
+                            )
+    process.interact()
+    process.close()
+    if process.signalstatus:
+        print('\33[2K\r', end='')
+        print('Benchmark terminated')
+        exit(process.signalstatus)
 
 
 def main() -> None:
-    # if os.geteuid() != 0:
-    #     sys.exit('Run as sudo!')
+    if os.geteuid() != 0:
+        sys.exit('Run as sudo!')
 
     if cleanup_previous:
         print('Cleanup...')
         for size in sizes:
             for db_name in db_names:
-                db_path = get_db_path(db_name, size)
+                db_path = get_db_main_dir_path(db_name, size)
                 if os.path.exists(db_path):
                     shutil.rmtree(db_path)
 
@@ -135,23 +142,16 @@ def main() -> None:
     for threads_count in threads:
         for size in sizes:
             for db_name in db_names:
-                db_path = get_db_path(db_name, size)
+                db_path = get_db_main_dir_path(db_name, size)
                 # Cleanup old DB
                 if len(threads) > 1 and cleanup_previous:
                     if os.path.exists(db_path):
                         shutil.rmtree(db_path)
 
-                # Prepare DB enviroment
-                pathlib.Path(db_path).mkdir(parents=True, exist_ok=True)
-                config_path = get_db_config_file_path(db_name, size)
-                launch_db(db_name, config_path)
-
                 if drop_caches:
                     for workload_name in workload_names:
                         if not run_docker_image:
-                            print('Dropping caches...')
-                            # drop_system_caches()
-                            time.sleep(8)
+                            drop_system_caches()
                         run(db_name, size, threads_count, [workload_name])
                 else:
                     run(db_name, size, threads_count, workload_names)

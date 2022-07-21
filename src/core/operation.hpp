@@ -41,7 +41,8 @@ struct operation_result_t {
     operation_status_t status = operation_status_t::ok_k;
 };
 
-struct operation_chooser_t {
+class operation_chooser_t {
+  public:
     inline operation_chooser_t() : generator_(0.0, 1.0), sum_(0) {}
 
     inline void add(operation_kind_t op, float weight);

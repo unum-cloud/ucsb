@@ -18,10 +18,11 @@ namespace ucsb {
  * For order consistency it's also recommended to provide a custom
  * comparator.
  * @section Values.
- * The Value buffer can be bigger than actual value because of memory aligment
+ * The Value buffer can be bigger than actual value because of memory alignment
  * Note: This is done for read workloads only
  */
-struct data_accessor_t {
+class data_accessor_t {
+  public:
     virtual ~data_accessor_t() {}
 
     virtual operation_result_t upsert(key_t key, value_spanc_t value) = 0;
@@ -56,8 +57,8 @@ struct data_accessor_t {
     /**
      * @brief Performs many insert at once.
      * In contrast to `batch_upsert` this interface used to initialize DB,
-     * asume that after every `batch_upsert` DB flushes, but in thiscase
-     * DB shuld do many `bulk_load`s and periodically flushs
+     * assume that after every `batch_upsert` DB flushes, but in this case
+     * DB should do many `bulk_load`s and periodically flushes
      *
      * @param keys Keys are in strict ascending order.
      * @param values Values are written in continuous form.

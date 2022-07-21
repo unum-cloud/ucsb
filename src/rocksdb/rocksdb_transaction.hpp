@@ -48,14 +48,14 @@ thread_local std::vector<rocksdb::Status> transaction_statuses;
  * Wraps all of our operations into transactions or just
  * snapshots if read-only workloads run.
  */
-struct rocksdb_transaction_t : public ucsb::transaction_t {
+class rocksdb_transaction_t : public ucsb::transaction_t {
   public:
     inline rocksdb_transaction_t(std::unique_ptr<rocksdb::Transaction> transaction,
                                  std::vector<rocksdb::ColumnFamilyHandle*> const& cf_handles)
         : transaction_(std::move(transaction)), cf_handles_(cf_handles) {
         read_options_.verify_checksums = false;
     }
-    inline ~rocksdb_transaction_t();
+    ~rocksdb_transaction_t();
 
     operation_result_t upsert(key_t key, value_spanc_t value) override;
     operation_result_t update(key_t key, value_spanc_t value) override;
@@ -77,7 +77,7 @@ struct rocksdb_transaction_t : public ucsb::transaction_t {
     rocksdb::ReadOptions read_options_;
 };
 
-inline rocksdb_transaction_t::~rocksdb_transaction_t() {
+rocksdb_transaction_t::~rocksdb_transaction_t() {
     transaction_batch_keys.clear();
     transaction_key_slices.clear();
     transaction_value_slices.clear();
@@ -105,7 +105,7 @@ operation_result_t rocksdb_transaction_t::update(key_t key, value_spanc_t value)
     rocksdb::PinnableSlice data;
     rocksdb::Status status = transaction_->Get(read_options_, to_slice(key_to_read), &data);
     if (status.IsNotFound())
-        return {1, operation_status_t::not_found_k};
+        return {0, operation_status_t::not_found_k};
     else if (!status.ok())
         return {0, operation_status_t::error_k};
 
@@ -137,7 +137,7 @@ operation_result_t rocksdb_transaction_t::read(key_t key, value_span_t value) co
     rocksdb::PinnableSlice data;
     rocksdb::Status status = transaction_->Get(read_options_, to_slice(key), &data);
     if (status.IsNotFound())
-        return {1, operation_status_t::not_found_k};
+        return {0, operation_status_t::not_found_k};
     else if (!status.ok())
         return {0, operation_status_t::error_k};
 

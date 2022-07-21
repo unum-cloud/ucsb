@@ -7,19 +7,20 @@
 
 namespace ucsb {
 
-struct zipfian_generator_t : public generator_gt<size_t> {
+class zipfian_generator_t : public generator_gt<size_t> {
+  public:
     static constexpr float zipfian_const_k = 0.99;
     static constexpr size_t items_max_count = (UINT64_MAX >> 24);
 
-    inline zipfian_generator_t(size_t items_count) : zipfian_generator_t(0, items_count - 1) {}
-    inline zipfian_generator_t(size_t min, size_t max, float zipfian_const = zipfian_const_k)
+    zipfian_generator_t(size_t items_count) : zipfian_generator_t(0, items_count - 1) {}
+    zipfian_generator_t(size_t min, size_t max, float zipfian_const = zipfian_const_k)
         : zipfian_generator_t(min, max, zipfian_const, zeta(max - min + 1, zipfian_const)) {}
-    inline zipfian_generator_t(size_t min, size_t max, float zipfian_const, float zeta_n);
+    zipfian_generator_t(size_t min, size_t max, float zipfian_const, float zeta_n);
 
     inline size_t generate() override { return generate(items_count_); }
     inline size_t last() override { return last_; }
 
-    inline size_t generate(size_t items_count);
+    size_t generate(size_t items_count);
 
   private:
     inline float eta() { return (1 - std::pow(2.f / items_count_, 1 - theta_)) / (1 - zeta_2_ / zeta_n_); }
@@ -39,7 +40,7 @@ struct zipfian_generator_t : public generator_gt<size_t> {
     bool allow_count_decrease_;
 };
 
-inline zipfian_generator_t::zipfian_generator_t(size_t min, size_t max, float zipfian_const, float zeta_n)
+zipfian_generator_t::zipfian_generator_t(size_t min, size_t max, float zipfian_const, float zeta_n)
     : generator_(0.0, 1.0), items_count_(max - min + 1), base_(min), theta_(zipfian_const),
       allow_count_decrease_(false) {
     assert(items_count_ >= 2 && items_count_ < items_max_count);
@@ -53,7 +54,7 @@ inline zipfian_generator_t::zipfian_generator_t(size_t min, size_t max, float zi
     generate();
 }
 
-inline size_t zipfian_generator_t::generate(size_t num) {
+size_t zipfian_generator_t::generate(size_t num) {
     assert(num >= 2 && num < items_max_count);
     if (num != count_for_zeta_) {
         if (num > count_for_zeta_) {

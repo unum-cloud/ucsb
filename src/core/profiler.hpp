@@ -18,11 +18,11 @@ namespace ucsb {
  *
  * @see psutil: https://pypi.org/project/psutil/
  */
-struct cpu_profiler_t {
-
+class cpu_profiler_t {
+  public:
     inline cpu_profiler_t(size_t request_delay = 100)
         : time_to_die_(true), request_delay_(request_delay), requests_count_(0) {}
-    inline ~cpu_profiler_t() { stop(); }
+    ~cpu_profiler_t() { stop(); }
 
     struct stats_t {
         float min = std::numeric_limits<float>::max();
@@ -109,11 +109,11 @@ struct cpu_profiler_t {
  *
  * @see valgrind: https://valgrind.org/
  */
-struct mem_profiler_t {
-
+class mem_profiler_t {
+  public:
     inline mem_profiler_t(size_t request_delay = 100)
         : time_to_die_(true), request_delay_(request_delay), requests_count_(0), page_size_(sysconf(_SC_PAGE_SIZE)) {}
-    inline ~mem_profiler_t() { stop(); }
+    ~mem_profiler_t() { stop(); }
 
     struct stats_t {
         size_t min = std::numeric_limits<size_t>::max();

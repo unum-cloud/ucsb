@@ -6,7 +6,7 @@
 
 namespace ucsb {
 
-struct skewed_latest_generator_t : public generator_gt<size_t> {
+class skewed_latest_generator_t : public generator_gt<size_t> {
   public:
     skewed_latest_generator_t(counter_generator_t& counter) : basis_(&counter), zipfian_(basis_->last()) { generate(); }
 

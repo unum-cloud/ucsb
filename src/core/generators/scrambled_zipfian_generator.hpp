@@ -5,7 +5,7 @@
 
 namespace ucsb {
 
-struct scrambled_zipfian_generator_t : public generator_gt<size_t> {
+class scrambled_zipfian_generator_t : public generator_gt<size_t> {
   public:
     inline scrambled_zipfian_generator_t(size_t min, size_t max, float zipfian_const)
         : base_(min), num_items_(max - min + 1), generator_(0, 10000000000LL, zipfian_const) {}

@@ -7,7 +7,7 @@ namespace ucsb {
 /**
  * @brief Aligned buffer for direct file I/O
  */
-struct aligned_buffer_t {
+class aligned_buffer_t {
   public:
     constexpr static size_t alignment_k = 4096;
 
@@ -26,7 +26,7 @@ struct aligned_buffer_t {
         other.size_ = 0;
     }
 
-    inline ~aligned_buffer_t() { std::free(buffer_); }
+    ~aligned_buffer_t() { std::free(buffer_); }
 
     inline aligned_buffer_t operator=(aligned_buffer_t const& other) {
         aligned_buffer_t copy(other);

@@ -10,11 +10,15 @@ struct printable_bytes_t {
     size_t bytes = 0;
 };
 
+struct printable_float_t {
+    double value = 0;
+};
+
 } // namespace ucsb
 
 template <>
-struct fmt::formatter<ucsb::printable_bytes_t> {
-
+class fmt::formatter<ucsb::printable_bytes_t> {
+  public:
     size_t suffix_idx = 0;
     unsigned char precision = 2;
 
@@ -78,5 +82,52 @@ struct fmt::formatter<ucsb::printable_bytes_t> {
             std::string format = fmt::format("{{:02.{}f}}{{}}", precision);
             return fmt::format_to(ctx.out(), fmt::runtime(format), float_bytes, suffix_k[suffix_idx]);
         }
+    }
+};
+
+template <>
+class fmt::formatter<ucsb::printable_float_t> {
+  public:
+    size_t suffix_idx = 0;
+
+    template <typename ctx_at>
+    constexpr auto parse(ctx_at& ctx) {
+        auto it = ctx.begin();
+        if (it != ctx.end()) {
+            switch (*it) {
+            case 'k': suffix_idx = 1; break;
+            case 'M': suffix_idx = 2; break;
+            case 'B': suffix_idx = 3; break;
+            case 'T': suffix_idx = 4; break;
+            case 'Q': suffix_idx = 5; break;
+            default: throw format_error("invalid unit");
+            }
+            it++;
+        }
+        if (it != ctx.end() && *it != '}')
+            throw format_error("invalid format");
+
+        return it;
+    }
+
+    template <typename ctx_at>
+    auto format(ucsb::printable_float_t const& v, ctx_at& ctx) {
+
+        char const* suffix_k[] = {"", "k", "M", "B", "T", "Q"};
+
+        double value = v.value;
+        double float_number = value;
+        char const length = sizeof(suffix_k) / sizeof(suffix_k[0]);
+        if (suffix_idx == 0) {
+            for (; (value / 1000) > 1.0 && suffix_idx < length - 1; suffix_idx++, value /= 1000)
+                float_number = value / 1000.0;
+        }
+        else
+            float_number /= std::pow(1000, suffix_idx);
+
+        if (suffix_idx == 0)
+            return fmt::format_to(ctx.out(), "{}", value);
+        else
+            return fmt::format_to(ctx.out(), "{:02.2f}{}", float_number, suffix_k[suffix_idx]);
     }
 };

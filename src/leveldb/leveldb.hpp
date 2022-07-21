@@ -31,6 +31,7 @@ using values_spanc_t = ucsb::values_spanc_t;
 using value_lengths_spanc_t = ucsb::value_lengths_spanc_t;
 using operation_status_t = ucsb::operation_status_t;
 using operation_result_t = ucsb::operation_result_t;
+using db_hints_t = ucsb::db_hints_t;
 using transaction_t = ucsb::transaction_t;
 
 inline leveldb::Slice to_slice(key_t& key) {
@@ -46,12 +47,12 @@ inline leveldb::Slice to_slice(value_spanc_t value) {
  * It's the precursor of RocksDB by Facebook.
  * https://github.com/google/leveldb
  */
-struct leveldb_t : public ucsb::db_t {
+class leveldb_t : public ucsb::db_t {
   public:
     inline leveldb_t() : db_(nullptr) {}
-    inline ~leveldb_t() { close(); }
+    ~leveldb_t() { close(); }
 
-    void set_config(fs::path const& config_path, fs::path const& dir_path) override;
+    void set_config(fs::path const& config_path, fs::path const& dir_path, db_hints_t const& hints) override;
     bool open() override;
     bool close() override;
     void destroy() override;
@@ -86,7 +87,8 @@ struct leveldb_t : public ucsb::db_t {
 
     inline bool load_config(config_t& config);
 
-    struct key_comparator_t final : public leveldb::Comparator {
+    class key_comparator_t final : public leveldb::Comparator {
+      public:
         int Compare(leveldb::Slice const& left, leveldb::Slice const& right) const /*override*/ {
             assert(left.size() == sizeof(key_t));
             assert(right.size() == sizeof(key_t));
@@ -111,7 +113,9 @@ struct leveldb_t : public ucsb::db_t {
     key_comparator_t key_cmp_;
 };
 
-void leveldb_t::set_config(fs::path const& config_path, fs::path const& dir_path) {
+void leveldb_t::set_config(fs::path const& config_path,
+                           fs::path const& dir_path,
+                           [[maybe_unused]] db_hints_t const& hints) {
     config_path_ = config_path;
     dir_path_ = dir_path;
 }
@@ -155,14 +159,14 @@ bool leveldb_t::close() {
 }
 
 void leveldb_t::destroy() {
-    bool ok = close();
+    [[maybe_unused]] bool ok = close();
     assert(ok);
     leveldb::DestroyDB(dir_path_.string(), options_);
 }
 
 operation_result_t leveldb_t::upsert(key_t key, value_spanc_t value) {
     leveldb::Status status = db_->Put(write_options_, to_slice(key), to_slice(value));
-    return {1, status.ok() ? operation_status_t::ok_k : operation_status_t::error_k};
+    return {size_t(status.ok()), status.ok() ? operation_status_t::ok_k : operation_status_t::error_k};
 }
 
 operation_result_t leveldb_t::update(key_t key, value_spanc_t value) {
@@ -170,17 +174,17 @@ operation_result_t leveldb_t::update(key_t key, value_spanc_t value) {
     std::string data;
     leveldb::Status status = db_->Get(read_options_, to_slice(key), &data);
     if (status.IsNotFound())
-        return {1, operation_status_t::not_found_k};
+        return {0, operation_status_t::not_found_k};
     else if (!status.ok())
-        return {1, operation_status_t::error_k};
+        return {0, operation_status_t::error_k};
 
     status = db_->Put(write_options_, to_slice(key), to_slice(value));
-    return {1, status.ok() ? operation_status_t::ok_k : operation_status_t::error_k};
+    return {size_t(status.ok()), status.ok() ? operation_status_t::ok_k : operation_status_t::error_k};
 }
 
 operation_result_t leveldb_t::remove(key_t key) {
     leveldb::Status status = db_->Delete(write_options_, to_slice(key));
-    return {1, status.ok() ? operation_status_t::ok_k : operation_status_t::error_k};
+    return {size_t(status.ok()), status.ok() ? operation_status_t::ok_k : operation_status_t::error_k};
 }
 
 operation_result_t leveldb_t::read(key_t key, value_span_t value) const {
@@ -190,7 +194,7 @@ operation_result_t leveldb_t::read(key_t key, value_span_t value) const {
     std::string data;
     leveldb::Status status = db_->Get(read_options_, to_slice(key), &data);
     if (status.IsNotFound())
-        return {1, operation_status_t::not_found_k};
+        return {0, operation_status_t::not_found_k};
     else if (!status.ok())
         return {0, operation_status_t::error_k};
 
@@ -257,7 +261,7 @@ operation_result_t leveldb_t::scan(key_t key, size_t length, value_span_t single
     size_t i = 0;
     leveldb::ReadOptions scan_options = read_options_;
     scan_options.fill_cache = false;
-    std::unique_ptr<leveldb::Iterator> it(db_->NewIterator(read_options_));
+    std::unique_ptr<leveldb::Iterator> it(db_->NewIterator(scan_options));
     it->Seek(to_slice(key));
     for (; it->Valid() && i != length; i++, it->Next())
         memcpy(single_value.data(), it->value().data(), it->value().size());

@@ -10,7 +10,8 @@ namespace ucsb {
  * @brief Synchronization primitive to isolate workers across
  * threads from operation on uninitialized or closing DB.
  */
-struct threads_fence_t {
+class threads_fence_t {
+  public:
     inline threads_fence_t(size_t threads_count)
         : threads_count_(threads_count), waiting_threads_count_(0), released_threads_count_(0) {}
 
@@ -24,9 +25,9 @@ struct threads_fence_t {
 
         ++released_threads_count_;
         if (released_threads_count_.load() == threads_count_) {
-            size_t tmp_wating = threads_count_;
+            size_t tmp_waiting = threads_count_;
             size_t tmp_released = threads_count_;
-            waiting_threads_count_.compare_exchange_weak(tmp_wating, size_t(0));
+            waiting_threads_count_.compare_exchange_weak(tmp_waiting, size_t(0));
             released_threads_count_.compare_exchange_weak(tmp_released, size_t(0));
         }
     }

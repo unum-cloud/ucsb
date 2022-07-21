@@ -6,7 +6,8 @@
 
 namespace ucsb {
 
-struct acknowledged_counter_generator_t : public counter_generator_t {
+class acknowledged_counter_generator_t : public counter_generator_t {
+  public:
     static const size_t window_size_k = (1 << 16);
     static const size_t window_mask_k = window_size_k - 1;
 

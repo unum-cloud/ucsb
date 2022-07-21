@@ -1,7 +1,9 @@
 #pragma once
+#include <set>
 #include <memory>
 
 #include "src/core/types.hpp"
+#include "src/core/db_hint.hpp"
 #include "src/core/data_accessor.hpp"
 
 namespace ucsb {
@@ -19,7 +21,8 @@ using transaction_t = data_accessor_t;
  * 4. Flush the state via `.close`,
  * 5. Remove all the data, if needed, via `.destroy`.
  */
-struct db_t : public data_accessor_t {
+class db_t : public data_accessor_t {
+  public:
     virtual ~db_t() {}
 
     virtual bool open() = 0;
@@ -35,8 +38,9 @@ struct db_t : public data_accessor_t {
      *
      * @param config_path The path of configuration files.
      * @param dir_path The target directory, where DB should be stored.
+     * @hints hints for the DB to prepare to work better.
      */
-    virtual void set_config(fs::path const& config_path, fs::path const& dir_path) = 0;
+    virtual void set_config(fs::path const& config_path, fs::path const& dir_path, db_hints_t const& hints) = 0;
 
     /**
      * @brief Removes all the information stored in the DB and deletes the files on disk.

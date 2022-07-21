@@ -25,18 +25,19 @@ using values_spanc_t = ucsb::values_spanc_t;
 using value_lengths_spanc_t = ucsb::value_lengths_spanc_t;
 using operation_status_t = ucsb::operation_status_t;
 using operation_result_t = ucsb::operation_result_t;
+using db_hints_t = ucsb::db_hints_t;
 using transaction_t = ucsb::transaction_t;
 
 /**
  * @brief LMDB wrapper for the UCSB benchmark.
  * https://github.com/LMDB/lmdb
  */
-struct lmdb_t : public ucsb::db_t {
+class lmdb_t : public ucsb::db_t {
   public:
     inline lmdb_t() : env_(nullptr), dbi_(0) {}
-    inline ~lmdb_t() { close(); }
+    ~lmdb_t() { close(); }
 
-    void set_config(fs::path const& config_path, fs::path const& dir_path) override;
+    void set_config(fs::path const& config_path, fs::path const& dir_path, db_hints_t const& hints) override;
     bool open() override;
     bool close() override;
     void destroy() override;
@@ -83,7 +84,9 @@ inline static int compare_keys(MDB_val const* left, MDB_val const* right) noexce
     return left_key < right_key ? -1 : left_key > right_key;
 }
 
-void lmdb_t::set_config(fs::path const& config_path, fs::path const& dir_path) {
+void lmdb_t::set_config(fs::path const& config_path,
+                        fs::path const& dir_path,
+                        [[maybe_unused]] db_hints_t const& hints) {
     config_path_ = config_path;
     dir_path_ = dir_path;
 }
@@ -169,7 +172,7 @@ void lmdb_t::destroy() {
     res = mdb_txn_commit(txn);
     assert(res == 0);
 
-    bool ok = close();
+    [[maybe_unused]] bool ok = close();
     assert(ok);
 
     ucsb::clear_directory(dir_path_);
@@ -196,7 +199,7 @@ operation_result_t lmdb_t::upsert(key_t key, value_spanc_t value) {
         return {0, operation_status_t::error_k};
     }
     res = mdb_txn_commit(txn);
-    return {1, res == 0 ? operation_status_t::ok_k : operation_status_t::error_k};
+    return {size_t(res == 0), res == 0 ? operation_status_t::ok_k : operation_status_t::error_k};
 }
 
 operation_result_t lmdb_t::update(key_t key, value_spanc_t value) {
@@ -214,7 +217,7 @@ operation_result_t lmdb_t::update(key_t key, value_spanc_t value) {
     res = mdb_get(txn, dbi_, &key_slice, &val_slice);
     if (res) {
         mdb_txn_abort(txn);
-        return {1, operation_status_t::not_found_k};
+        return {0, operation_status_t::not_found_k};
     }
 
     val_slice.mv_data = const_cast<void*>(reinterpret_cast<void const*>(value.data()));
@@ -227,7 +230,7 @@ operation_result_t lmdb_t::update(key_t key, value_spanc_t value) {
     }
 
     res = mdb_txn_commit(txn);
-    return {1, res == 0 ? operation_status_t::ok_k : operation_status_t::error_k};
+    return {size_t(res == 0), res == 0 ? operation_status_t::ok_k : operation_status_t::error_k};
 }
 
 operation_result_t lmdb_t::remove(key_t key) {
@@ -245,10 +248,10 @@ operation_result_t lmdb_t::remove(key_t key) {
     res = mdb_del(txn, dbi_, &key_slice, nullptr);
     if (res) {
         mdb_txn_abort(txn);
-        return {1, operation_status_t::not_found_k};
+        return {0, operation_status_t::not_found_k};
     }
     res = mdb_txn_commit(txn);
-    return {1, res == 0 ? operation_status_t::ok_k : operation_status_t::error_k};
+    return {size_t(res == 0), res == 0 ? operation_status_t::ok_k : operation_status_t::error_k};
 }
 
 operation_result_t lmdb_t::read(key_t key, value_span_t value) const {
@@ -266,7 +269,7 @@ operation_result_t lmdb_t::read(key_t key, value_span_t value) const {
     res = mdb_get(txn, dbi_, &key_slice, &val_slice);
     if (res) {
         mdb_txn_abort(txn);
-        return {1, operation_status_t::not_found_k};
+        return {0, operation_status_t::not_found_k};
     }
     memcpy(value.data(), val_slice.mv_data, val_slice.mv_size);
     mdb_txn_abort(txn);
@@ -358,7 +361,7 @@ operation_result_t lmdb_t::range_select(key_t key, size_t length, values_span_t 
     res = mdb_cursor_get(cursor, &key_slice, &val_slice, MDB_SET);
     if (res) {
         mdb_txn_abort(txn);
-        return {1, operation_status_t::not_found_k};
+        return {0, operation_status_t::not_found_k};
     }
 
     size_t offset = 0;
@@ -396,7 +399,7 @@ operation_result_t lmdb_t::scan(key_t key, size_t length, value_span_t single_va
     res = mdb_cursor_get(cursor, &key_slice, &val_slice, MDB_SET);
     if (res) {
         mdb_txn_abort(txn);
-        return {1, operation_status_t::not_found_k};
+        return {0, operation_status_t::not_found_k};
     }
 
     size_t scanned_records_count = 0;

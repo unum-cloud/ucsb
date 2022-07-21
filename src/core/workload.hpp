@@ -14,7 +14,7 @@ namespace ucsb {
 
 /**
  * @brief A description of a single benchmark.
- * It's post-processed version will devide the task
+ * It's post-processed version will divide the task
  * by the number of threads.
  */
 struct workload_t {

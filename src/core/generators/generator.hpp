@@ -5,7 +5,8 @@
 namespace ucsb {
 
 template <typename value_at>
-struct generator_gt {
+class generator_gt {
+  public:
     using value_t = value_at;
 
     virtual ~generator_gt() {}

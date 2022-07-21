@@ -3,6 +3,7 @@
 #include <string>
 #include <vector>
 #include <fmt/format.h>
+#include <fmt/chrono.h>
 #include <nlohmann/json.hpp>
 #include <benchmark/benchmark.h>
 
@@ -13,6 +14,7 @@
 #include "src/core/workload.hpp"
 #include "src/core/worker.hpp"
 #include "src/core/db_brand.hpp"
+#include "src/core/db_hint.hpp"
 #include "src/core/distribution.hpp"
 #include "src/core/operation.hpp"
 #include "src/core/exception.hpp"
@@ -25,11 +27,11 @@ namespace bm = benchmark;
 using settings_t = ucsb::settings_t;
 using workload_t = ucsb::workload_t;
 using workloads_t = ucsb::workloads_t;
+using worker_t = ucsb::worker_t;
 using db_t = ucsb::db_t;
 using data_accessor_t = ucsb::data_accessor_t;
 using db_brand_t = ucsb::db_brand_t;
-using timer_ref_t = ucsb::timer_ref_t;
-using worker_t = ucsb::worker_t;
+using db_hints_t = ucsb::db_hints_t;
 using distribution_kind_t = ucsb::distribution_kind_t;
 using operation_kind_t = ucsb::operation_kind_t;
 using operation_status_t = ucsb::operation_status_t;
@@ -40,7 +42,7 @@ using mem_profiler_t = ucsb::mem_profiler_t;
 using printable_bytes_t = ucsb::printable_bytes_t;
 using threads_fence_t = ucsb::threads_fence_t;
 
-inline void usage_message(const char* command) {
+void usage_message(const char* command) {
     fmt::print("Usage: {} [options]\n", command);
     fmt::print("Options:\n");
     fmt::print("-db: Database name\n");
@@ -177,7 +179,7 @@ inline void register_section(std::string const& name) {
     });
 }
 
-inline std::string section_name(settings_t const& settings, workloads_t const& workloads) {
+std::string section_name(settings_t const& settings, workloads_t const& workloads) {
 
     std::vector<std::string> infos;
     if (settings.transactional)
@@ -228,6 +230,51 @@ void run_benchmarks(int argc, char* argv[], settings_t const& settings) {
     benchmark::RunSpecifiedBenchmarks();
 }
 
+void validate_workload(workload_t const& workload, [[maybe_unused]] size_t threads_count) {
+
+    assert(threads_count > 0);
+    assert(!workload.name.empty());
+    assert(workload.db_records_count > 0);
+    assert(workload.db_operations_count > 0);
+
+    float proportion = 0;
+    proportion += workload.upsert_proportion;
+    proportion += workload.update_proportion;
+    proportion += workload.remove_proportion;
+    proportion += workload.read_proportion;
+    proportion += workload.read_modify_write_proportion;
+    proportion += workload.batch_upsert_proportion;
+    proportion += workload.batch_read_proportion;
+    proportion += workload.bulk_load_proportion;
+    proportion += workload.range_select_proportion;
+    proportion += workload.scan_proportion;
+    assert(proportion > 0.0 && proportion <= 1.0);
+
+    assert(workload.value_length > 0);
+
+    assert(workload.key_dist != distribution_kind_t::unknown_k);
+
+    assert(workload.batch_upsert_proportion == 0.0 ||
+           (workload.batch_upsert_proportion > 0.0 && workload.batch_upsert_min_length > 0));
+    assert(workload.batch_upsert_min_length <= workload.batch_upsert_max_length);
+    assert(workload.batch_upsert_max_length <= workload.db_records_count / threads_count);
+
+    assert(workload.batch_read_proportion == 0.0 ||
+           (workload.batch_read_proportion > 0.0 && workload.batch_read_min_length > 0));
+    assert(workload.batch_read_min_length <= workload.batch_read_max_length);
+    assert(workload.batch_read_max_length <= workload.db_records_count / threads_count);
+
+    assert(workload.bulk_load_proportion == 0.0 ||
+           (workload.bulk_load_proportion > 0.0 && workload.bulk_load_min_length > 0));
+    assert(workload.bulk_load_min_length <= workload.bulk_load_max_length);
+    assert(workload.bulk_load_max_length <= workload.db_records_count / threads_count);
+
+    assert(workload.range_select_proportion == 0.0 ||
+           (workload.range_select_proportion > 0.0 && workload.range_select_min_length > 0));
+    assert(workload.range_select_min_length <= workload.range_select_max_length);
+    assert(workload.range_select_max_length <= workload.db_records_count / threads_count);
+}
+
 workloads_t filter_workloads(workloads_t const& workloads, std::string const& filter) {
     if (filter.empty())
         return workloads;
@@ -254,13 +301,12 @@ std::vector<workload_t> split_workload_into_threads(workload_t const& workload, 
     auto leftover_records_count = workload.db_records_count % threads_count;
     auto leftover_operations_count = workload.db_operations_count % threads_count;
 
-    size_t start_key = workload.start_key;
+    auto start_key = workload.start_key;
     for (size_t idx = 0; idx < threads_count; ++idx) {
         workload_t thread_workload = workload;
         thread_workload.records_count = records_count_per_thread + bool(leftover_records_count);
         thread_workload.operations_count = operations_count_per_thread + bool(leftover_operations_count);
         thread_workload.operations_count = std::max(size_t(1), thread_workload.operations_count);
-        auto prev_thread_records_count = idx == 0 ? 0 : workloads[idx - 1].records_count;
         thread_workload.start_key = start_key;
         workloads.push_back(thread_workload);
 
@@ -268,8 +314,7 @@ std::vector<workload_t> split_workload_into_threads(workload_t const& workload, 
         leftover_operations_count -= bool(leftover_operations_count);
 
         if (workload.upsert_proportion == 1.0 || workload.batch_upsert_proportion == 1.0 ||
-            workload.bulk_load_proportion == 1.0)
-        {
+            workload.bulk_load_proportion == 1.0) {
             size_t new_records_count =
                 bool(workload.upsert_proportion) * thread_workload.operations_count +
                 bool(workload.bulk_load_proportion) * thread_workload.operations_count * workload.bulk_load_max_length +
@@ -284,52 +329,16 @@ std::vector<workload_t> split_workload_into_threads(workload_t const& workload, 
     return workloads;
 }
 
-void validate_workload(workload_t const& workload, size_t threads_count) {
-
-    assert(threads_count > 0);
-    assert(!workload.name.empty());
-    assert(workload.db_records_count > 0);
-    assert(workload.db_operations_count > 0);
-
-    float proportion = 0;
-    proportion += workload.upsert_proportion;
-    proportion += workload.update_proportion;
-    proportion += workload.remove_proportion;
-    proportion += workload.read_proportion;
-    proportion += workload.read_modify_write_proportion;
-    proportion += workload.batch_upsert_proportion;
-    proportion += workload.batch_read_proportion;
-    proportion += workload.bulk_load_proportion;
-    proportion += workload.range_select_proportion;
-    proportion += workload.scan_proportion;
-    assert(proportion > 0.0 && proportion <= 1.0);
-
-    assert(workload.value_length > 0);
-
-    assert(workload.key_dist != distribution_kind_t::unknown_k);
-
-    assert(workload.batch_upsert_proportion == 0.0 ||
-           workload.batch_upsert_proportion > 0.0 && workload.batch_upsert_min_length > 0);
-    assert(workload.batch_upsert_min_length <= workload.batch_upsert_max_length);
-    assert(workload.batch_upsert_max_length <= workload.db_records_count / threads_count);
-
-    assert(workload.batch_read_proportion == 0.0 ||
-           workload.batch_read_proportion > 0.0 && workload.batch_read_min_length > 0);
-    assert(workload.batch_read_min_length <= workload.batch_read_max_length);
-    assert(workload.batch_read_max_length <= workload.db_records_count / threads_count);
-
-    assert(workload.bulk_load_proportion == 0.0 ||
-           workload.bulk_load_proportion > 0.0 && workload.bulk_load_min_length > 0);
-    assert(workload.bulk_load_min_length <= workload.bulk_load_max_length);
-    assert(workload.bulk_load_max_length <= workload.db_records_count / threads_count);
-
-    assert(workload.range_select_proportion == 0.0 ||
-           workload.range_select_proportion > 0.0 && workload.range_select_min_length > 0);
-    assert(workload.range_select_min_length <= workload.range_select_max_length);
-    assert(workload.range_select_max_length <= workload.db_records_count / threads_count);
+db_hints_t make_hints(workloads_t const& workloads) {
+    db_hints_t hints {0, 0};
+    if (!workloads.empty()) {
+        hints.records_count = workloads[0].db_records_count;
+        hints.value_length = workloads[0].value_length;
+    }
+    return hints;
 }
 
-inline operation_chooser_t create_operation_chooser(workload_t const& workload) {
+operation_chooser_t create_operation_chooser(workload_t const& workload) {
     operation_chooser_t chooser = std::make_unique<ucsb::operation_chooser_t>();
     chooser->add(operation_kind_t::upsert_k, workload.upsert_proportion);
     chooser->add(operation_kind_t::update_k, workload.update_proportion);
@@ -344,43 +353,114 @@ inline operation_chooser_t create_operation_chooser(workload_t const& workload) 
     return chooser;
 }
 
-void bench(bm::State& state, workload_t const& workload, db_t& db, data_accessor_t& data_accessor) {
+struct progress_t {
+    size_t entries_touched = 0;
+    size_t bytes_processed = 0;
 
-    auto chooser = create_operation_chooser(workload);
-    timer_ref_t timer(state);
-    worker_t worker(workload, data_accessor, timer);
+    size_t done_iterations = 0;
+    size_t failed_iterations = 0;
+    size_t last_printed_iterations = 0;
+    size_t total_iterations = 0;
+    size_t print_distance = 0;
 
-    // Stats
-    static size_t fails_count = 0;
-    static size_t entries_touched = 0;
-    static size_t bytes_processed_count = 0;
-    cpu_profiler_t cpu_stat;
-    mem_profiler_t mem_stat;
-
-    // Progress
-    static size_t done_iterations_count = 0;
-    size_t last_printed_iterations_count = 0;
-    size_t const iterations_total_count = workload.db_operations_count;
-    size_t const printable_iterations_distance = iterations_total_count / 10;
-    std::atomic_bool do_flash = true;
-
-    if (state.thread_index() == 0) {
-        fails_count = 0;
-        entries_touched = 0;
-        bytes_processed_count = 0;
-        done_iterations_count = 0;
-        last_printed_iterations_count = 0;
-        cpu_stat.start();
-        mem_stat.start();
-
-        // Print initial progress
-        fmt::print("{}: {:>6.2f}%\r", workload.name, 0.0);
+    static void print_db_open() {
+        fmt::print("\33[2K\r");
+        fmt::print("Opening DB...\r");
         fflush(stdout);
     }
 
+    static void print_db_close() {
+        fmt::print("\33[2K\r");
+        fmt::print("Closing DB...\r");
+        fflush(stdout);
+    }
+
+    static void print_db_flush() {
+        fmt::print("\33[2K\r");
+        fmt::print("Flushing DB...\r");
+        fflush(stdout);
+    }
+
+    void print_start(std::string const& bench_name) {
+        fmt::print("\33[2K\r");
+        fmt::print("{}: {:.2f}%\r", bench_name, 0.0);
+        fflush(stdout);
+    }
+
+    void print_end() {
+        fmt::print("\33[2K\r");
+        fmt::print("Completed\r");
+        fflush(stdout);
+    }
+
+    bool is_time_to_print() {
+        auto done_its = ucsb::atomic_load(done_iterations);
+        return done_its - ucsb::atomic_load(last_printed_iterations) >= print_distance || done_its == total_iterations;
+    }
+
+    void print(std::string const& bench_name,
+               ucsb::elapsed_time_t operations_elapsed_time,
+               ucsb::elapsed_time_t elapsed_time) {
+
+        ucsb::atomic_store(last_printed_iterations, done_iterations);
+
+        auto done_percent = 100.f * done_iterations / total_iterations;
+        auto fails_percent = failed_iterations * 100.0 / done_iterations;
+        auto ops_per_second = entries_touched / operations_elapsed_time.count();
+        auto remaining = (elapsed_time.count() / done_percent) * (100.f - done_percent);
+
+        fmt::print("\33[2K\r");
+        fmt::print("{}: {:.2f}% [{}/s, fails: {:.2f}%, elapsed: {:%Hh:%Mm:%Ss}, remaining: {:%Hh:%Mm:%Ss}]\r",
+                   bench_name,
+                   done_percent,
+                   ucsb::printable_float_t {ops_per_second},
+                   fails_percent,
+                   std::chrono::seconds(size_t(elapsed_time.count())),
+                   std::chrono::seconds(size_t(remaining)));
+        fflush(stdout);
+    }
+
+    void clear() {
+        failed_iterations = 0;
+        entries_touched = 0;
+        bytes_processed = 0;
+        done_iterations = 0;
+        last_printed_iterations = 0;
+        total_iterations = 0;
+        print_distance = 0;
+    }
+};
+
+void bench(bm::State& state, workload_t const& workload, db_t& db, data_accessor_t& data_accessor) {
+
+    // Bench components
+    auto chooser = create_operation_chooser(workload);
+    ucsb::timer_t timer(state);
+    worker_t worker(workload, data_accessor, timer);
+    std::atomic_bool do_flash = true;
+
+    // Monitoring
+    cpu_profiler_t cpu_prof;    // Only one thread profiles
+    mem_profiler_t mem_prof;    // Only one thread profiles
+    static progress_t progress; // Shared between threads
+
+    // Bench initialization
+    if (state.thread_index() == 0) {
+        cpu_prof.start();
+        mem_prof.start();
+
+        progress.clear();
+        progress.total_iterations = workload.db_operations_count;
+        progress.print_distance = workload.db_operations_count / 20;
+        progress.print_start(workload.name);
+    }
+
+    // Bench
+    timer.start();
     while (state.KeepRunningBatch(workload.operations_count)) {
-        size_t iterations_per_thread = workload.operations_count;
-        while (iterations_per_thread) {
+        size_t thread_iterations = workload.operations_count;
+        while (thread_iterations) {
+            // Do operation
             operation_result_t result;
             auto operation = chooser->choose();
             switch (operation) {
@@ -397,43 +477,45 @@ void bench(bm::State& state, workload_t const& workload, db_t& db, data_accessor
             default: throw ucsb::exception_t("Unknown operation"); break;
             }
 
+            // Update progress
             bool success = result.status == operation_status_t::ok_k;
-            ucsb::add_atomic(entries_touched, result.entries_touched);
-            ucsb::add_atomic(fails_count, size_t(!success) * result.entries_touched);
-            ucsb::add_atomic(bytes_processed_count, size_t(success) * workload.value_length * result.entries_touched);
+            auto bytes_processed = size_t(success) * workload.value_length * result.entries_touched;
+            ucsb::atomic_add(progress.entries_touched, size_t(success) * result.entries_touched);
+            ucsb::atomic_add(progress.failed_iterations, size_t(!success));
+            ucsb::atomic_add(progress.bytes_processed, bytes_processed);
+            ucsb::atomic_add(progress.done_iterations, size_t(1));
 
-            // Print progress
-            ucsb::add_atomic(done_iterations_count, size_t(1));
-            if (done_iterations_count - last_printed_iterations_count > printable_iterations_distance ||
-                done_iterations_count <= state.threads() || done_iterations_count == iterations_total_count) {
+            if (progress.is_time_to_print())
+                progress.print(workload.name, timer.operations_elapsed_time(), timer.elapsed_time());
 
-                last_printed_iterations_count = done_iterations_count;
-                float percent = 100.f * done_iterations_count / iterations_total_count;
-                fmt::print("{}: {:>6.2f}%\r", workload.name, percent);
-                fflush(stdout);
+            // Last thread flushes the DB
+            bool only_once = true;
+            bool is_last_iteration = progress.done_iterations == progress.total_iterations;
+            if (is_last_iteration && do_flash.compare_exchange_weak(only_once, false)) {
+                progress_t::print_db_flush();
+                db.flush();
             }
 
-            // Last thread will flush the DB
-            bool only_once = true;
-            if (done_iterations_count == iterations_total_count && do_flash.compare_exchange_weak(only_once, false))
-                db.flush();
-            --iterations_per_thread;
+            --thread_iterations;
         }
     }
+    timer.stop();
 
+    // Conclusion
     if (state.thread_index() == 0) {
-        cpu_stat.stop();
-        mem_stat.stop();
+        progress.print_end();
+        cpu_prof.stop();
+        mem_prof.stop();
 
-        state.SetBytesProcessed(bytes_processed_count);
-        state.counters["fails,%"] = bm::Counter(entries_touched ? fails_count * 100.0 / entries_touched : 100.0);
-        state.counters["operations/s"] = bm::Counter(entries_touched - fails_count, bm::Counter::kIsRate);
-        state.counters["cpu_max,%"] = bm::Counter(cpu_stat.percent().max);
-        state.counters["cpu_avg,%"] = bm::Counter(cpu_stat.percent().avg);
-        state.counters["mem_max,bytes"] = bm::Counter(mem_stat.rss().max, bm::Counter::kDefaults, bm::Counter::kIs1024);
-        state.counters["mem_avg,bytes"] = bm::Counter(mem_stat.rss().avg, bm::Counter::kDefaults, bm::Counter::kIs1024);
-        state.counters["processed,bytes"] =
-            bm::Counter(bytes_processed_count, bm::Counter::kDefaults, bm::Counter::kIs1024);
+        auto bytes_processed = progress.bytes_processed;
+        state.SetBytesProcessed(bytes_processed);
+        state.counters["fails,%"] = bm::Counter(progress.failed_iterations * 100.0 / progress.done_iterations);
+        state.counters["operations/s"] = bm::Counter(progress.entries_touched, bm::Counter::kIsRate);
+        state.counters["cpu_max,%"] = bm::Counter(cpu_prof.percent().max);
+        state.counters["cpu_avg,%"] = bm::Counter(cpu_prof.percent().avg);
+        state.counters["mem_max,bytes"] = bm::Counter(mem_prof.rss().max, bm::Counter::kDefaults, bm::Counter::kIs1024);
+        state.counters["mem_avg,bytes"] = bm::Counter(mem_prof.rss().avg, bm::Counter::kDefaults, bm::Counter::kIs1024);
+        state.counters["processed,bytes"] = bm::Counter(bytes_processed, bm::Counter::kDefaults, bm::Counter::kIs1024);
         state.counters["disk,bytes"] = bm::Counter(db.size_on_disk(), bm::Counter::kDefaults, bm::Counter::kIs1024);
     }
 }
@@ -441,6 +523,7 @@ void bench(bm::State& state, workload_t const& workload, db_t& db, data_accessor
 void bench(bm::State& state, workload_t const& workload, db_t& db, bool transactional, threads_fence_t& fence) {
 
     if (state.thread_index() == 0) {
+        progress_t::print_db_open();
         if (!db.open())
             throw ucsb::exception_t("Failed to open DB");
     }
@@ -457,6 +540,7 @@ void bench(bm::State& state, workload_t const& workload, db_t& db, bool transact
 
     fence.sync();
     if (state.thread_index() == 0) {
+        progress_t::print_db_close();
         if (!db.close())
             throw ucsb::exception_t("Failed to close DB");
     }
@@ -472,15 +556,15 @@ int main(int argc, char** argv) {
             fmt::format("{}/cores_{}/{}/", settings.results_path.string(), settings.threads_count, settings.db_name));
         std::string results_file_path =
             fmt::format("{}{}.json", results_dir_path, settings.workloads_path.stem().c_str());
-        std::string partial_results_file_path =
-            fmt::format("{}{}_partial.json", results_dir_path, settings.workloads_path.stem().c_str());
-        bool partial_benchmark = !settings.workload_filter.empty();
-        if (partial_benchmark)
-            settings.results_path = partial_results_file_path;
-        else
+        std::string pending_results_file_path =
+            fmt::format("{}{}_pending.json", results_dir_path, settings.workloads_path.stem().c_str());
+        bool is_full_benchmark = settings.workload_filter.empty();
+        if (is_full_benchmark)
             settings.results_path = results_file_path;
+        else
+            settings.results_path = pending_results_file_path;
 
-        // Prepare worklods
+        // Prepare workloads
         workloads_t workloads;
         if (!ucsb::load(settings.workloads_path, workloads)) {
             fmt::print("Failed to load workloads. path: {}\n", settings.workloads_path.c_str());
@@ -492,14 +576,14 @@ int main(int argc, char** argv) {
         }
         workloads = filter_workloads(workloads, settings.workload_filter);
         if (workloads.empty()) {
-            fmt::print("Filter dones't match any workload. filter: {}\n", settings.workload_filter);
+            fmt::print("Filter doesn't match any workload. filter: {}\n", settings.workload_filter);
             return 1;
         }
         std::vector<workloads_t> threads_workloads;
         for (auto const& workload : workloads) {
             validate_workload(workload, settings.threads_count);
-            std::vector<workload_t> splited_workloads = split_workload_into_threads(workload, settings.threads_count);
-            threads_workloads.push_back(splited_workloads);
+            std::vector<workload_t> splitted_workloads = split_workload_into_threads(workload, settings.threads_count);
+            threads_workloads.push_back(splitted_workloads);
         }
 
         ucsb::fs::create_directories(settings.working_dir_path.string());
@@ -515,29 +599,32 @@ int main(int argc, char** argv) {
                 fmt::print("Failed to create DB: {}\n", settings.db_name);
             return 1;
         }
-        db->set_config(settings.db_config_path, settings.working_dir_path.string());
+        db->set_config(settings.db_config_path, settings.working_dir_path.string(), make_hints(workloads));
 
         threads_fence_t fence(settings.threads_count);
 
         // Register benchmarks
         register_section(section_name(settings, workloads));
-        for (auto const& splited_workloads : threads_workloads) {
-            std::string bench_name = splited_workloads.front().name;
+        for (auto const& splitted_workloads : threads_workloads) {
+            std::string bench_name = splitted_workloads.front().name;
             register_benchmark(bench_name, settings.threads_count, [&](bm::State& state) {
-                auto const& workload = splited_workloads[state.thread_index()];
+                auto const& workload = splitted_workloads[state.thread_index()];
                 bench(state, workload, *db, settings.transactional, fence);
             });
         }
 
         run_benchmarks(argc, argv, settings);
 
-        if (partial_benchmark) {
-            ucsb::marge_results(partial_results_file_path, results_file_path);
-            ucsb::fs::remove(partial_results_file_path);
+        if (!is_full_benchmark) {
+            ucsb::marge_results(pending_results_file_path, results_file_path, settings.db_name);
+            ucsb::fs::remove(pending_results_file_path);
         }
     }
     catch (ucsb::exception_t const& ex) {
-        fmt::print("exception: {}\n", ex.what());
+        fmt::print("ucsb exception: {}\n", ex.what());
+    }
+    catch (std::exception const& ex) {
+        fmt::print("std exception: {}\n", ex.what());
     }
     catch (...) {
         fmt::print("Unknown exception was thrown\n");

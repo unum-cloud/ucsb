@@ -6,7 +6,8 @@
 namespace ucsb {
 
 template <typename value_at>
-struct uniform_generator_gt : public generator_gt<value_at> {
+class uniform_generator_gt : public generator_gt<value_at> {
+  public:
     using value_t = value_at;
     static_assert(std::is_integral<value_t>());
 

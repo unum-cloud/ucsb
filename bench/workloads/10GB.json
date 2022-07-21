@@ -11,7 +11,7 @@
     {
         "name": "Read",
         "records_count": 10000000,
-        "operations_count": 10000000,
+        "operations_count": 1000000,
         "read_proportion": 1.0,
         "key_dist": "zipfian",
         "value_length": 1024
@@ -19,7 +19,7 @@
     {
         "name": "BatchRead",
         "records_count": 10000000,
-        "operations_count": 50000,
+        "operations_count": 8000,
         "batch_read_proportion": 1.0,
         "key_dist": "zipfian",
         "value_length": 1024,
@@ -30,12 +30,12 @@
     {
         "name": "RangeSelect",
         "records_count": 10000000,
-        "operations_count": 100000,
+        "operations_count": 4000,
         "range_select_proportion": 1.0,
         "key_dist": "zipfian",
         "value_length": 1024,
-        "range_select_min_length": 100,
-        "range_select_max_length": 100,
+        "range_select_min_length": 256,
+        "range_select_max_length": 256,
         "range_select_length_dist": "uniform"
     },
     {
@@ -49,7 +49,7 @@
     {
         "name": "ReadUpdate_50_50",
         "records_count": 10000000,
-        "operations_count": 10000000,
+        "operations_count": 1000000,
         "read_proportion": 0.5,
         "update_proportion": 0.5,
         "key_dist": "zipfian",
@@ -58,7 +58,7 @@
     {
         "name": "ReadUpsert_95_5",
         "records_count": 10000000,
-        "operations_count": 10000000,
+        "operations_count": 1000000,
         "read_proportion": 0.95,
         "upsert_proportion": 0.05,
         "key_dist": "latest",
@@ -66,8 +66,9 @@
     },
     {
         "name": "BatchUpsert",
-        "records_count": 10000000,
-        "operations_count": 100,
+        "records_count": 10050000,
+        "operations_count": 50,
+        "start_key": 10050000,
         "value_length": 1024,
         "batch_upsert_proportion": 1.0,
         "batch_upsert_min_length": 10000,
@@ -75,8 +76,8 @@
     },
     {
         "name": "Remove",
-        "records_count": 10000000,
-        "operations_count": 1500000,
+        "records_count": 10550000,
+        "operations_count": 550000,
         "value_length": 1024,
         "remove_proportion": 1.0,
         "key_dist": "zipfian"
