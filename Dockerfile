@@ -1,7 +1,5 @@
 FROM ubuntu
 
-MAINTAINER unum@cloud.com
-
 WORKDIR ./
 
 RUN apt-get update
