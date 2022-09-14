@@ -1,26 +1,26 @@
 #include <atomic>
+#include <benchmark/benchmark.h>
+#include <fmt/chrono.h>
+#include <fmt/format.h>
 #include <memory>
+#include <nlohmann/json.hpp>
 #include <string>
 #include <vector>
-#include <fmt/format.h>
-#include <fmt/chrono.h>
-#include <nlohmann/json.hpp>
-#include <benchmark/benchmark.h>
 
-#include "src/core/types.hpp"
-#include "src/core/settings.hpp"
-#include "src/core/profiler.hpp"
-#include "src/core/db.hpp"
-#include "src/core/workload.hpp"
-#include "src/core/worker.hpp"
-#include "src/core/db_brand.hpp"
-#include "src/core/db_hint.hpp"
-#include "src/core/distribution.hpp"
-#include "src/core/operation.hpp"
-#include "src/core/exception.hpp"
-#include "src/core/printable.hpp"
-#include "src/core/results.hpp"
-#include "src/core/threads_fence.hpp"
+#include "core/db.hpp"
+#include "core/db_brand.hpp"
+#include "core/db_hint.hpp"
+#include "core/distribution.hpp"
+#include "core/exception.hpp"
+#include "core/operation.hpp"
+#include "core/printable.hpp"
+#include "core/profiler.hpp"
+#include "core/results.hpp"
+#include "core/settings.hpp"
+#include "core/threads_fence.hpp"
+#include "core/types.hpp"
+#include "core/worker.hpp"
+#include "core/workload.hpp"
 
 namespace bm = benchmark;
 
@@ -410,13 +410,15 @@ struct progress_t {
         auto remaining = (elapsed_time.count() / done_percent) * (100.f - done_percent);
 
         fmt::print("\33[2K\r");
-        fmt::print("{}: {:.2f}% [{}/s, fails: {:.2f}%, elapsed: {:%Hh:%Mm:%Ss}, remaining: {:%Hh:%Mm:%Ss}]\r",
-                   bench_name,
-                   done_percent,
-                   ucsb::printable_float_t {ops_per_second},
-                   fails_percent,
-                   std::chrono::seconds(size_t(elapsed_time.count())),
-                   std::chrono::seconds(size_t(remaining)));
+        fmt::print(
+            "{}: {:.2f}% [{}/s, fails: {:.2f}%, elapsed: {:%Hh:%Mm:%Ss}, "
+            "remaining: {:%Hh:%Mm:%Ss}]\r",
+            bench_name,
+            done_percent,
+            ucsb::printable_float_t {ops_per_second},
+            fails_percent,
+            std::chrono::seconds(size_t(elapsed_time.count())),
+            std::chrono::seconds(size_t(remaining)));
         fflush(stdout);
     }
 

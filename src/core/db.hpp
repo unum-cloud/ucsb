@@ -2,26 +2,28 @@
 #include <set>
 #include <memory>
 
-#include "src/core/types.hpp"
-#include "src/core/db_hint.hpp"
-#include "src/core/data_accessor.hpp"
+#include "core/types.hpp"
+#include "core/db_hint.hpp"
+#include "core/data_accessor.hpp"
 
-namespace ucsb {
+namespace ucsb
+{
 
-using transaction_t = data_accessor_t;
+  using transaction_t = data_accessor_t;
 
-/**
- * @brief A base class for benchmarking key-value stores.
- * This doesn't apply to transactional benchmarks.
- *
- * General usage procedure is the following:
- * 1. Configure `.set_config` and a custom file,
- * 2. Recover the state from disk via `.open`,
- * 3. Perform all the needed benchmarks,
- * 4. Flush the state via `.close`,
- * 5. Remove all the data, if needed, via `.destroy`.
- */
-class db_t : public data_accessor_t {
+  /**
+   * @brief A base class for benchmarking key-value stores.
+   * This doesn't apply to transactional benchmarks.
+   *
+   * General usage procedure is the following:
+   * 1. Configure `.set_config` and a custom file,
+   * 2. Recover the state from disk via `.open`,
+   * 3. Perform all the needed benchmarks,
+   * 4. Flush the state via `.close`,
+   * 5. Remove all the data, if needed, via `.destroy`.
+   */
+  class db_t : public data_accessor_t
+  {
   public:
     virtual ~db_t() {}
 
@@ -40,7 +42,7 @@ class db_t : public data_accessor_t {
      * @param dir_path The target directory, where DB should be stored.
      * @hints hints for the DB to prepare to work better.
      */
-    virtual void set_config(fs::path const& config_path, fs::path const& dir_path, db_hints_t const& hints) = 0;
+    virtual void set_config(fs::path const &config_path, fs::path const &dir_path, db_hints_t const &hints) = 0;
 
     /**
      * @brief Removes all the information stored in the DB and deletes the files on disk.
@@ -55,6 +57,6 @@ class db_t : public data_accessor_t {
     virtual size_t size_on_disk() const = 0;
 
     virtual std::unique_ptr<transaction_t> create_transaction() = 0;
-};
+  };
 
 } // namespace ucsb

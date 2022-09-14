@@ -5,8 +5,8 @@
 #include <fstream>
 #include <nlohmann/json.hpp>
 
-#include "src/core/types.hpp"
-#include "src/core/distribution.hpp"
+#include "core/types.hpp"
+#include "core/distribution.hpp"
 
 using json = nlohmann::json;
 

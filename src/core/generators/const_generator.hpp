@@ -1,12 +1,14 @@
 #pragma once
 #include <random>
 
-#include "src/core/generators/generator.hpp"
+#include "core/generators/generator.hpp"
 
-namespace ucsb {
+namespace ucsb
+{
 
-template <typename value_at>
-class const_generator_gt : public generator_gt<value_at> {
+  template <typename value_at>
+  class const_generator_gt : public generator_gt<value_at>
+  {
   public:
     using value_t = value_at;
 
@@ -17,6 +19,6 @@ class const_generator_gt : public generator_gt<value_at> {
 
   private:
     value_t constant_;
-};
+  };
 
 } // namespace ucsb

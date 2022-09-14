@@ -6,9 +6,9 @@
 
 #include <rocksdb/utilities/transaction_db.h>
 
-#include "src/core/types.hpp"
-#include "src/core/data_accessor.hpp"
-#include "src/core/helper.hpp"
+#include "core/types.hpp"
+#include "core/data_accessor.hpp"
+#include "core/helper.hpp"
 
 namespace facebook {
 
