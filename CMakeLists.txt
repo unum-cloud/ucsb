@@ -66,13 +66,13 @@ endif()
 #######################################################################################################################
 
 # General flags.
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wnon-virtual-dtor -Woverloaded-virtual")
+# set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wnon-virtual-dtor -Woverloaded-virtual")
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-missing-field-initializers")
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fno-builtin-memcmp")
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wreorder -Wunused-parameter")
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -Wextra -Wno-unknown-pragmas")
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -frtti -fPIC")
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Winline")
+# set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Winline")
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wattributes")
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wdeprecated-copy")
 
@@ -83,11 +83,11 @@ set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -DDEBUG_SAFE_MODE -g")
 set(CMAKE_C_FLAGS_RELEASE "${CMAKE_C_FLAGS_RELEASE} -DNDEBUG -O2")
 set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -DNDEBUG -O2")
 
-# Custom flags.
-set(CMAKE_C_FLAGS_DEBUG "${CMAKE_C_FLAGS_DEBUG} -DHAS_FMT -DHAS_GTEST -DHAS_BENCHMARK -DHAS_NLOHMANN_JSON -DHAS_ROCKSDB -DHAS_LEVELDB -DHAS_LMDB")
-set(CMAKE_C_FLAGS_RELEASE "${CMAKE_C_FLAGS_RELEASE} -DHAS_FMT -DHAS_GTEST -DHAS_BENCHMARK -DHAS_NLOHMANN_JSON -DHAS_ROCKSDB -DHAS_LEVELDB -DHAS_LMDB")
-set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -DHAS_FMT -DHAS_GTEST -DHAS_BENCHMARK -DHAS_NLOHMANN_JSON -DHAS_ROCKSDB -DHAS_LEVELDB -DHAS_LMDB")
-set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -DHAS_FMT -DHAS_GTEST -DHAS_BENCHMARK -DHAS_NLOHMANN_JSON -DHAS_ROCKSDB -DHAS_LEVELDB -DHAS_LMDB")
+# # Custom flags.
+# set(CMAKE_C_FLAGS_DEBUG "${CMAKE_C_FLAGS_DEBUG} -DHAS_FMT -DHAS_GTEST -DHAS_BENCHMARK -DHAS_NLOHMANN_JSON -DHAS_ROCKSDB -DHAS_LEVELDB -DHAS_LMDB")
+# set(CMAKE_C_FLAGS_RELEASE "${CMAKE_C_FLAGS_RELEASE} -DHAS_FMT -DHAS_GTEST -DHAS_BENCHMARK -DHAS_NLOHMANN_JSON -DHAS_ROCKSDB -DHAS_LEVELDB -DHAS_LMDB")
+# set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -DHAS_FMT -DHAS_GTEST -DHAS_BENCHMARK -DHAS_NLOHMANN_JSON -DHAS_ROCKSDB -DHAS_LEVELDB -DHAS_LMDB")
+# set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -DHAS_FMT -DHAS_GTEST -DHAS_BENCHMARK -DHAS_NLOHMANN_JSON -DHAS_ROCKSDB -DHAS_LEVELDB -DHAS_LMDB")
 
 if(${CMAKE_SYSTEM_PROCESSOR} MATCHES "aarch64")
   message("- Enabling SIMD for ARM")
@@ -115,27 +115,25 @@ else ()
   message(STATUS "Unknown CMAKE_CXX_COMPILER_ID: ${CMAKE_CXX_COMPILER_ID}")
 endif()
 
-# Use this if you are manually installing rockdb and leveldb, otherwise comment it
-set(CXX_TARGET_LINK_LIBRARIES rocksdb leveldb)
-set(CXX_TARGET_LINK_LIBRARIES_WITH_FLAGS z uring)
-
-set(PKG_CONFIG ON)
-if (${PKG_CONFIG})
-  find_package(PkgConfig REQUIRED)
-
-  pkg_check_modules(PKG_PACKAGES REQUIRED wiredtiger)
-  set(PKG_LIBRARIES ${PKG_PACKAGES_LIBRARIES})
-endif()
-
-include(${CMAKE_SOURCE_DIR}/cmake/conanbuildinfo.cmake)
-conan_basic_setup()
-
 set(CMAKE_THREAD_LIBS_INIT "-lpthread")
 set(CMAKE_HAVE_THREADS_LIBRARY 1)
 set(CMAKE_USE_WIN32_THREADS_INIT 0)
 set(CMAKE_USE_PTHREADS_INIT 1)
 set(THREADS_PREFER_PTHREAD_FLAG ON)
 find_package(Threads REQUIRED)
+
+
+# Install 3rd Party Packages
+include(FetchContent)
+set(FETCHCONTENT_QUIET OFF)
+
+include("${CMAKE_SOURCE_DIR}/cmake/fmt.cmake")
+include("${CMAKE_SOURCE_DIR}/cmake/gtest.cmake")
+include("${CMAKE_SOURCE_DIR}/cmake/gbench.cmake")
+include("${CMAKE_SOURCE_DIR}/cmake/wiredtiger.cmake")
+# include("${CMAKE_SOURCE_DIR}/cmake/lmdb.cmake")
+include("${CMAKE_SOURCE_DIR}/cmake/rocksdb.cmake")
+include("${CMAKE_SOURCE_DIR}/cmake/leveldb.cmake")
 
 #######################################################################################################################
 # Build tests benchmarks
@@ -148,4 +146,14 @@ target_link_libraries(ucsb_bench${ARTIFACT_SUFFIX}
   ${CONAN_LIBS}
   ${CMAKE_DL_LIBS}
   ${CXX_TARGET_LINK_LIBRARIES_WITH_FLAGS}
+
+  leveldb
+  rocksdb
+  wiredtiger
+  fmt
+  gtest
+  benchmark::benchmark
 )
+
+set_source_files_properties(./src/bench.cxx PROPERTIES COMPILE_FLAGS -fno-rtti)
+
