@@ -4,26 +4,24 @@
 #include "core/types.hpp"
 #include "core/operation.hpp"
 
-namespace ucsb
-{
+namespace ucsb {
 
-  /**
-   * @brief A base class for data accessing: on DBs and Transactions state.
-   *
-   * @section Keys.
-   * The key type is set to a 64-bit unsigned integer.
-   * Todays engines often support string keys of variable length,
-   * but generally work faster if keys are of identical length.
-   * To avoid extra heap allocations and expensive integer formatting,
-   * under the hood, we pass a view to raw bytes forming the integer key.
-   * For order consistency it's also recommended to provide a custom
-   * comparator.
-   * @section Values.
-   * The Value buffer can be bigger than actual value because of memory alignment
-   * Note: This is done for read workloads only
-   */
-  class data_accessor_t
-  {
+/**
+ * @brief A base class for data accessing: on DBs and Transactions state.
+ *
+ * @section Keys.
+ * The key type is set to a 64-bit unsigned integer.
+ * Todays engines often support string keys of variable length,
+ * but generally work faster if keys are of identical length.
+ * To avoid extra heap allocations and expensive integer formatting,
+ * under the hood, we pass a view to raw bytes forming the integer key.
+ * For order consistency it's also recommended to provide a custom
+ * comparator.
+ * @section Values.
+ * The Value buffer can be bigger than actual value because of memory alignment
+ * Note: This is done for read workloads only
+ */
+class data_accessor_t {
   public:
     virtual ~data_accessor_t() {}
 
@@ -87,6 +85,6 @@ namespace ucsb
      * @param values A temporary buffer big enough for a all values.
      */
     virtual operation_result_t scan(key_t key, size_t length, value_span_t single_value) const = 0;
-  };
+};
 
 } // namespace ucsb

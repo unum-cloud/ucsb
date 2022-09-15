@@ -1,11 +1,12 @@
 #include <atomic>
-#include <benchmark/benchmark.h>
-#include <fmt/chrono.h>
-#include <fmt/format.h>
 #include <memory>
-#include <nlohmann/json.hpp>
 #include <string>
 #include <vector>
+
+#include <benchmark/benchmark.h>
+#include <nlohmann/json.hpp>
+#include <fmt/chrono.h>
+#include <fmt/format.h>
 
 #include "core/db.hpp"
 #include "core/db_brand.hpp"
@@ -58,7 +59,7 @@ void usage_message(const char* command) {
 void parse_and_validate_args(int argc, char* argv[], settings_t& settings) {
     int arg_idx = 1;
     while (arg_idx < argc && ucsb::start_with(argv[arg_idx], "-")) {
-        if (strcmp(argv[arg_idx], "-db") == 0) {
+        if (std::strcmp(argv[arg_idx], "-db") == 0) {
             ++arg_idx;
             if (arg_idx >= argc) {
                 usage_message(argv[0]);
@@ -68,11 +69,11 @@ void parse_and_validate_args(int argc, char* argv[], settings_t& settings) {
             settings.db_name = std::string(argv[arg_idx]);
             ++arg_idx;
         }
-        else if (strcmp(argv[arg_idx], "-t") == 0) {
+        else if (std::strcmp(argv[arg_idx], "-t") == 0) {
             settings.transactional = true;
             ++arg_idx;
         }
-        else if (strcmp(argv[arg_idx], "-c") == 0) {
+        else if (std::strcmp(argv[arg_idx], "-c") == 0) {
             ++arg_idx;
             if (arg_idx >= argc) {
                 usage_message(argv[0]);
@@ -82,7 +83,7 @@ void parse_and_validate_args(int argc, char* argv[], settings_t& settings) {
             settings.db_config_path = std::string(argv[arg_idx]);
             ++arg_idx;
         }
-        else if (strcmp(argv[arg_idx], "-w") == 0) {
+        else if (std::strcmp(argv[arg_idx], "-w") == 0) {
             ++arg_idx;
             if (arg_idx >= argc) {
                 usage_message(argv[0]);
@@ -92,7 +93,7 @@ void parse_and_validate_args(int argc, char* argv[], settings_t& settings) {
             settings.workloads_path = std::string(argv[arg_idx]);
             ++arg_idx;
         }
-        else if (strcmp(argv[arg_idx], "-r") == 0) {
+        else if (std::strcmp(argv[arg_idx], "-r") == 0) {
             ++arg_idx;
             if (arg_idx >= argc) {
                 usage_message(argv[0]);
@@ -105,7 +106,7 @@ void parse_and_validate_args(int argc, char* argv[], settings_t& settings) {
             settings.results_path = path;
             ++arg_idx;
         }
-        else if (strcmp(argv[arg_idx], "-wd") == 0) {
+        else if (std::strcmp(argv[arg_idx], "-wd") == 0) {
             ++arg_idx;
             if (arg_idx >= argc) {
                 usage_message(argv[0]);
@@ -118,7 +119,7 @@ void parse_and_validate_args(int argc, char* argv[], settings_t& settings) {
             settings.working_dir_path = path;
             ++arg_idx;
         }
-        else if (strcmp(argv[arg_idx], "-threads") == 0) {
+        else if (std::strcmp(argv[arg_idx], "-threads") == 0) {
             ++arg_idx;
             if (arg_idx >= argc) {
                 usage_message(argv[0]);
@@ -128,7 +129,7 @@ void parse_and_validate_args(int argc, char* argv[], settings_t& settings) {
             settings.threads_count = std::stoi(argv[arg_idx]);
             ++arg_idx;
         }
-        else if (strcmp(argv[arg_idx], "-filter") == 0) {
+        else if (std::strcmp(argv[arg_idx], "-filter") == 0) {
             ++arg_idx;
             if (arg_idx >= argc) {
                 usage_message(argv[0]);

@@ -18,7 +18,7 @@ class aligned_buffer_t {
     }
 
     inline aligned_buffer_t(aligned_buffer_t const& other) : aligned_buffer_t(other.size_) {
-        memcpy(buffer_, other.buffer_, size_);
+        std::memcpy(buffer_, other.buffer_, size_);
     }
     inline aligned_buffer_t(aligned_buffer_t&& other) noexcept
         : buffer_(std::move(other.buffer_)), size_(std::move(other.size_)) {
