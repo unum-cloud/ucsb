@@ -1,0 +1,11 @@
+build/
+build_debug/
+build_release/
+CMakeFiles/
+tmp/
+lib/
+CMakeCache.txt
+build_version.cc
+Makefile
+cmake_install.cmake
+_deps/

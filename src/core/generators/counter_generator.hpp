@@ -1,11 +1,13 @@
 #pragma once
 #include <random>
 
-#include "src/core/generators/generator.hpp"
+#include "core/generators/generator.hpp"
 
-namespace ucsb {
+namespace ucsb
+{
 
-class counter_generator_t : public generator_gt<size_t> {
+  class counter_generator_t : public generator_gt<size_t>
+  {
   public:
     inline counter_generator_t(size_t start) : counter_(start) {}
 
@@ -14,6 +16,6 @@ class counter_generator_t : public generator_gt<size_t> {
 
   protected:
     size_t counter_;
-};
+  };
 
 } // namespace ucsb

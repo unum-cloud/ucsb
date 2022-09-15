@@ -2,9 +2,9 @@
 #include <set>
 #include <memory>
 
-#include "src/core/types.hpp"
-#include "src/core/db_hint.hpp"
-#include "src/core/data_accessor.hpp"
+#include "core/types.hpp"
+#include "core/db_hint.hpp"
+#include "core/data_accessor.hpp"
 
 namespace ucsb {
 

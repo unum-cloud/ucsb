@@ -4,7 +4,7 @@
 #include <vector>
 #include <unordered_map>
 
-#include "src/core/types.hpp"
+#include "core/types.hpp"
 
 using ordered_json = nlohmann::ordered_json;
 

@@ -1,12 +1,12 @@
 #pragma once
 
-#include "src/core/types.hpp"
-#include "src/core/db.hpp"
+#include "core/types.hpp"
+#include "core/db.hpp"
 
-#include "src/rocksdb/rocksdb.hpp"
-#include "src/leveldb/leveldb.hpp"
-#include "src/wiredtiger/wiredtiger.hpp"
-#include "src/lmdb/lmdb.hpp"
+#include "rocksdb/rocksdb.hpp"
+#include "leveldb/leveldb.hpp"
+#include "wiredtiger/wiredtiger.hpp"
+#include "lmdb/lmdb.hpp"
 
 namespace ucsb {
 

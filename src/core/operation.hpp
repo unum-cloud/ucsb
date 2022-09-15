@@ -4,7 +4,7 @@
 #include <cassert>
 #include <cstddef>
 
-#include "src/core/generators/random_generator.hpp"
+#include "core/generators/random_generator.hpp"
 
 namespace ucsb {
 

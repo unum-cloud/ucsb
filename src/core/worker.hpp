@@ -5,19 +5,19 @@
 #include <set>
 #include <fmt/format.h>
 
-#include "src/core/types.hpp"
-#include "src/core/data_accessor.hpp"
-#include "src/core/workload.hpp"
-#include "src/core/timer.hpp"
-#include "src/core/helper.hpp"
-#include "src/core/generators/generator.hpp"
-#include "src/core/generators/const_generator.hpp"
-#include "src/core/generators/counter_generator.hpp"
-#include "src/core/generators/uniform_generator.hpp"
-#include "src/core/generators/zipfian_generator.hpp"
-#include "src/core/generators/scrambled_zipfian_generator.hpp"
-#include "src/core/generators/skewed_zipfian_generator.hpp"
-#include "src/core/generators/acknowledged_counter_generator.hpp"
+#include "core/types.hpp"
+#include "core/data_accessor.hpp"
+#include "core/workload.hpp"
+#include "core/timer.hpp"
+#include "core/helper.hpp"
+#include "core/generators/generator.hpp"
+#include "core/generators/const_generator.hpp"
+#include "core/generators/counter_generator.hpp"
+#include "core/generators/uniform_generator.hpp"
+#include "core/generators/zipfian_generator.hpp"
+#include "core/generators/scrambled_zipfian_generator.hpp"
+#include "core/generators/skewed_zipfian_generator.hpp"
+#include "core/generators/acknowledged_counter_generator.hpp"
 
 namespace ucsb {
 

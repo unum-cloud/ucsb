@@ -1,6 +1,6 @@
 #pragma once
 
-#include "src/core/types.hpp"
+#include "core/types.hpp"
 
 namespace ucsb {
 

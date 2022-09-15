@@ -2,6 +2,7 @@
 
 #include <atomic>
 #include <iostream>
+#include <fstream>
 #include <cstring>
 #include <memory>
 #include <string>
@@ -18,9 +19,9 @@
 #include <rocksdb/comparator.h>
 #include <rocksdb/filter_policy.h>
 
-#include "src/core/types.hpp"
-#include "src/core/db.hpp"
-#include "src/core/helper.hpp"
+#include "core/types.hpp"
+#include "core/db.hpp"
+#include "core/helper.hpp"
 
 #include "rocksdb_transaction.hpp"
 

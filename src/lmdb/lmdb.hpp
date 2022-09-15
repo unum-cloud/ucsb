@@ -8,9 +8,9 @@
 
 #include <lmdb.h>
 
-#include "src/core/types.hpp"
-#include "src/core/db.hpp"
-#include "src/core/helper.hpp"
+#include "core/types.hpp"
+#include "core/db.hpp"
+#include "core/helper.hpp"
 
 namespace symas {
 

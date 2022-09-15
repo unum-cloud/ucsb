@@ -2,25 +2,26 @@
 #include <memory>
 #include <string>
 #include <vector>
-#include <fmt/format.h>
-#include <fmt/chrono.h>
-#include <nlohmann/json.hpp>
-#include <benchmark/benchmark.h>
 
-#include "src/core/types.hpp"
-#include "src/core/settings.hpp"
-#include "src/core/profiler.hpp"
-#include "src/core/db.hpp"
-#include "src/core/workload.hpp"
-#include "src/core/worker.hpp"
-#include "src/core/db_brand.hpp"
-#include "src/core/db_hint.hpp"
-#include "src/core/distribution.hpp"
-#include "src/core/operation.hpp"
-#include "src/core/exception.hpp"
-#include "src/core/printable.hpp"
-#include "src/core/results.hpp"
-#include "src/core/threads_fence.hpp"
+#include <benchmark/benchmark.h>
+#include <nlohmann/json.hpp>
+#include <fmt/chrono.h>
+#include <fmt/format.h>
+
+#include "core/db.hpp"
+#include "core/db_brand.hpp"
+#include "core/db_hint.hpp"
+#include "core/distribution.hpp"
+#include "core/exception.hpp"
+#include "core/operation.hpp"
+#include "core/printable.hpp"
+#include "core/profiler.hpp"
+#include "core/results.hpp"
+#include "core/settings.hpp"
+#include "core/threads_fence.hpp"
+#include "core/types.hpp"
+#include "core/worker.hpp"
+#include "core/workload.hpp"
 
 namespace bm = benchmark;
 
@@ -58,7 +59,7 @@ void usage_message(const char* command) {
 void parse_and_validate_args(int argc, char* argv[], settings_t& settings) {
     int arg_idx = 1;
     while (arg_idx < argc && ucsb::start_with(argv[arg_idx], "-")) {
-        if (strcmp(argv[arg_idx], "-db") == 0) {
+        if (std::strcmp(argv[arg_idx], "-db") == 0) {
             ++arg_idx;
             if (arg_idx >= argc) {
                 usage_message(argv[0]);
@@ -68,11 +69,11 @@ void parse_and_validate_args(int argc, char* argv[], settings_t& settings) {
             settings.db_name = std::string(argv[arg_idx]);
             ++arg_idx;
         }
-        else if (strcmp(argv[arg_idx], "-t") == 0) {
+        else if (std::strcmp(argv[arg_idx], "-t") == 0) {
             settings.transactional = true;
             ++arg_idx;
         }
-        else if (strcmp(argv[arg_idx], "-c") == 0) {
+        else if (std::strcmp(argv[arg_idx], "-c") == 0) {
             ++arg_idx;
             if (arg_idx >= argc) {
                 usage_message(argv[0]);
@@ -82,7 +83,7 @@ void parse_and_validate_args(int argc, char* argv[], settings_t& settings) {
             settings.db_config_path = std::string(argv[arg_idx]);
             ++arg_idx;
         }
-        else if (strcmp(argv[arg_idx], "-w") == 0) {
+        else if (std::strcmp(argv[arg_idx], "-w") == 0) {
             ++arg_idx;
             if (arg_idx >= argc) {
                 usage_message(argv[0]);
@@ -92,7 +93,7 @@ void parse_and_validate_args(int argc, char* argv[], settings_t& settings) {
             settings.workloads_path = std::string(argv[arg_idx]);
             ++arg_idx;
         }
-        else if (strcmp(argv[arg_idx], "-r") == 0) {
+        else if (std::strcmp(argv[arg_idx], "-r") == 0) {
             ++arg_idx;
             if (arg_idx >= argc) {
                 usage_message(argv[0]);
@@ -105,7 +106,7 @@ void parse_and_validate_args(int argc, char* argv[], settings_t& settings) {
             settings.results_path = path;
             ++arg_idx;
         }
-        else if (strcmp(argv[arg_idx], "-wd") == 0) {
+        else if (std::strcmp(argv[arg_idx], "-wd") == 0) {
             ++arg_idx;
             if (arg_idx >= argc) {
                 usage_message(argv[0]);
@@ -118,7 +119,7 @@ void parse_and_validate_args(int argc, char* argv[], settings_t& settings) {
             settings.working_dir_path = path;
             ++arg_idx;
         }
-        else if (strcmp(argv[arg_idx], "-threads") == 0) {
+        else if (std::strcmp(argv[arg_idx], "-threads") == 0) {
             ++arg_idx;
             if (arg_idx >= argc) {
                 usage_message(argv[0]);
@@ -128,7 +129,7 @@ void parse_and_validate_args(int argc, char* argv[], settings_t& settings) {
             settings.threads_count = std::stoi(argv[arg_idx]);
             ++arg_idx;
         }
-        else if (strcmp(argv[arg_idx], "-filter") == 0) {
+        else if (std::strcmp(argv[arg_idx], "-filter") == 0) {
             ++arg_idx;
             if (arg_idx >= argc) {
                 usage_message(argv[0]);
@@ -410,13 +411,15 @@ struct progress_t {
         auto remaining = (elapsed_time.count() / done_percent) * (100.f - done_percent);
 
         fmt::print("\33[2K\r");
-        fmt::print("{}: {:.2f}% [{}/s, fails: {:.2f}%, elapsed: {:%Hh:%Mm:%Ss}, remaining: {:%Hh:%Mm:%Ss}]\r",
-                   bench_name,
-                   done_percent,
-                   ucsb::printable_float_t {ops_per_second},
-                   fails_percent,
-                   std::chrono::seconds(size_t(elapsed_time.count())),
-                   std::chrono::seconds(size_t(remaining)));
+        fmt::print(
+            "{}: {:.2f}% [{}/s, fails: {:.2f}%, elapsed: {:%Hh:%Mm:%Ss}, "
+            "remaining: {:%Hh:%Mm:%Ss}]\r",
+            bench_name,
+            done_percent,
+            ucsb::printable_float_t {ops_per_second},
+            fails_percent,
+            std::chrono::seconds(size_t(elapsed_time.count())),
+            std::chrono::seconds(size_t(remaining)));
         fflush(stdout);
     }
 

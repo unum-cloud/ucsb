@@ -6,7 +6,7 @@
 #include <cstdlib>
 #include <filesystem>
 
-#include "src/core/aligned_buffer.hpp"
+#include "core/aligned_buffer.hpp"
 
 namespace ucsb {
 

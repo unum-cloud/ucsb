@@ -1,8 +1,8 @@
 #pragma once
 #include <set>
 
-#include "src/core/types.hpp"
-#include "src/core/operation.hpp"
+#include "core/types.hpp"
+#include "core/operation.hpp"
 
 namespace ucsb {
 

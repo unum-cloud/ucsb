@@ -14,9 +14,9 @@
 #include <leveldb/filter_policy.h>
 #include <leveldb/comparator.h>
 
-#include "src/core/types.hpp"
-#include "src/core/db.hpp"
-#include "src/core/helper.hpp"
+#include "core/types.hpp"
+#include "core/db.hpp"
+#include "core/helper.hpp"
 
 namespace google {
 
@@ -89,7 +89,8 @@ class leveldb_t : public ucsb::db_t {
 
     class key_comparator_t final : public leveldb::Comparator {
       public:
-        int Compare(leveldb::Slice const& left, leveldb::Slice const& right) const /*override*/ {
+        int Compare(leveldb::Slice const& left, leveldb::Slice const& right) const /*override*/
+        {
             assert(left.size() == sizeof(key_t));
             assert(right.size() == sizeof(key_t));
 
