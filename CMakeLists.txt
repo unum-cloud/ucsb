@@ -1,10 +1,9 @@
-cmake_minimum_required(VERSION 3.20.1)
+cmake_minimum_required(VERSION 3.18)
 project(UCSB)
 
-#######################################################################################################################
+# ######################################################################################################################
 # Log project environment
-#######################################################################################################################
-
+# ######################################################################################################################
 set(CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmake/")
 set(CMAKE_CACHEFILE_DIR "${CMAKE_SOURCE_DIR}/build")
 set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/lib")
@@ -24,11 +23,11 @@ message(STATUS "CMAKE_C_COMPILER_ID: ${CMAKE_C_COMPILER_ID}")
 message(STATUS "CMAKE_CXX_COMPILER: ${CMAKE_CXX_COMPILER}")
 message(STATUS "CMAKE_CXX_COMPILER_ID: ${CMAKE_CXX_COMPILER_ID}")
 
-#######################################################################################################################
+# ######################################################################################################################
 # Selecting a modern standard version
-#######################################################################################################################
+# ######################################################################################################################
 
-# Export the compilation report, that can be later be reused by static 
+# Export the compilation report, that can be later be reused by static
 # analysis tools and other apps like SourceTrail.
 set(CMAKE_EXPORT_COMPILE_COMMANDS OFF)
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
@@ -47,9 +46,9 @@ if(CMAKE_BUILD_TYPE EQUAL "Release")
   set(CMAKE_UNITY_BUILD ON)
 endif()
 
-#######################################################################################################################
+# ######################################################################################################################
 # Macros and additional flags
-#######################################################################################################################
+# ######################################################################################################################
 
 # General flags.
 # set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wnon-virtual-dtor -Woverloaded-virtual")
@@ -70,18 +69,19 @@ set(CMAKE_C_FLAGS_RELEASE "${CMAKE_C_FLAGS_RELEASE} -DNDEBUG -O2")
 set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -DNDEBUG -O2")
 
 # Compiler-specific flags.
-if (CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
+if(CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
   set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -fstrict-vtable-pointers")
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -ferror-limit=1")
+
   # Riscky Performance Optimization, that require tuning.
   set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -momit-leaf-frame-pointer")
   set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -funsafe-math-optimizations")
   set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -fno-omit-frame-pointer")
-elseif (CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
-  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fmax-errors=1")  
-elseif (CMAKE_CXX_COMPILER_ID STREQUAL "Intel")
-elseif (CMAKE_CXX_COMPILER_ID STREQUAL "MSVC")
-else ()
+elseif(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fmax-errors=1")
+elseif(CMAKE_CXX_COMPILER_ID STREQUAL "Intel")
+elseif(CMAKE_CXX_COMPILER_ID STREQUAL "MSVC")
+else()
   message(STATUS "Unknown CMAKE_CXX_COMPILER_ID: ${CMAKE_CXX_COMPILER_ID}")
 endif()
 
@@ -98,22 +98,21 @@ include("${CMAKE_SOURCE_DIR}/cmake/fmt.cmake")
 include("${CMAKE_SOURCE_DIR}/cmake/gtest.cmake")
 include("${CMAKE_SOURCE_DIR}/cmake/gbench.cmake")
 include("${CMAKE_SOURCE_DIR}/cmake/wiredtiger.cmake")
-# include("${CMAKE_SOURCE_DIR}/cmake/lmdb.cmake")
+include("${CMAKE_SOURCE_DIR}/cmake/lmdb.cmake")
 include("${CMAKE_SOURCE_DIR}/cmake/rocksdb.cmake")
 include("${CMAKE_SOURCE_DIR}/cmake/leveldb.cmake")
 
-#######################################################################################################################
+# ######################################################################################################################
 # Build tests benchmarks
-#######################################################################################################################
-
+# ######################################################################################################################
 include_directories(${PROJECT_SOURCE_DIR}/src)
 add_executable(ucsb_bench src/bench.cxx)
-target_link_libraries(ucsb_bench${ARTIFACT_SUFFIX} 
+target_link_libraries(ucsb_bench${ARTIFACT_SUFFIX}
   leveldb
   rocksdb
   wiredtiger
   fmt
-  gtest
+  lmdb
   benchmark::benchmark
 )
 
