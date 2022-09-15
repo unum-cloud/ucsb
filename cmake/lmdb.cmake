@@ -4,7 +4,7 @@ find_package(Git REQUIRED)
 find_program(MAKE_EXE NAMES gmake nmake make)
 
 ExternalProject_Add(
-    liblmdb
+    lmdb
     PREFIX "_deps/lmdb"
     GIT_REPOSITORY "https://github.com/lmdb/lmdb.git"
     GIT_TAG LMDB_0.9.29
@@ -16,14 +16,14 @@ ExternalProject_Add(
     INSTALL_COMMAND ""
 )
 
-ExternalProject_Get_Property(liblmdb source_dir)
-set(lmdb_INCLUDE_DIR ${source_dir}/libraries/liblmdb/)
-set(lmdb_LIBRARY_PATH ${source_dir}/libraries/liblmdb/liblmdb.a)
-add_library(lmdb STATIC IMPORTED)
+ExternalProject_Get_Property(lmdb source_dir)
+set(liblmdb_INCLUDE_DIR ${source_dir}/libraries/liblmdb/)
+set(liblmdb_LIBRARY_PATH ${source_dir}/libraries/liblmdb/liblmdb.a)
+add_library(liblmdb STATIC IMPORTED)
 
-set_property(TARGET lmdb PROPERTY IMPORTED_LOCATION ${lmdb_LIBRARY_PATH})
-set_property(TARGET lmdb APPEND PROPERTY INTERFACE_INCLUDE_DIRECTORIES ${lmdb_INCLUDE_DIR})
+set_property(TARGET liblmdb PROPERTY IMPORTED_LOCATION ${liblmdb_LIBRARY_PATH})
+set_property(TARGET liblmdb APPEND PROPERTY INTERFACE_INCLUDE_DIRECTORIES ${liblmdb_INCLUDE_DIR})
 
 # Dependencies
-add_dependencies(lmdb liblmdb)
-include_directories(${lmdb_INCLUDE_DIR})
+add_dependencies(liblmdb lmdb)
+include_directories(${liblmdb_INCLUDE_DIR})

@@ -108,11 +108,11 @@ include("${CMAKE_SOURCE_DIR}/cmake/leveldb.cmake")
 include_directories(${PROJECT_SOURCE_DIR}/src)
 add_executable(ucsb_bench src/bench.cxx)
 target_link_libraries(ucsb_bench${ARTIFACT_SUFFIX}
+  fmt
   leveldb
   rocksdb
+  liblmdb
   wiredtiger
-  fmt
-  lmdb
   benchmark::benchmark
 )
 
