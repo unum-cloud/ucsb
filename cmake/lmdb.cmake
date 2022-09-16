@@ -16,9 +16,9 @@ ExternalProject_Add(
     INSTALL_COMMAND ""
 )
 
-ExternalProject_Get_Property(lmdb source_dir)
-set(liblmdb_INCLUDE_DIR ${source_dir}/libraries/liblmdb/)
-set(liblmdb_LIBRARY_PATH ${source_dir}/libraries/liblmdb/liblmdb.a)
+ExternalProject_Get_Property(lmdb SOURCE_DIR)
+set(liblmdb_INCLUDE_DIR ${SOURCE_DIR}/libraries/liblmdb/)
+set(liblmdb_LIBRARY_PATH ${SOURCE_DIR}/libraries/liblmdb/liblmdb.a)
 add_library(liblmdb STATIC IMPORTED)
 
 set_property(TARGET liblmdb PROPERTY IMPORTED_LOCATION ${liblmdb_LIBRARY_PATH})

@@ -7,6 +7,8 @@
 #include <memory>
 #include <string>
 #include <vector>
+#include <thread>
+
 #include <fmt/format.h>
 
 #include <rocksdb/status.h>

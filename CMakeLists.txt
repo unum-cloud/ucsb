@@ -85,35 +85,57 @@ else()
   message(STATUS "Unknown CMAKE_CXX_COMPILER_ID: ${CMAKE_CXX_COMPILER_ID}")
 endif()
 
+# ######################################################################################################################
+# Declaring Targets and Dependencies
+# ######################################################################################################################
+set(UCSB_USE_LEVELDB ON CACHE BOOL "True if LevelDB variant has to be built")
+set(UCSB_USE_ROCKSDB ON CACHE BOOL "True if RocksDB variant has to be built")
+set(UCSB_USE_WIREDTIGER ON CACHE BOOL "True if WiredTiger variant has to be built")
+set(UCSB_USE_LMDB OFF CACHE BOOL "True if LMDB variant has to be built")
+set(UCSB_USE_MONGODB OFF CACHE BOOL "True if MongoDB variant has to be built")
+set(UCSB_USE_REDIS OFF CACHE BOOL "True if Redis variant has to be built")
+
 set(CMAKE_HAVE_THREADS_LIBRARY 1)
 set(CMAKE_USE_PTHREADS_INIT 1)
 set(THREADS_PREFER_PTHREAD_FLAG ON)
 find_package(Threads REQUIRED)
 
-# Install 3rd Party Packages
 include(FetchContent)
 set(FETCHCONTENT_QUIET OFF)
-
 include("${CMAKE_SOURCE_DIR}/cmake/fmt.cmake")
 include("${CMAKE_SOURCE_DIR}/cmake/gtest.cmake")
 include("${CMAKE_SOURCE_DIR}/cmake/gbench.cmake")
-include("${CMAKE_SOURCE_DIR}/cmake/wiredtiger.cmake")
-include("${CMAKE_SOURCE_DIR}/cmake/lmdb.cmake")
-include("${CMAKE_SOURCE_DIR}/cmake/rocksdb.cmake")
-include("${CMAKE_SOURCE_DIR}/cmake/leveldb.cmake")
+
+set(UCSB_ENGINE_NAMES "")
+
+if(${UCSB_USE_LEVELDB})
+  include("${CMAKE_SOURCE_DIR}/cmake/leveldb.cmake")
+  list(APPEND UCSB_ENGINE_NAMES "leveldb")
+  set_property(SOURCE src/bench.cxx APPEND PROPERTY COMPILE_DEFINITIONS UCSB_USE_LEVELDB)
+endif()
+
+if(${UCSB_USE_ROCKSDB})
+  include("${CMAKE_SOURCE_DIR}/cmake/rocksdb.cmake")
+  list(APPEND UCSB_ENGINE_NAMES "rocksdb")
+  set_property(SOURCE src/bench.cxx APPEND PROPERTY COMPILE_DEFINITIONS UCSB_USE_ROCKSDB)
+endif()
+
+if(${UCSB_USE_WIREDTIGER})
+  include("${CMAKE_SOURCE_DIR}/cmake/wiredtiger.cmake")
+  list(APPEND UCSB_ENGINE_NAMES "wiredtiger")
+  set_property(SOURCE src/bench.cxx APPEND PROPERTY COMPILE_DEFINITIONS UCSB_USE_WIREDTIGER)
+endif()
+
+if(${UCSB_USE_LMDB})
+  include("${CMAKE_SOURCE_DIR}/cmake/lmdb.cmake")
+  list(APPEND UCSB_ENGINE_NAMES "liblmdb")
+  set_property(SOURCE src/bench.cxx APPEND PROPERTY COMPILE_DEFINITIONS UCSB_USE_LMDB)
+endif()
 
 # ######################################################################################################################
 # Build tests benchmarks
 # ######################################################################################################################
 include_directories(${PROJECT_SOURCE_DIR}/src)
 add_executable(ucsb_bench src/bench.cxx)
-target_link_libraries(ucsb_bench${ARTIFACT_SUFFIX}
-  fmt
-  leveldb
-  rocksdb
-  liblmdb
-  wiredtiger
-  benchmark::benchmark
-)
-
+target_link_libraries(ucsb_bench fmt benchmark::benchmark ${UCSB_ENGINE_NAMES})
 set_source_files_properties(src/bench.cxx PROPERTIES COMPILE_FLAGS -fno-rtti)

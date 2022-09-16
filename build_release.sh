@@ -4,7 +4,7 @@
 # Debug vs Release:
 # https://stackoverflow.com/a/7725055
 
-cmake -DCMAKE_INSTALL_PREFIX=/usr/local -DCMAKE_BUILD_TYPE=Release -B ./build_release &&
-    make -j4 -C ./build_release --silent &&
+cmake -DCMAKE_BUILD_TYPE=Release -B ./build_release &&
+    make -j32 -C ./build_release --silent &&
     # Congratulate the user!
     echo 'Congrats, UCSB is ready for use!'

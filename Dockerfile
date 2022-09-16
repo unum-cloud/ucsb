@@ -9,7 +9,7 @@ RUN apt-get update && \
 
 COPY . /usr/src/ucsb
 WORKDIR /usr/src/ucsb
-RUN cmake . && make -j16
+RUN bash build_release.sh
 
 FROM ubuntu:22.04
 WORKDIR /root/
