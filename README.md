@@ -22,13 +22,13 @@ Our UnumDB is also evaluated with this benchmark, but it wasn't included into th
 * [∅](https://unum.cloud/ucsb#0): imports monotonically increasing keys 🔄
 * [A](https://unum.cloud/ucsb#A): 50% reads + 50% updates, all random
 * [C](https://unum.cloud/ucsb#C): reads, all random
-* [D](https://unum.cloud/ucsb#D): 95% reads + 5% upserts, all random
+* [D](https://unum.cloud/ucsb#D): 95% reads + 5% inserts, all random
 * [E](https://unum.cloud/ucsb#E): range scan 🔄
 * [✗](https://unum.cloud/ucsb#X): batch read 🆕
-* [Y](https://unum.cloud/ucsb#Y): batch upsert 🆕
+* [Y](https://unum.cloud/ucsb#Y): batch insert 🆕
 * [Z](https://unum.cloud/ucsb#Z): scans 🆕
 
-The **∅** was previously implemented as one-by-one upserts, but some KVS support the external construction of its internal representation files.
+The **∅** was previously implemented as one-by-one inserts, but some KVS support the external construction of its internal representation files.
 The **E** was [previously](https://github.com/brianfrankcooper/YCSB/blob/master/workloads/workloade) mixed with 5% insertions.
 
 ## Known Issues and TODOs
