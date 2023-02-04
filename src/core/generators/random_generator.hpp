@@ -3,7 +3,7 @@
 
 #include "src/core/generators/generator.hpp"
 
-namespace ucsb {
+namespace ucsb::core::generators {
 
 class random_int_generator_t final : public generator_gt<uint32_t> {
   public:

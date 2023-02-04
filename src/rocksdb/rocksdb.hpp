@@ -6,8 +6,8 @@
 #include <memory>
 #include <string>
 #include <vector>
-#include <fmt/format.h>
 
+#include <fmt/format.h>
 #include <rocksdb/status.h>
 #include <rocksdb/cache.h>
 #include <rocksdb/write_batch.h>
@@ -24,7 +24,7 @@
 
 #include "rocksdb_transaction.hpp"
 
-namespace facebook {
+namespace ucsb::facebook {
 
 namespace fs = ucsb::fs;
 
@@ -426,4 +426,4 @@ bool rocksdb_t::load_additional_options() {
     return true;
 }
 
-} // namespace facebook
+} // namespace ucsb::facebook

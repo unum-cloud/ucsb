@@ -3,7 +3,7 @@
 Unum Cloud Serving Benchmark is the grandchild of Yahoo Cloud Serving Benchmark, reimplemented in C++, with less costly abstractions and with more workloads, crafted specifically for the Big Data age!
 A full description of this benchmark can be found [here, in our corporate blog](https://unum.cloud/ucsb), together with the recent results.
 
-![UCSB Benchmark Duration for RocksDB, LevelDB, WiredTiger and UnumDB](https://unum.cloud/assets/post/2022-03-22-ucsb/ucsb-duration.png)
+![UCSB Benchmark Duration for RocksDB, LevelDB, WiredTiger and UDisk](https://unum.cloud/assets/post/2022-03-22-ucsb/ucsb-duration.png)
 
 To run the benchmark, call `./run.py`.
 Output will be placed into the `bench/results/` folder.
@@ -15,7 +15,7 @@ Output will be placed into the `bench/results/` folder.
 * RocksDB. Version 6.29.3.
 * LMDB. Version 0.9.29.
 
-Our UnumDB is also evaluated with this benchmark, but it wasn't included into the public mirror.
+Our UDisk is also evaluated with this benchmark, but it wasn't included into the public mirror.
 
 ### Implemented Workloads
 

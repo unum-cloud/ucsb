@@ -3,7 +3,7 @@
 
 #include "src/core/generators/generator.hpp"
 
-namespace ucsb {
+namespace ucsb::core::generators {
 
 class counter_generator_t : public generator_gt<size_t> {
   public:

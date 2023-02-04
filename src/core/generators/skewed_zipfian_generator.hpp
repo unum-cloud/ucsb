@@ -4,7 +4,7 @@
 #include "src/core/generators/counter_generator.hpp"
 #include "src/core/generators/zipfian_generator.hpp"
 
-namespace ucsb {
+namespace ucsb::core::generators {
 
 class skewed_latest_generator_t : public generator_gt<size_t> {
   public:

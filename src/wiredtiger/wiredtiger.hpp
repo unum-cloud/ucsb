@@ -2,8 +2,8 @@
 
 #include <string>
 #include <vector>
-#include <fmt/format.h>
 
+#include <fmt/format.h>
 #include <wiredtiger.h>
 
 #include "src/core/types.hpp"
@@ -11,7 +11,7 @@
 #include "src/core/helper.hpp"
 #include "src/core/printable.hpp"
 
-namespace mongodb {
+namespace ucsb::mongodb {
 
 namespace fs = ucsb::fs;
 
@@ -423,4 +423,4 @@ inline std::string wiredtiger_t::create_str_config(config_t const& config) const
     return fmt::format("{},{}", str_config, str_cache_size);
 }
 
-} // namespace mongodb
+} // namespace ucsb::mongodb

@@ -3,6 +3,7 @@
 #include <iostream>
 #include <memory>
 #include <string>
+
 #include <fmt/format.h>
 #include <nlohmann/json.hpp>
 
@@ -18,7 +19,7 @@
 #include "src/core/db.hpp"
 #include "src/core/helper.hpp"
 
-namespace google {
+namespace ucsb::google {
 
 namespace fs = ucsb::fs;
 
@@ -302,4 +303,4 @@ bool leveldb_t::load_config(config_t& config) {
     return true;
 }
 
-} // namespace google
+} // namespace ucsb::google

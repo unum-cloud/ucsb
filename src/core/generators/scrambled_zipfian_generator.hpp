@@ -3,7 +3,7 @@
 
 #include "src/core/generators/zipfian_generator.hpp"
 
-namespace ucsb {
+namespace ucsb::core::generators {
 
 class scrambled_zipfian_generator_t : public generator_gt<size_t> {
   public:

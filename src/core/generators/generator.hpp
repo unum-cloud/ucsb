@@ -2,7 +2,7 @@
 
 #include "src/core/types.hpp"
 
-namespace ucsb {
+namespace ucsb::core::generators {
 
 template <typename value_at>
 class generator_gt {

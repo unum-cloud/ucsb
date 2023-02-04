@@ -5,7 +5,7 @@
 #include "src/core/generators/generator.hpp"
 #include "src/core/generators/random_generator.hpp"
 
-namespace ucsb {
+namespace ucsb::core::generators {
 
 class zipfian_generator_t : public generator_gt<size_t> {
   public:

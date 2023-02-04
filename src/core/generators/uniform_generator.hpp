@@ -3,7 +3,7 @@
 
 #include "src/core/generators/generator.hpp"
 
-namespace ucsb {
+namespace ucsb::core::generators {
 
 template <typename value_at>
 class uniform_generator_gt : public generator_gt<value_at> {

@@ -3,6 +3,7 @@
 #include <string>
 #include <vector>
 #include <sys/stat.h>
+
 #include <fmt/format.h>
 #include <nlohmann/json.hpp>
 
@@ -12,7 +13,7 @@
 #include "src/core/db.hpp"
 #include "src/core/helper.hpp"
 
-namespace symas {
+namespace ucsb::symas {
 
 namespace fs = ucsb::fs;
 

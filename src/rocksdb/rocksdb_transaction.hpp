@@ -2,15 +2,15 @@
 
 #include <memory>
 #include <vector>
-#include <fmt/format.h>
 
+#include <fmt/format.h>
 #include <rocksdb/utilities/transaction_db.h>
 
 #include "src/core/types.hpp"
 #include "src/core/data_accessor.hpp"
 #include "src/core/helper.hpp"
 
-namespace facebook {
+namespace ucsb::facebook {
 
 namespace fs = ucsb::fs;
 
@@ -231,4 +231,4 @@ operation_result_t rocksdb_transaction_t::scan(key_t key, size_t length, value_s
     return {i, operation_status_t::ok_k};
 }
 
-} // namespace facebook
+} // namespace ucsb::facebook

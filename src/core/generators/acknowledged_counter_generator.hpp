@@ -4,7 +4,7 @@
 #include "src/core/exception.hpp"
 #include "src/core/generators/counter_generator.hpp"
 
-namespace ucsb {
+namespace ucsb::core::generators {
 
 class acknowledged_counter_generator_t : public counter_generator_t {
   public:

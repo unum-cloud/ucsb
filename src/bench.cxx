@@ -2,6 +2,7 @@
 #include <memory>
 #include <string>
 #include <vector>
+
 #include <fmt/format.h>
 #include <fmt/chrono.h>
 #include <nlohmann/json.hpp>
@@ -23,24 +24,9 @@
 #include "src/core/threads_fence.hpp"
 
 namespace bm = benchmark;
+using namespace ucsb;
 
-using settings_t = ucsb::settings_t;
-using workload_t = ucsb::workload_t;
-using workloads_t = ucsb::workloads_t;
-using worker_t = ucsb::worker_t;
-using db_t = ucsb::db_t;
-using data_accessor_t = ucsb::data_accessor_t;
-using db_brand_t = ucsb::db_brand_t;
-using db_hints_t = ucsb::db_hints_t;
-using distribution_kind_t = ucsb::distribution_kind_t;
-using operation_kind_t = ucsb::operation_kind_t;
-using operation_status_t = ucsb::operation_status_t;
-using operation_result_t = ucsb::operation_result_t;
-using operation_chooser_t = std::unique_ptr<ucsb::operation_chooser_t>;
-using cpu_profiler_t = ucsb::cpu_profiler_t;
-using mem_profiler_t = ucsb::mem_profiler_t;
-using printable_bytes_t = ucsb::printable_bytes_t;
-using threads_fence_t = ucsb::threads_fence_t;
+using operation_chooser_ptr_t = std::unique_ptr<operation_chooser_t>;
 
 void usage_message(const char* command) {
     fmt::print("Usage: {} [options]\n", command);
@@ -58,7 +44,7 @@ void usage_message(const char* command) {
 
 void parse_and_validate_args(int argc, char* argv[], settings_t& settings) {
     int arg_idx = 1;
-    while (arg_idx < argc && ucsb::start_with(argv[arg_idx], "-")) {
+    while (arg_idx < argc && start_with(argv[arg_idx], "-")) {
         if (strcmp(argv[arg_idx], "-db") == 0) {
             ++arg_idx;
             if (arg_idx >= argc) {
@@ -125,7 +111,7 @@ void parse_and_validate_args(int argc, char* argv[], settings_t& settings) {
             }
             settings.db_storage_dir_paths.clear();
             std::string str_dir_paths(argv[arg_idx]);
-            std::vector<std::string> dir_paths = ucsb::split(str_dir_paths, ',');
+            std::vector<std::string> dir_paths = split(str_dir_paths, ',');
             for (auto& dir_path : dir_paths) {
                 if (!dir_path.empty() && dir_path.back() != '/')
                     dir_path.push_back('/');
@@ -300,7 +286,7 @@ workloads_t filter_workloads(workloads_t const& workloads, std::string const& fi
 
     // Note: It keeps order as mentioned in filter
     workloads_t filtered_workloads;
-    std::vector<std::string> tokens = ucsb::split(filter, ',');
+    std::vector<std::string> tokens = split(filter, ',');
     for (auto const& token : tokens) {
         for (auto const& workload : workloads) {
             if (workload.name == token)
@@ -357,8 +343,8 @@ db_hints_t make_hints(workloads_t const& workloads) {
     return hints;
 }
 
-operation_chooser_t create_operation_chooser(workload_t const& workload) {
-    operation_chooser_t chooser = std::make_unique<ucsb::operation_chooser_t>();
+operation_chooser_ptr_t create_operation_chooser(workload_t const& workload) {
+    operation_chooser_ptr_t chooser = std::make_unique<operation_chooser_ptr_t>();
     chooser->add(operation_kind_t::upsert_k, workload.upsert_proportion);
     chooser->add(operation_kind_t::update_k, workload.update_proportion);
     chooser->add(operation_kind_t::remove_k, workload.remove_proportion);
@@ -413,16 +399,13 @@ struct progress_t {
 
     bool is_time_to_print() {
         auto print_iterations_step = std::max(size_t(0.05 * total_iterations), size_t(1));
-        auto done_its = ucsb::atomic_load(done_iterations);
-        return done_its - ucsb::atomic_load(last_printed_iterations) >= print_iterations_step ||
-               done_its == total_iterations;
+        auto done_its = atomic_load(done_iterations);
+        return done_its - atomic_load(last_printed_iterations) >= print_iterations_step || done_its == total_iterations;
     }
 
-    void print(std::string const& bench_name,
-               ucsb::elapsed_time_t operations_elapsed_time,
-               ucsb::elapsed_time_t elapsed_time) {
+    void print(std::string const& bench_name, elapsed_time_t operations_elapsed_time, elapsed_time_t elapsed_time) {
 
-        ucsb::atomic_store(last_printed_iterations, done_iterations);
+        atomic_store(last_printed_iterations, done_iterations);
 
         auto done_percent = 100.f * done_iterations / total_iterations;
         auto fails_percent = failed_iterations * 100.0 / done_iterations;
@@ -433,7 +416,7 @@ struct progress_t {
         fmt::print("{}: {:.2f}% [{}/s, fails: {:.2f}%, elapsed: {:%Hh:%Mm:%Ss}, remaining: {:%Hh:%Mm:%Ss}]\r",
                    bench_name,
                    done_percent,
-                   ucsb::printable_float_t {ops_per_second},
+                   printable_float_t {ops_per_second},
                    fails_percent,
                    std::chrono::seconds(size_t(elapsed_time.count())),
                    std::chrono::seconds(size_t(remaining)));
@@ -454,7 +437,7 @@ void bench(bm::State& state, workload_t const& workload, db_t& db, data_accessor
 
     // Bench components
     auto chooser = create_operation_chooser(workload);
-    ucsb::timer_t timer(state);
+    timer_t timer(state);
     worker_t worker(workload, data_accessor, timer);
     std::atomic_bool do_flash = true;
 
@@ -464,7 +447,7 @@ void bench(bm::State& state, workload_t const& workload, db_t& db, data_accessor
     static progress_t progress; // Shared between threads
 
     // Bench initialization
-    ucsb::atomic_add_fetch(progress.total_iterations, workload.operations_count);
+    atomic_add_fetch(progress.total_iterations, workload.operations_count);
     if (state.thread_index() == 0) {
         cpu_prof.start();
         mem_prof.start();
@@ -490,16 +473,16 @@ void bench(bm::State& state, workload_t const& workload, db_t& db, data_accessor
             case operation_kind_t::bulk_load_k: result = worker.do_bulk_load(); break;
             case operation_kind_t::range_select_k: result = worker.do_range_select(); break;
             case operation_kind_t::scan_k: result = worker.do_scan(); break;
-            default: throw ucsb::exception_t("Unknown operation"); break;
+            default: throw exception_t("Unknown operation"); break;
             }
 
             // Update progress
             bool success = result.status == operation_status_t::ok_k;
             auto bytes_processed = size_t(success) * workload.value_length * result.entries_touched;
-            ucsb::atomic_add_fetch(progress.entries_touched, size_t(success) * result.entries_touched);
-            ucsb::atomic_add_fetch(progress.failed_iterations, size_t(!success));
-            ucsb::atomic_add_fetch(progress.bytes_processed, bytes_processed);
-            auto done_iterations = ucsb::atomic_add_fetch(progress.done_iterations, size_t(1));
+            atomic_add_fetch(progress.entries_touched, size_t(success) * result.entries_touched);
+            atomic_add_fetch(progress.failed_iterations, size_t(!success));
+            atomic_add_fetch(progress.bytes_processed, bytes_processed);
+            auto done_iterations = atomic_add_fetch(progress.done_iterations, size_t(1));
 
             if (progress.is_time_to_print())
                 progress.print(workload.name, timer.operations_elapsed_time(), timer.elapsed_time());
@@ -548,14 +531,14 @@ void bench(bm::State& state, workload_t const& workload, db_t& db, bool transact
     if (state.thread_index() == 0) {
         progress_t::print_db_open();
         if (!db.open())
-            throw ucsb::exception_t("Failed to open DB");
+            throw exception_t("Failed to open DB");
     }
     fence.sync();
 
     if (transactional) {
         auto transaction = db.create_transaction();
         if (!transaction)
-            throw ucsb::exception_t("Failed to create DB transaction");
+            throw exception_t("Failed to create DB transaction");
         bench(state, workload, db, *transaction);
     }
     else
@@ -565,7 +548,7 @@ void bench(bm::State& state, workload_t const& workload, db_t& db, bool transact
     if (state.thread_index() == 0) {
         progress_t::print_db_close();
         if (!db.close())
-            throw ucsb::exception_t("Failed to close DB");
+            throw exception_t("Failed to close DB");
     }
 }
 
@@ -586,21 +569,21 @@ int main(int argc, char** argv) {
                                                         settings.results_file_path.filename().stem().string());
             settings.results_file_path = in_progress_results_file_path;
             // Remove if exists
-            if (ucsb::fs::exists(in_progress_results_file_path))
-                ucsb::fs::remove(in_progress_results_file_path);
+            if (fs::exists(in_progress_results_file_path))
+                fs::remove(in_progress_results_file_path);
         }
 
         // Create directories
         std::error_code ec;
-        if (!ucsb::fs::exists(settings.db_main_dir_path)) {
-            ucsb::fs::create_directories(settings.db_main_dir_path, ec);
+        if (!fs::exists(settings.db_main_dir_path)) {
+            fs::create_directories(settings.db_main_dir_path, ec);
             if (ec) {
                 fmt::print("Failed to create DB main directory. path: {}\n", settings.db_main_dir_path.string());
                 return 1;
             }
         }
-        if (!ucsb::fs::exists(settings.results_file_path.parent_path())) {
-            ucsb::fs::create_directories(settings.results_file_path.parent_path(), ec);
+        if (!fs::exists(settings.results_file_path.parent_path())) {
+            fs::create_directories(settings.results_file_path.parent_path(), ec);
             if (ec) {
                 fmt::print("Failed to create results directory. path: {}\n",
                            settings.results_file_path.parent_path().string());
@@ -608,8 +591,8 @@ int main(int argc, char** argv) {
             }
         }
         for (auto const& dir_path : settings.db_storage_dir_paths) {
-            if (!ucsb::fs::exists(dir_path)) {
-                ucsb::fs::create_directories(dir_path, ec);
+            if (!fs::exists(dir_path)) {
+                fs::create_directories(dir_path, ec);
                 if (ec) {
                     fmt::print("Failed to create DB storage directory. path: {}\n", dir_path.string());
                     return 1;
@@ -619,7 +602,7 @@ int main(int argc, char** argv) {
 
         // Prepare workloads
         workloads_t workloads;
-        if (!ucsb::load(settings.workloads_file_path, workloads)) {
+        if (!load(settings.workloads_file_path, workloads)) {
             fmt::print("Failed to load workloads. path: {}\n", settings.workloads_file_path.string());
             return 1;
         }
@@ -640,8 +623,8 @@ int main(int argc, char** argv) {
         }
 
         // Setup DB
-        db_brand_t db_brand = ucsb::parse_db_brand(settings.db_name);
-        std::shared_ptr<db_t> db = ucsb::make_db(db_brand, settings.transactional);
+        db_brand_t db_brand = parse_db_brand(settings.db_name);
+        std::shared_ptr<db_t> db = make_db(db_brand, settings.transactional);
         if (!db) {
             if (settings.transactional)
                 fmt::print("Failed to create transactional DB: {}\n", settings.db_name);
@@ -669,11 +652,11 @@ int main(int argc, char** argv) {
         run_benchmarks(argc, argv, settings);
 
         if (!in_progress_results_file_path.empty()) {
-            ucsb::marge_results(in_progress_results_file_path, final_results_file_path, settings.db_name);
-            ucsb::fs::remove(in_progress_results_file_path);
+            marge_results(in_progress_results_file_path, final_results_file_path, settings.db_name);
+            fs::remove(in_progress_results_file_path);
         }
     }
-    catch (ucsb::exception_t const& ex) {
+    catch (exception_t const& ex) {
         fmt::print("ucsb exception: {}\n", ex.what());
     }
     catch (std::exception const& ex) {

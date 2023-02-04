@@ -84,9 +84,11 @@ def get_db_storage_dir_paths(db_name: str, size: str) -> list:
     db_storage_dir_paths = []
     for storage_disk_path in storage_disk_root_paths:
         if (storage_disk_path.endswith('/')):
-            db_storage_dir_paths.append(f'{storage_disk_path}{db_name}/{size}/')
+            db_storage_dir_paths.append(
+                f'{storage_disk_path}{db_name}/{size}/')
         else:
-            db_storage_dir_paths.append(f'{storage_disk_path}/{db_name}/{size}/')
+            db_storage_dir_paths.append(
+                f'{storage_disk_path}/{db_name}/{size}/')
     return db_storage_dir_paths
 
 
