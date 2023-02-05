@@ -49,19 +49,19 @@ Key-Value Stores and NoSQL databases differ in supported operations.
 It also applies to the operations queried by UCSB.
 
 
-|                        | Bulk Import | Bulk Scan | Batch Read | Batch Write |
-| :--------------------- | :---------: | :-------: | :--------: | :---------: |
-|                        |             |           |            |             |
-| 💾 Embedded Databases   |             |           |            |             |
-| WiredTiger             |      ✅      |     ✅     |     ❌      |      ❌      |
-| LevelDB                |      ❌      |     ✅     |     ❌      |      ✅      |
-| RocksDB                |      ✅      |     ✅     |     ✅      |      ✅      |
-| LMDB                   |             |           |            |             |
-| UDisk                  |      ✅      |     ✅     |     ✅      |      ✅      |
-|                        |             |           |            |             |
-| 🖥️ Standalone Databases |             |           |            |             |
-| Redis                  |             |     ❌     |     ✅      |      ✅      |
-| MongoDB                |             |     ✅     |     ✅      |      ✅      |
+|                        | Bulk Scan | Batch Read | Batch Write |
+| :--------------------- | :-------: | :--------: | :---------: |
+|                        |           |            |             |
+| 💾 Embedded Databases   |           |            |             |
+| WiredTiger             |     ✅     |     ❌      |      ❌      |
+| LevelDB                |     ✅     |     ❌      |      ✅      |
+| RocksDB                |     ✅     |     ✅      |      ✅      |
+| LMDB                   |     ✅     |     ❌      |      ❌      |
+| UDisk                  |     ✅     |     ✅      |      ✅      |
+|                        |           |            |             |
+| 🖥️ Standalone Databases |           |            |             |
+| Redis                  |     ❌     |     ✅      |      ✅      |
+| MongoDB                |     ✅     |     ✅      |      ✅      |
 
 When batches aren't natively supported, we simulate them with multiple single-entry operations.
 There is also asymmetry elsewhere:
@@ -87,11 +87,13 @@ Recent results:
 
 - [Supported Databases](#supported-databases)
 - [Yet Another Benchmark?](#yet-another-benchmark)
-- [Ways to Spoil a DBMS Benchmark](#ways-to-spoil-a-dbms-benchmark)
-  - [Durability vs Speed](#durability-vs-speed)
-  - [Strict vs Flexible RAM Limits](#strict-vs-flexible-ram-limits)
-  - [Dataset Size \& NAND Modes](#dataset-size--nand-modes)
 - [Preset Workloads](#preset-workloads)
+- [Ways to Spoil a DBMS Benchmark](#ways-to-spoil-a-dbms-benchmark)
+  - [Durability vs Write Speed](#durability-vs-write-speed)
+  - [Strict vs Flexible RAM Limits](#strict-vs-flexible-ram-limits)
+  - [Dataset Size and NAND Modes](#dataset-size-and-nand-modes)
+  - [Slow Benchmarks for Fast Code](#slow-benchmarks-for-fast-code)
+  - [Incomplete Measurements](#incomplete-measurements)
 
 ---
 
@@ -100,38 +102,38 @@ Recent results:
 Yes.
 In the DBMS world there are just 2 major benchmarks:
 
-* YCSB for NoSQL.
-* TPC for SQL.
-
-There are, of course, more niche variants:
-
-* New York Taxi Rides benchmarks.
-* ANN and BigANN benchmarks for kANN indexes.
+* [YCSB](https://github.com/brianfrankcooper/YCSB) for NoSQL.
+* [TPC](https://www.tpc.org/) for SQL.
 
 With YCSB everything seems simple - clone the repo, pick a DBMS, run the benchmark.
 TPC suite seems more enterprisey, and after a few years in the industry, I still don't understand the procedure.
-Moreover, most SQL databases these days are built on top of other NoSQL solutions.
+Moreover, most SQL databases these days are built on top of other NoSQL solutions, so NoSQL is more foundational.
 So naturally we used YCSB internally.
 
 We were getting great numbers.
 All was fine until it wasn't.
 We looked under the hood and realized that the benchmark code itself was less efficient than the databases it was trying to evaluate, causing additional bottlenecks and affecting the measurements.
-
-> It was like racing Ferraris with 30 mi/h speed limits.
-
 So just like others, we decided to port it to C++, refactor it, and share with the world.
-Everyone is welcome to contribute!
+
+## Preset Workloads
+
+* **∅**: imports monotonically increasing keys 🔄
+* **A**: 50% reads + 50% updates, all random
+* **C**: reads, all random
+* **D**: 95% reads + 5% inserts, all random
+* **E**: range scan 🔄
+* **✗**: batch read 🆕
+* **Y**: batch insert 🆕
+* **Z**: scans 🆕
+
+The **∅** was previously implemented as one-by-one inserts, but some KVS support the external construction of its internal representation files.
+The **E** was [previously](https://github.com/brianfrankcooper/YCSB/blob/master/workloads/workloade) mixed with 5% insertions.
 
 ## Ways to Spoil a DBMS Benchmark
 
-If you use Google Benchmark, you know about its [bunch of nifty tricks](/post/2022-03-04-gbench), like `DoNotOptimize` or the automatic resolution of the number of iterations at runtime.
-It's widespread in micro-benchmarking, but it begs for extensions when you start profiling a DBMS.
-The ones shipped with UCSB spawn a sibling process that samples usage statistics from the OS.
-Like `valgrind`, we read from [`/proc/*` files](https://man7.org/linux/man-pages/man5/proc.5.html) and aggregate stats like SSD I/O and overall RAM usage.
-
 > Unlike humans, [ACID](https://en.wikipedia.org/wiki/ACID) is one of the best things that can happen to DBMS 😁
 
-### Durability vs Speed
+### Durability vs Write Speed
 
 Like all good things, ACID is unreachable, because of at least one property - Durability.
 Absolute Durability is practically impossible and high Durability is expensive.
@@ -205,7 +207,7 @@ Between this, we flush the whole system.
 The caches filled during insertions benchmarks, will be invalidated before the reads begin.
 This will make the numbers more reliable but limits concurrent benchmarks to one.
 
-### Dataset Size & NAND Modes
+### Dataset Size and NAND Modes
 
 Large capacity SSDs store multiple bits per cell.
 If you are buying a Quad Level Cell SSD, you expect each of them to store 4 bits of relevant information.
@@ -224,16 +226,80 @@ In our case for a 1 TB workload on 8 TB drives, it's either:
 * starting with an empty drive,
 * starting with an 80% full drive.
 
-## Preset Workloads
+### Slow Benchmarks for Fast Code
 
-* [∅](https://unum.cloud/ucsb#0): imports monotonically increasing keys 🔄
-* [A](https://unum.cloud/ucsb#A): 50% reads + 50% updates, all random
-* [C](https://unum.cloud/ucsb#C): reads, all random
-* [D](https://unum.cloud/ucsb#D): 95% reads + 5% inserts, all random
-* [E](https://unum.cloud/ucsb#E): range scan 🔄
-* [✗](https://unum.cloud/ucsb#X): batch read 🆕
-* [Y](https://unum.cloud/ucsb#Y): batch insert 🆕
-* [Z](https://unum.cloud/ucsb#Z): scans 🆕
+Returning to the topic of definciencies in the original implementation, let's linger on the fact that is implemented in Java, while all performant Key-Value Stores are implemented in C and C++.
+This means, that you would need some form of a “Foreign Function Interface” to interact with the KVS.
+This immediately adds unnecessary work for our CPU, but it’s a minor problem compared to rest.
 
-The **∅** was previously implemented as one-by-one inserts, but some KVS support the external construction of its internal representation files.
-The **E** was [previously](https://github.com/brianfrankcooper/YCSB/blob/master/workloads/workloade) mixed with 5% insertions.
+Every language and its ecosystem has different priorities. Java focuses on the simplicity of development, while C++ trades it for higher performance.
+
+```java
+private static String getRowKey(String db, String table, String key) {
+    return db + ":" + table + ":" + key;
+}
+```
+
+The above snippet is from the [Apples & SnowFlakes FoundationDB adapter inside YCSB](https://github.com/brianfrankcooper/YCSB/blob/ce3eb9ce51c84ee9e236998cdd2cefaeb96798a8/foundationdb/src/main/java/site/ycsb/db/foundationdb/FoundationDBClient.java#L100), but it’s identical across the entire repo.
+It’s responsible for generating keys for queries, so it runs on the hot path.
+Here is what a modern recommended C++ version would look like:
+
+```cpp
+auto get_row_key(std::string_view db, std::string_view table, std::string_view key) {
+    return std::format("{}:{}:{}", db, table, key);
+}
+```
+
+From Java 7 onwards, the [Java String Pool](https://www.baeldung.com/java-string-pool) lives in the Heap space, which is garbage collected by the JVM.
+This code will produce a `StringBuilder`, a heap-allocated array of pointers to heap-allocated strings, later materializing in the final concatenated `String`.
+Of course, on-heap again.
+And if we know something about High-Performance Computing, the heap is expensive, but together with Garbage Collection and multithreading, it becomes completely intolerable.
+The same applies to the C++ version.
+Yes, we are doing only 1 allocation there, but it is also too slow to be called HPC.
+We need to replace `std::format` with `std::format_to` and export the result into a reusable buffer.
+
+---
+
+If one example is not enough, below is the [code snippet](https://github.com/brianfrankcooper/YCSB/blob/ce3eb9ce51c84ee9e236998cdd2cefaeb96798a8/core/src/main/java/site/ycsb/generator/ZipfianGenerator.java#L250), which produces random integers before packing them into `String` key.
+
+```java
+long nextLong(long itemcount) {
+    // from "Quickly Generating Billion-Record Synthetic Databases", Jim Gray et al, SIGMOD 1994
+    if (itemcount != countforzeta) {
+        synchronized (this) {
+            if (itemcount > countforzeta) {
+                ...
+            else
+                ...
+        }
+    }
+
+    double u = ThreadLocalRandom.current().nextDouble();
+    double uz = u * zetan;
+    if (uz < 1.0)
+        return base;
+    if (uz < 1.0 + Math.pow(0.5, theta))
+        return base + 1;
+
+    long ret = base + (long) ((itemcount) * Math.pow(eta * u - eta + 1, alpha));
+    setLastValue(ret);
+    return ret;
+}
+```
+
+To generate a `long`, YCSB is doing numerous operations on `double`-s, by far the most computationally expensive numeric type on modern computers (except for integer division).
+Aside from that, this PRNG contains 4x if statements and `synchronized (this)` mutex.
+Creating random integers for most distributions is generally within 50 CPU cycles or 10 nanoseconds.
+In this implementation, every if branch may cost that much, and the mutex may cost orders of magnitude more.
+If you are writing a benchmark, don't do that.
+
+### Incomplete Measurements
+
+If you use Google Benchmark, you know about its [bunch of nifty tricks](/post/2022-03-04-gbench), like `DoNotOptimize` or the automatic resolution of the number of iterations at runtime.
+It's widespread in micro-benchmarking, but it begs for extensions when you start profiling a DBMS.
+The ones shipped with UCSB spawn a sibling process that samples usage statistics from the OS.
+Like `valgrind`, we read from `/proc/*` [files](https://man7.org/linux/man-pages/man5/proc.5.html) and aggregate stats like SSD I/O and overall RAM usage.
+Those are better than nothing, but they are far less accurate, than what can be accomplished with eBPF.
+We have a pending ticket for its implementation.
+Don't wait, contribute 🤗
+
