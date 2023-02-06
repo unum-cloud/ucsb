@@ -27,8 +27,13 @@ RUN make install
 
 WORKDIR /
 
-RUN mkdir "./ucsb"
+# Build UCSB
+RUN git clone https://github.com/unum-cloud/ucsb.git
 WORKDIR "./ucsb/"
-COPY "./build_release/bin/_ucsb_bench" "./build_release/bin/_ucsb_bench"
+RUN update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-10 10
+RUN update-alternatives --install /usr/bin/g++ g++ /usr/bin/g++-10 10
+RUN bash -i setup.sh
+RUN bash -i build_release.sh
+RUN rm -rf ./bench
 
-ENTRYPOINT ["./build_release/bin/_ucsb_bench"]
+ENTRYPOINT ["./build_release/bin/ucsb_bench"]
