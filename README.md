@@ -6,15 +6,15 @@ Refactored and Extended with Batch and Range Queries<br/>
 <br/>
 
 <p align="center">
-  <a href="https://discord.gg/AxsU9mctAn"><img height="25" src="https://github.com/unum-cloud/ukv/raw/main/assets/icons/discord.svg" alt="Discord"></a>
-	&nbsp;&nbsp;&nbsp;
-  <a href="https://www.linkedin.com/company/unum-cloud/"><img height="25" src="https://github.com/unum-cloud/ukv/raw/main/assets/icons/linkedin.svg" alt="LinkedIn"></a>
-  &nbsp;&nbsp;&nbsp;
-  <a href="https://twitter.com/unum_cloud"><img height="25" src="https://github.com/unum-cloud/ukv/raw/main/assets/icons/twitter.svg" alt="Twitter"></a>
-  &nbsp;&nbsp;&nbsp;
-	<a href="https://unum.cloud/post"><img height="25" src="https://github.com/unum-cloud/ukv/raw/main/assets/icons/blog.svg" alt="Blog"></a>
-	&nbsp;&nbsp;&nbsp;
-	<a href="https://github.com/unum-cloud/ucset"><img height="25" src="https://github.com/unum-cloud/ukv/raw/main/assets/icons/github.svg" alt="GitHub"></a>
+<a href="https://discord.gg/AxsU9mctAn"><img height="25" src="https://github.com/unum-cloud/ukv/raw/main/assets/icons/discord.svg" alt="Discord"></a>
+&nbsp;&nbsp;&nbsp;
+<a href="https://www.linkedin.com/company/unum-cloud/"><img height="25" src="https://github.com/unum-cloud/ukv/raw/main/assets/icons/linkedin.svg" alt="LinkedIn"></a>
+&nbsp;&nbsp;&nbsp;
+<a href="https://twitter.com/unum_cloud"><img height="25" src="https://github.com/unum-cloud/ukv/raw/main/assets/icons/twitter.svg" alt="Twitter"></a>
+&nbsp;&nbsp;&nbsp;
+<a href="https://unum.cloud/post"><img height="25" src="https://github.com/unum-cloud/ukv/raw/main/assets/icons/blog.svg" alt="Blog"></a>
+&nbsp;&nbsp;&nbsp;
+<a href="https://github.com/unum-cloud/ucset"><img height="25" src="https://github.com/unum-cloud/ukv/raw/main/assets/icons/github.svg" alt="GitHub"></a>
 </p>
 
 ---
@@ -34,41 +34,38 @@ Unum Cloud Serving Benchmark is the grandchild of Yahoo Cloud Serving Benchmark,
 | Support of Transactions |        ❌        |        ✅        |
 
 As you may know, benchmarking databases is very complex.
-There is too much control flow to tune, so instead of learning the names of a thousand CLI arguments, you'd use a [`run.py`](https://github.com/unum-cloud/UCSB/blob/main/run.py) script to launch the benchmarks:
+There is too much control flow to tune, so instead of learning the names of a thousand CLI arguments, you'd use a [`run.py`](https://github.com/unum-cloud/UCSB/blob/main/run.py) script to launch the benchmarks.
+The outputs will be placed in the `bench/results/` folder.
 
 ```sh
-git clone https://github.com/unum-cloud/ucsb.git
-./run.py
+git clone https://github.com/unum-cloud/ucsb.git && cd ucsb && ./run.py
 ```
-
-The outputs will be placed into the `bench/results/` folder.
 
 ## Supported Databases
 
 Key-Value Stores and NoSQL databases differ in supported operations.
-It also applies to the operations queried by UCSB.
-
-
-|                        | Bulk Scan | Batch Read | Batch Write |
-| :--------------------- | :-------: | :--------: | :---------: |
-|                        |           |            |             |
-| 💾 Embedded Databases   |           |            |             |
-| WiredTiger             |     ✅     |     ❌      |      ❌      |
-| LevelDB                |     ✅     |     ❌      |      ✅      |
-| RocksDB                |     ✅     |     ✅      |      ✅      |
-| LMDB                   |     ✅     |     ❌      |      ❌      |
-| UDisk                  |     ✅     |     ✅      |      ✅      |
-|                        |           |            |             |
-| 🖥️ Standalone Databases |           |            |             |
-| Redis                  |     ❌     |     ✅      |      ✅      |
-| MongoDB                |     ✅     |     ✅      |      ✅      |
-
+Including the ones queried by UCSB, like "batch" operations.
 When batches aren't natively supported, we simulate them with multiple single-entry operations.
+
+|                        | Bulk Scan | Batch Read | Batch Write | Integer Keys |
+| :--------------------- | :-------: | :--------: | :---------: | :----------: |
+|                        |           |            |             |              |
+| 💾 Embedded Databases   |           |            |             |              |
+| WiredTiger             |     ✅     |     ❌      |      ❌      |      ✅       |
+| LevelDB                |     ✅     |     ❌      |      ✅      |      ❌       |
+| RocksDB                |     ✅     |     ✅      |      ✅      |      ❓       |
+| LMDB                   |     ✅     |     ❌      |      ❌      |      ❌       |
+| UDisk                  |     ✅     |     ✅      |      ✅      |      ✅       |
+|                        |           |            |             |              |
+| 🖥️ Standalone Databases |           |            |             |              |
+| Redis                  |     ❌     |     ✅      |      ✅      |      ❌       |
+| MongoDB                |     ✅     |     ✅      |      ✅      |      ✅       |
+
 There is also asymmetry elsewhere:
 
 * WiredTiger supports fixed-size integer keys.
 * LevelDB only supports variable length keys and values.
-* RocksDB has minimal support for [`fixed_key_len`](https://cs.github.com/facebook/rocksdb?q=fixed_key_len), incompatiable with `BlockBasedTable`.
+* RocksDB has minimal support for [`fixed_key_len`](https://cs.github.com/facebook/rocksdb?q=fixed_key_len), incompatible with `BlockBasedTable`.
 * UDisk supports both fixed-size keys and values.
 
 Just like YCSB, we use 8-byte integer keys and 1000-byte values.
@@ -106,7 +103,7 @@ In the DBMS world there are just 2 major benchmarks:
 * [TPC](https://www.tpc.org/) for SQL.
 
 With YCSB everything seems simple - clone the repo, pick a DBMS, run the benchmark.
-TPC suite seems more enterprisey, and after a few years in the industry, I still don't understand the procedure.
+TPC suite seems more "enterprisey", and after a few years in the industry, I still don't understand the procedure.
 Moreover, most SQL databases these days are built on top of other NoSQL solutions, so NoSQL is more foundational.
 So naturally we used YCSB internally.
 
@@ -288,7 +285,7 @@ long nextLong(long itemcount) {
 ```
 
 To generate a `long`, YCSB is doing numerous operations on `double`-s, by far the most computationally expensive numeric type on modern computers (except for integer division).
-Aside from that, this PRNG contains 4x if statements and `synchronized (this)` mutex.
+Aside from that, this Pseudo-Random Generator contains 4x if statements and `synchronized (this)` mutex.
 Creating random integers for most distributions is generally within 50 CPU cycles or 10 nanoseconds.
 In this implementation, every if branch may cost that much, and the mutex may cost orders of magnitude more.
 If you are writing a benchmark, don't do that.
@@ -302,4 +299,3 @@ Like `valgrind`, we read from `/proc/*` [files](https://man7.org/linux/man-pages
 Those are better than nothing, but they are far less accurate, than what can be accomplished with eBPF.
 We have a pending ticket for its implementation.
 Don't wait, contribute 🤗
-
