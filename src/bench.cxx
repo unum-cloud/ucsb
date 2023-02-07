@@ -8,6 +8,7 @@
 #include <nlohmann/json.hpp>
 #include <benchmark/benchmark.h>
 
+#include "src/core/timer.hpp"
 #include "src/core/types.hpp"
 #include "src/core/settings.hpp"
 #include "src/core/profiler.hpp"
@@ -344,7 +345,7 @@ db_hints_t make_hints(workloads_t const& workloads) {
 }
 
 operation_chooser_ptr_t create_operation_chooser(workload_t const& workload) {
-    operation_chooser_ptr_t chooser = std::make_unique<operation_chooser_ptr_t>();
+    operation_chooser_ptr_t chooser = std::make_unique<operation_chooser_t>();
     chooser->add(operation_kind_t::upsert_k, workload.upsert_proportion);
     chooser->add(operation_kind_t::update_k, workload.update_proportion);
     chooser->add(operation_kind_t::remove_k, workload.remove_proportion);
@@ -437,7 +438,7 @@ void bench(bm::State& state, workload_t const& workload, db_t& db, data_accessor
 
     // Bench components
     auto chooser = create_operation_chooser(workload);
-    timer_t timer(state);
+    ucsb::timer_t timer(state);
     worker_t worker(workload, data_accessor, timer);
     std::atomic_bool do_flash = true;
 
