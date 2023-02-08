@@ -206,7 +206,7 @@ def main(db_names: list = None, sizes: list = ['100MB'], workload_names: Optiona
 
     if os.geteuid() != 0:
         sys.exit('Run as sudo!')
-        
+
     check_args(db_names, sizes, workload_names,
                main_dir_root_path, storage_disk_root_paths, threads_count)
 
