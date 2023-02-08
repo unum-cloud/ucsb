@@ -42,29 +42,29 @@ supported_workload_names = [
 
 
 def get_db_config_file_path(db_name: str, size: str) -> str:
-    path = f'./bench/configs/{db_name}/{size}.cfg'
+    path = os.path.join('./bench/configs', db_name, size + '.cfg')
     if not pathlib.Path(path).exists():
-        path = f'./bench/configs/{db_name}/default.cfg'
+        path = os.path.join('./bench/configs', db_name, 'default.cfg')
     return path
 
 
 def get_workloads_file_path(size: str) -> str:
-    return f'./bench/workloads/{size}.json'
+    return os.path.join('./bench/workloads', size + '.json')
 
 
 def get_db_main_dir_path(db_name: str, size: str, main_dir_root_path: str) -> str:
-    return f'{main_dir_root_path}{db_name}/{size}/'
+    return os.path.join(main_dir_root_path + db_name, size, "")
 
 
 def get_db_storage_dir_paths(db_name: str, size: str, storage_disk_root_paths: str) -> list:
     db_storage_dir_paths = []
     for storage_disk_path in storage_disk_root_paths:
         if (storage_disk_path.endswith('/')):
-            db_storage_dir_paths.append(
-                f'{storage_disk_path}{db_name}/{size}/')
+            db_storage_dir_paths.append(os.path.join(
+                storage_disk_path + db_name, size, ""))
         else:
-            db_storage_dir_paths.append(
-                f'{storage_disk_path}/{db_name}/{size}/')
+            db_storage_dir_paths.append(os.path.join(
+                storage_disk_path, db_name, size, ""))
     return db_storage_dir_paths
 
 
@@ -82,9 +82,9 @@ def get_results_file_path(db_name: str, size: str, drop_caches: bool, transactio
             root_dir_path = './bench/results/'
 
     if len(storage_disk_root_paths) > 1:
-        return f'{root_dir_path}cores_{threads_count}/disks_{len(storage_disk_root_paths)}/{db_name}/{size}.json'
+        return os.path.join(f'{root_dir_path}cores_{threads_count}', f'disks_{len(storage_disk_root_paths)}', db_name, f'{size}.json')
     else:
-        return f'{root_dir_path}cores_{threads_count}/disks_1/{db_name}/{size}.json'
+        return os.path.join(f'{root_dir_path}cores_{threads_count}', 'disks_1', db_name, f'{size}.json')
 
 
 def drop_system_caches():
@@ -164,7 +164,7 @@ def validate_args(args=[], supported_args: list = []) -> str:
 
 def check_for_path_exists(paths=[]) -> str:
     for path in paths:
-        if not os.path.exists(path):
+        if not pathlib.Path(path).exists():
             return path
 
     return None
