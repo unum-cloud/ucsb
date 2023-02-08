@@ -159,7 +159,7 @@ def validate_args(args=[], supported_args: list = []) -> str:
         if i == count:
             return arg
 
-    return 'Ok'
+    return None
 
 
 def check_for_path_exists(paths=[]) -> str:
@@ -167,41 +167,41 @@ def check_for_path_exists(paths=[]) -> str:
         if not os.path.exists(path):
             return path
 
-    return 'Ok'
+    return None
 
 
 def check_args(db_names, sizes, workload_names, main_dir_root_path, storage_disk_root_paths, threads_count):
     if db_names is None:
-        sys.exit('db_name should be initialized!')
+        sys.exit('db_names should be initialized!')
 
     status = validate_args(db_names, supported_db_names)
-    if status != 'Ok':
+    if status is not None:
         sys.exit(status + ' is not supported database!')
 
     status = validate_args(sizes, supported_sizes)
-    if status != 'Ok':
+    if status is not None:
         sys.exit(status + ' is not supported size!')
 
     if workload_names != supported_workload_names:
         status = validate_args(workload_names, supported_workload_names)
-        if status != 'Ok':
+        if status is not None:
             sys.exit(status + ' is not supported workload names!')
 
     status = check_for_path_exists([main_dir_root_path])
-    if status != 'Ok':
+    if status is not None:
         sys.exit(status + ' path is not exists!')
 
     status = check_for_path_exists(storage_disk_root_paths)
-    if status != 'Ok':
+    if status is not None:
         sys.exit(status + ' path is not exists!')
 
     if not threads_count >= 1:
         sys.exit('Wrong threads count!')
 
 
-def main(db_names: list = None, sizes: list = ['100MB'], workload_names: Optional[list] = supported_workload_names,
+def main(db_names: list[str] = None, sizes: Optional[list[str]] = ['100MB'], workload_names: Optional[list[str]] = supported_workload_names,
          threads_count: Optional[int] = 1, transactional: Optional[bool] = False, main_dir_root_path: Optional[str] = './tmp/',
-         storage_disk_root_paths: Optional[list] = [], cleanup_previous: Optional[bool] = False, drop_caches: Optional[bool] = False,
+         storage_disk_root_paths: Optional[list[str]] = [], cleanup_previous: Optional[bool] = False, drop_caches: Optional[bool] = False,
          run_docker_image: Optional[bool] = False) -> None:
 
     if os.geteuid() != 0:
