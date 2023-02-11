@@ -42,29 +42,25 @@ supported_workload_names = [
 
 
 def get_db_config_file_path(db_name: str, size: str) -> str:
-    path = os.path.join('./bench/configs', db_name, size + '.cfg')
+    path = os.path.join('./bench/configs', db_name, f'{size}.cfg')
     if not pathlib.Path(path).exists():
         path = os.path.join('./bench/configs', db_name, 'default.cfg')
     return path
 
 
 def get_workloads_file_path(size: str) -> str:
-    return os.path.join('./bench/workloads', size + '.json')
+    return os.path.join('./bench/workloads', f'{size}.json')
 
 
 def get_db_main_dir_path(db_name: str, size: str, main_dir_root_path: str) -> str:
-    return os.path.join(main_dir_root_path + db_name, size, "")
+    return os.path.join(f'{main_dir_root_path}{db_name}', size, "")
 
 
 def get_db_storage_dir_paths(db_name: str, size: str, storage_disk_root_paths: str) -> list:
     db_storage_dir_paths = []
     for storage_disk_path in storage_disk_root_paths:
-        if (storage_disk_path.endswith('/')):
-            db_storage_dir_paths.append(os.path.join(
-                storage_disk_path + db_name, size, ""))
-        else:
-            db_storage_dir_paths.append(os.path.join(
-                storage_disk_path, db_name, size, ""))
+        db_storage_dir_paths.append(os.path.join(
+            storage_disk_path, db_name, size, ""))
     return db_storage_dir_paths
 
 
@@ -125,11 +121,11 @@ def run(db_name: str, size: str, workload_names: list, main_dir_root_path: str, 
                             {transactional_flag} \
                             -c "{db_config_file_path}" \
                             -w "{workloads_file_path}" \
-                            -wd "{db_main_dir_path}" \
-                            -sd "{db_storage_dir_paths}"\
+                            -m "{db_main_dir_path}" \
+                            -s "{db_storage_dir_paths}"\
                             -r "{results_file_path}" \
-                            -threads {threads_count} \
-                            -filter {filter}'
+                            -ts {threads_count} \
+                            -f {filter}'
                             )
     process.interact()
     process.close()
@@ -170,7 +166,7 @@ def check_for_path_exists(paths=[]) -> str:
     return None
 
 
-def check_args(db_names, sizes, workload_names, main_dir_root_path, storage_disk_root_paths, threads_count):
+def check_args(db_names, sizes, workload_names, storage_disk_root_paths, threads_count):
     if db_names is None:
         sys.exit('db_names should be initialized!')
 
@@ -186,10 +182,6 @@ def check_args(db_names, sizes, workload_names, main_dir_root_path, storage_disk
         status = validate_args(workload_names, supported_workload_names)
         if status is not None:
             sys.exit(status + ' is not supported workload names!')
-
-    status = check_for_path_exists([main_dir_root_path])
-    if status is not None:
-        sys.exit(status + ' path is not exists!')
 
     status = check_for_path_exists(storage_disk_root_paths)
     if status is not None:
@@ -208,7 +200,7 @@ def main(db_names: list[str] = None, sizes: Optional[list[str]] = ['100MB'], wor
         sys.exit('Run as sudo!')
 
     check_args(db_names, sizes, workload_names,
-               main_dir_root_path, storage_disk_root_paths, threads_count)
+               storage_disk_root_paths, threads_count)
 
     # Cleanup old DBs
     if cleanup_previous:
