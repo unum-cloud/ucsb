@@ -78,4 +78,23 @@ void ukv_t::destroy() {
     assert(status_);
 }
 
+operation_result_t ukv_t::upsert(key_t key, value_spanc_t value) {
+    status_ = collection_[key].assign(value);
+    return {size_t(status_), status_ ? operation_status_t::ok_k : operation_status_t::error_k};
+}
+
+operation_result_t ukv_t::update(key_t key, value_spanc_t value) {
+    status_ = collection_[key];
+    if (status_)
+        return {0, operation_status_t::not_found_k};
+
+    status_ = collection_[key].assign(value);
+    return {size_t(status_), status_ ? operation_status_t::ok_k : operation_status_t::error_k};
+}
+
+operation_result_t ukv_t::remove(key_t key) {
+    status_ = status_ = collection_[key].erase();
+    return {size_t(status), status ? operation_status_t::ok_k : operation_status_t::error_k};
+}
+
 } // namespace ukv
