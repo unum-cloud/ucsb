@@ -53,7 +53,7 @@ def get_workloads_file_path(size: str) -> str:
 
 
 def get_db_main_dir_path(db_name: str, size: str, main_dir_root_path: str) -> str:
-    return os.path.join(f'{main_dir_root_path}{db_name}', size, "")
+    return os.path.join(main_dir_root_path, db_name, size, "")
 
 
 def get_db_storage_dir_paths(db_name: str, size: str, storage_disk_root_paths: str) -> list:
