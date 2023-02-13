@@ -63,4 +63,5 @@ class UCSBConan(ConanFile):
         self.requires("lz4/1.9.3")
         self.requires("zstd/1.5.2")
         self.requires("bzip2/1.0.8")
+        self.requires("argparse/2.9")
         pass

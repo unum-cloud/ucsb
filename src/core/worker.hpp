@@ -28,10 +28,10 @@ namespace ucsb {
  */
 class worker_t {
   public:
-    using key_generator_t = std::unique_ptr<generator_gt<key_t>>;
-    using acknowledged_key_generator_t = std::unique_ptr<acknowledged_counter_generator_t>;
-    using value_length_generator_t = std::unique_ptr<generator_gt<value_length_t>>;
-    using length_generator_t = std::unique_ptr<generator_gt<size_t>>;
+    using key_generator_t = std::unique_ptr<core::generators::generator_gt<key_t>>;
+    using acknowledged_key_generator_t = std::unique_ptr<core::generators::acknowledged_counter_generator_t>;
+    using value_length_generator_t = std::unique_ptr<core::generators::generator_gt<value_length_t>>;
+    using length_generator_t = std::unique_ptr<core::generators::generator_gt<size_t>>;
     using values_and_sizes_spanc_t = std::pair<values_spanc_t, value_lengths_spanc_t>;
 
     worker_t(workload_t const& workload, data_accessor_t& data_accessor, timer_t& timer);
@@ -48,7 +48,7 @@ class worker_t {
     inline operation_result_t do_scan();
 
   private:
-    inline key_generator_t create_key_generator(workload_t const& workload, counter_generator_t& counter_generator);
+    inline key_generator_t create_key_generator(workload_t const& workload, core::generators::counter_generator_t& counter_generator);
     inline value_length_generator_t create_value_length_generator(workload_t const& workload);
     inline length_generator_t create_batch_upsert_length_generator(workload_t const& workload);
     inline length_generator_t create_batch_read_length_generator(workload_t const& workload);
@@ -74,7 +74,7 @@ class worker_t {
     keys_t keys_buffer_;
 
     value_length_generator_t value_length_generator_;
-    random_byte_generator_t value_generator_;
+    core::generators::random_byte_generator_t value_generator_;
     values_buffer_t values_buffer_;
     value_lengths_t value_sizes_buffer_;
 
@@ -89,9 +89,9 @@ worker_t::worker_t(workload_t const& workload, data_accessor_t& data_accessor, t
 
     if (workload.upsert_proportion == 1.0 || workload.batch_upsert_proportion == 1.0 ||
         workload.bulk_load_proportion == 1.0)
-        upsert_key_sequence_generator = std::make_unique<counter_generator_t>(workload.start_key);
+        upsert_key_sequence_generator = std::make_unique<core::generators::counter_generator_t>(workload.start_key);
     else {
-        acknowledged_key_generator = std::make_unique<acknowledged_counter_generator_t>(workload.db_records_count);
+        acknowledged_key_generator = std::make_unique<core::generators::acknowledged_counter_generator_t>(workload.db_records_count);
         key_generator_ = create_key_generator(workload, *acknowledged_key_generator);
         upsert_key_sequence_generator = std::move(acknowledged_key_generator);
     }
@@ -190,22 +190,22 @@ inline operation_result_t worker_t::do_scan() {
 }
 
 inline worker_t::key_generator_t worker_t::create_key_generator(workload_t const& workload,
-                                                                counter_generator_t& counter_generator) {
+                                                                core::generators::counter_generator_t& counter_generator) {
     key_generator_t generator;
     switch (workload.key_dist) {
     case distribution_kind_t::uniform_k:
-        generator = std::make_unique<uniform_generator_gt<key_t>>(workload.start_key,
+        generator = std::make_unique<core::generators::uniform_generator_gt<key_t>>(workload.start_key,
                                                                   workload.start_key + workload.records_count - 1);
         break;
     case distribution_kind_t::zipfian_k: {
         size_t new_keys = (size_t)(workload.operations_count * workload.upsert_proportion * 2);
         generator =
-            std::make_unique<scrambled_zipfian_generator_t>(workload.start_key,
+            std::make_unique<core::generators::scrambled_zipfian_generator_t>(workload.start_key,
                                                             workload.start_key + workload.records_count + new_keys - 1);
         break;
     }
     case distribution_kind_t::skewed_latest_k:
-        generator = std::make_unique<skewed_latest_generator_t>(counter_generator);
+        generator = std::make_unique<core::generators::skewed_latest_generator_t>(counter_generator);
         break;
     default: throw exception_t(fmt::format("Unknown key distribution: {}", int(workload.key_dist)));
     }
@@ -217,10 +217,10 @@ inline worker_t::value_length_generator_t worker_t::create_value_length_generato
     value_length_generator_t generator;
     switch (workload.value_length_dist) {
     case distribution_kind_t::const_k:
-        generator = std::make_unique<const_generator_gt<value_length_t>>(workload.value_length);
+        generator = std::make_unique<core::generators::const_generator_gt<value_length_t>>(workload.value_length);
         break;
     case distribution_kind_t::uniform_k:
-        generator = std::make_unique<uniform_generator_gt<value_length_t>>(1, workload.value_length);
+        generator = std::make_unique<core::generators::uniform_generator_gt<value_length_t>>(1, workload.value_length);
         break;
     default: throw exception_t(fmt::format("Unknown value length distribution: {}", int(workload.value_length_dist)));
     }
@@ -232,12 +232,12 @@ inline worker_t::length_generator_t worker_t::create_batch_upsert_length_generat
     length_generator_t generator;
     switch (workload.batch_upsert_length_dist) {
     case distribution_kind_t::uniform_k:
-        generator = std::make_unique<uniform_generator_gt<size_t>>(workload.batch_upsert_min_length,
+        generator = std::make_unique<core::generators::uniform_generator_gt<size_t>>(workload.batch_upsert_min_length,
                                                                    workload.batch_upsert_max_length);
         break;
     case distribution_kind_t::zipfian_k:
         generator =
-            std::make_unique<zipfian_generator_t>(workload.batch_upsert_min_length, workload.batch_upsert_max_length);
+            std::make_unique<core::generators::zipfian_generator_t>(workload.batch_upsert_min_length, workload.batch_upsert_max_length);
         break;
     default:
         throw exception_t(
@@ -250,12 +250,12 @@ inline worker_t::length_generator_t worker_t::create_batch_read_length_generator
     length_generator_t generator;
     switch (workload.batch_read_length_dist) {
     case distribution_kind_t::uniform_k:
-        generator = std::make_unique<uniform_generator_gt<size_t>>(workload.batch_read_min_length,
+        generator = std::make_unique<core::generators::uniform_generator_gt<size_t>>(workload.batch_read_min_length,
                                                                    workload.batch_read_max_length);
         break;
     case distribution_kind_t::zipfian_k:
         generator =
-            std::make_unique<zipfian_generator_t>(workload.batch_read_min_length, workload.batch_read_max_length);
+            std::make_unique<core::generators::zipfian_generator_t>(workload.batch_read_min_length, workload.batch_read_max_length);
         break;
     default:
         throw exception_t(
@@ -269,11 +269,11 @@ inline worker_t::length_generator_t worker_t::create_bulk_load_length_generator(
     length_generator_t generator;
     switch (workload.bulk_load_length_dist) {
     case distribution_kind_t::uniform_k:
-        generator = std::make_unique<uniform_generator_gt<size_t>>(workload.bulk_load_min_length,
+        generator = std::make_unique<core::generators::uniform_generator_gt<size_t>>(workload.bulk_load_min_length,
                                                                    workload.bulk_load_max_length);
         break;
     case distribution_kind_t::zipfian_k:
-        generator = std::make_unique<zipfian_generator_t>(workload.bulk_load_min_length, workload.bulk_load_max_length);
+        generator = std::make_unique<core::generators::zipfian_generator_t>(workload.bulk_load_min_length, workload.bulk_load_max_length);
         break;
     default:
         throw exception_t(
@@ -287,12 +287,12 @@ inline worker_t::length_generator_t worker_t::create_range_select_length_generat
     length_generator_t generator;
     switch (workload.range_select_length_dist) {
     case distribution_kind_t::uniform_k:
-        generator = std::make_unique<uniform_generator_gt<size_t>>(workload.range_select_min_length,
+        generator = std::make_unique<core::generators::uniform_generator_gt<size_t>>(workload.range_select_min_length,
                                                                    workload.range_select_max_length);
         break;
     case distribution_kind_t::zipfian_k:
         generator =
-            std::make_unique<zipfian_generator_t>(workload.range_select_min_length, workload.range_select_max_length);
+            std::make_unique<core::generators::zipfian_generator_t>(workload.range_select_min_length, workload.range_select_max_length);
         break;
     default:
         throw exception_t(

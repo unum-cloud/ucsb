@@ -5,9 +5,12 @@
 
 #include <fmt/format.h>
 #include <fmt/chrono.h>
-#include <nlohmann/json.hpp>
 #include <benchmark/benchmark.h>
 
+#include <nlohmann/json.hpp>
+#include <argparse/argparse.hpp>
+
+#include "src/core/timer.hpp"
 #include "src/core/types.hpp"
 #include "src/core/settings.hpp"
 #include "src/core/profiler.hpp"
@@ -28,149 +31,46 @@ using namespace ucsb;
 
 using operation_chooser_ptr_t = std::unique_ptr<operation_chooser_t>;
 
-void usage_message(const char* command) {
-    fmt::print("Usage: {} [options]\n", command);
-    fmt::print("Options:\n");
-    fmt::print("-db: Database name\n");
-    fmt::print("-t: transactional\n");
-    fmt::print("-c: Database configuration file path\n");
-    fmt::print("-w: Workloads file path\n");
-    fmt::print("-wd: Database main directory path\n");
-    fmt::print("-sd: Database storage directories path\n");
-    fmt::print("-r: Results file path\n");
-    fmt::print("-filter: Workload filter (Optional)\n");
-    fmt::print("-threads: Threads count (Optional, default: 1)\n");
-}
-
 void parse_and_validate_args(int argc, char* argv[], settings_t& settings) {
-    int arg_idx = 1;
-    while (arg_idx < argc && start_with(argv[arg_idx], "-")) {
-        if (strcmp(argv[arg_idx], "-db") == 0) {
-            ++arg_idx;
-            if (arg_idx >= argc) {
-                usage_message(argv[0]);
-                fmt::print("Missing argument value for -db\n");
-                exit(1);
-            }
-            settings.db_name = std::string(argv[arg_idx]);
-            ++arg_idx;
-        }
-        else if (strcmp(argv[arg_idx], "-t") == 0) {
-            settings.transactional = true;
-            ++arg_idx;
-        }
-        else if (strcmp(argv[arg_idx], "-c") == 0) {
-            ++arg_idx;
-            if (arg_idx >= argc) {
-                usage_message(argv[0]);
-                fmt::print("Missing argument value for -c\n");
-                exit(1);
-            }
-            settings.db_config_file_path = std::string(argv[arg_idx]);
-            ++arg_idx;
-        }
-        else if (strcmp(argv[arg_idx], "-w") == 0) {
-            ++arg_idx;
-            if (arg_idx >= argc) {
-                usage_message(argv[0]);
-                fmt::print("Missing argument value for -w\n");
-                exit(1);
-            }
-            settings.workloads_file_path = std::string(argv[arg_idx]);
-            ++arg_idx;
-        }
-        else if (strcmp(argv[arg_idx], "-r") == 0) {
-            ++arg_idx;
-            if (arg_idx >= argc) {
-                usage_message(argv[0]);
-                fmt::print("Missing argument value for -r\n");
-                exit(1);
-            }
-            settings.results_file_path = std::string(argv[arg_idx]);
-            ++arg_idx;
-        }
-        else if (strcmp(argv[arg_idx], "-wd") == 0) {
-            ++arg_idx;
-            if (arg_idx >= argc) {
-                usage_message(argv[0]);
-                fmt::print("Missing argument value for -wd\n");
-                exit(1);
-            }
-            std::string path(argv[arg_idx]);
-            if (!path.empty() && path.back() != '/')
-                path.push_back('/');
-            settings.db_main_dir_path = path;
-            ++arg_idx;
-        }
-        else if (strcmp(argv[arg_idx], "-sd") == 0) {
-            ++arg_idx;
-            if (arg_idx >= argc) {
-                usage_message(argv[0]);
-                fmt::print("Missing argument value for -sd\n");
-                exit(1);
-            }
-            settings.db_storage_dir_paths.clear();
-            std::string str_dir_paths(argv[arg_idx]);
-            std::vector<std::string> dir_paths = split(str_dir_paths, ',');
-            for (auto& dir_path : dir_paths) {
-                if (!dir_path.empty() && dir_path.back() != '/')
-                    dir_path.push_back('/');
-                settings.db_storage_dir_paths.push_back(dir_path);
-            }
-            ++arg_idx;
-        }
-        else if (strcmp(argv[arg_idx], "-threads") == 0) {
-            ++arg_idx;
-            if (arg_idx >= argc) {
-                usage_message(argv[0]);
-                fmt::print("Missing argument value for -threads\n");
-                exit(1);
-            }
-            settings.threads_count = std::stoi(argv[arg_idx]);
-            ++arg_idx;
-        }
-        else if (strcmp(argv[arg_idx], "-filter") == 0) {
-            ++arg_idx;
-            if (arg_idx >= argc) {
-                usage_message(argv[0]);
-                fmt::print("Missing argument value for -filter\n");
-                exit(1);
-            }
-            settings.workload_filter = std::string(argv[arg_idx]);
-            ++arg_idx;
-        }
-        else {
-            usage_message(argv[0]);
-            fmt::print("Unknown option '{}'\n", argv[arg_idx]);
-            exit(1);
-        }
+
+    argparse::ArgumentParser program(argv[0]);
+    program.add_argument("-db", "--db_name").required().help("Database name");
+    program.add_argument("-w", "--workload_path").required().help("Workloads file path");
+    program.add_argument("-c", "--cfg_path").required().help("Database configuration file path");
+    program.add_argument("-t", "--txn").default_value(false).implicit_value(true).help("transactional");
+    program.add_argument("-r", "--result_path").required().help("Result file path");
+    program.add_argument("-m", "--main_dir").required().help("Database main directory path");
+    program.add_argument("-s", "--storage_dir")
+        .default_value(std::string(""))
+        .implicit_value(std::string(""))
+        .help("Database storage directory path");
+    program.add_argument("-f", "--filter").required().help("Workloads filter (Optional)");
+    program.add_argument("-ts", "--threads").required().default_value(1).help("Threads Count");
+
+    program.parse_known_args(argc, argv);
+
+    settings.db_name = program.get("db_name");
+    settings.db_config_file_path = program.get("cfg_path");
+    settings.workloads_file_path = program.get("workload_path");
+    settings.results_file_path = program.get("result_path");
+    settings.threads_count = std::stoi(program.get("threads"));
+    settings.workload_filter = program.get("filter");
+    settings.transactional = program.get<bool>("txn");
+
+    auto path = program.get("main_dir");
+    if (!path.empty() && path.back() != '/')
+        path.push_back('/');
+    settings.db_main_dir_path = path;
+
+    settings.db_storage_dir_paths.clear();
+    std::string str_dir_paths = program.get("storage_dir");
+    auto dir_paths = split(str_dir_paths, ',');
+    for (auto& dir_path : dir_paths) {
+        if (!dir_path.empty() && dir_path.back() != '/')
+            dir_path.push_back('/');
+        settings.db_storage_dir_paths.push_back(dir_path);
     }
 
-    if (arg_idx == 1 || arg_idx != argc) {
-        usage_message(argv[0]);
-        exit(1);
-    }
-
-    if (settings.db_name.empty()) {
-        fmt::print("-db: DB name not specified\n");
-        exit(1);
-    }
-    if (settings.db_config_file_path.empty()) {
-        fmt::print("-c: DB configuration file path not specified\n");
-        exit(1);
-    }
-    if (settings.workloads_file_path.empty()) {
-        fmt::print("-w: workloads file path not specified\n");
-        exit(1);
-    }
-    if (settings.db_main_dir_path.empty()) {
-        fmt::print("-wd: working dir path not specified\n");
-        exit(1);
-    }
-    if (settings.results_file_path.empty()) {
-        fmt::print("-r: results file path not specified\n");
-        exit(1);
-    }
     if (settings.threads_count == 0) {
         fmt::print("-threads: Zero threads count specified\n");
         exit(1);
@@ -344,7 +244,7 @@ db_hints_t make_hints(workloads_t const& workloads) {
 }
 
 operation_chooser_ptr_t create_operation_chooser(workload_t const& workload) {
-    operation_chooser_ptr_t chooser = std::make_unique<operation_chooser_ptr_t>();
+    operation_chooser_ptr_t chooser = std::make_unique<operation_chooser_t>();
     chooser->add(operation_kind_t::upsert_k, workload.upsert_proportion);
     chooser->add(operation_kind_t::update_k, workload.update_proportion);
     chooser->add(operation_kind_t::remove_k, workload.remove_proportion);
@@ -437,7 +337,7 @@ void bench(bm::State& state, workload_t const& workload, db_t& db, data_accessor
 
     // Bench components
     auto chooser = create_operation_chooser(workload);
-    timer_t timer(state);
+    ucsb::timer_t timer(state);
     worker_t worker(workload, data_accessor, timer);
     std::atomic_bool do_flash = true;
 
