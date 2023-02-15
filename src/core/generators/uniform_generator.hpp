@@ -3,7 +3,7 @@
 
 #include "src/core/generators/generator.hpp"
 
-namespace ucsb::core::generators {
+namespace ucsb::core {
 
 template <typename value_at>
 class uniform_generator_gt : public generator_gt<value_at> {
@@ -21,4 +21,4 @@ class uniform_generator_gt : public generator_gt<value_at> {
     value_t last_;
 };
 
-} // namespace ucsb
+} // namespace ucsb::core
