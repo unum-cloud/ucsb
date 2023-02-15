@@ -53,7 +53,7 @@ class UCSBConan(ConanFile):
         # Your library dependencies go here.
         # https://docs.conan.io/en/latest/reference/conanfile/methods.html#requirements
 
-        self.requires("fmt/8.0.1")
+        self.requires("fmt/8.1.1")
         self.requires("benchmark/1.6.0")
         self.requires("nlohmann_json/3.10.4")
         # self.requires("rocksdb/6.20.3")
