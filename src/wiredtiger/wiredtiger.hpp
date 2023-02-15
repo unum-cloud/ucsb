@@ -395,13 +395,9 @@ void wiredtiger_t::flush() {
     bulk_load_session_.reset();
 }
 
-size_t wiredtiger_t::size_on_disk() const {
-    return ucsb::size_on_disk(main_dir_path_);
-}
+size_t wiredtiger_t::size_on_disk() const { return ucsb::size_on_disk(main_dir_path_); }
 
-std::unique_ptr<transaction_t> wiredtiger_t::create_transaction() {
-    return {};
-}
+std::unique_ptr<transaction_t> wiredtiger_t::create_transaction() { return {}; }
 
 bool wiredtiger_t::load_config(config_t& config) {
     if (!fs::exists(config_path_))

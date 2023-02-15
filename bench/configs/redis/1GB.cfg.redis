@@ -1,0 +1,9 @@
+include bench/configs/redis/redis.cfg
+# Directory
+dir tmp/redis/1GB/
+pidfile redis.pid
+logfile redis.log
+
+# Unix socket
+unixsocket redis.sock
+unixsocketperm 777
