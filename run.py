@@ -129,7 +129,7 @@ def run(db_name: str, size: str, workload_names: list, main_dir_path: str, stora
     if run_docker_image:
         runner = f'docker run -v {os.getcwd()}/bench:/ucsb/bench -v {os.getcwd()}/tmp:/ucsb/tmp -it ucsb-image-dev'
     else:
-        runner = './build_release/bin/_ucsb_bench_cxx'
+        runner = './build_release/bin/ucsb_bench'
     process = pexpect.spawn(f'{runner} \
                             -db {db_name} \
                             {transactional_flag} \
