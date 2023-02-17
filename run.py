@@ -49,12 +49,12 @@ supported_workload_names = [
 ]
  
 default_threads_count = 1
-default_main_dir_path = './tmp/'
+default_main_dir_path = './db_main/'
 default_storage_disk_paths = [
-    # '/mnt/disk1/',
-    # '/mnt/disk2/',
-    # '/mnt/disk3/',
-    # '/mnt/disk4/',
+    # '/mnt/disk1/db_storage/',
+    # '/mnt/disk2/db_storage/',
+    # '/mnt/disk3/db_storage/',
+    # '/mnt/disk4/db_storage/',
 ]
 
 
