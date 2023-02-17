@@ -177,7 +177,6 @@ def main(db_names: Optional[list[str]] = supported_db_names,
 
     if os.geteuid() != 0:
         sys.exit('Run as sudo!')
-
     check_args(db_names, sizes)
 
     # Cleanup old DBs
@@ -197,7 +196,7 @@ def main(db_names: Optional[list[str]] = supported_db_names,
                     if pathlib.Path(db_storage_dir_path).exists():
                         shutil.rmtree(db_storage_dir_path)
 
-    # Create directories for DB files
+    # Run benchmarks
     for size in sizes:
         for db_name in db_names:
             # Create DB main directory
@@ -214,9 +213,7 @@ def main(db_names: Optional[list[str]] = supported_db_names,
             pathlib.Path(get_results_file_path(db_name, size, drop_caches, transactional, storage_disk_paths, threads_count)
                          ).parent.mkdir(parents=True, exist_ok=True)
 
-    # Run benchmarks
-    for size in sizes:
-        for db_name in db_names:
+            # Run benchmark
             if drop_caches:
                 for workload_name in workload_names:
                     if not run_docker_image:
