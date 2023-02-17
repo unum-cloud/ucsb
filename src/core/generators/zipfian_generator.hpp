@@ -5,7 +5,7 @@
 #include "src/core/generators/generator.hpp"
 #include "src/core/generators/random_generator.hpp"
 
-namespace ucsb::core::generators {
+namespace ucsb::core {
 
 class zipfian_generator_t : public generator_gt<size_t> {
   public:
@@ -84,4 +84,4 @@ inline float zipfian_generator_t::zeta(size_t last_num, size_t cur_num, float th
     return zeta;
 }
 
-} // namespace ucsb
+} // namespace ucsb::core
