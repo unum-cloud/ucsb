@@ -57,7 +57,7 @@ class UCSBConan(ConanFile):
         self.requires("benchmark/1.6.0")
         self.requires("nlohmann_json/3.10.4")
         # self.requires("rocksdb/6.20.3")
-        self.requires("leveldb/1.23")
+        # self.requires("leveldb/1.23")
         self.requires("lmdb/0.9.29")
         self.requires("snappy/1.1.9")
         self.requires("lz4/1.9.3")
