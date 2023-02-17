@@ -12,6 +12,12 @@ import termcolor
 
 from typing import Optional
 
+"""
+Run the script by passing arguments to the script or changing the settings below.
+All the settings are also treated as defaults, so passed arguments will overwrite them.
+See main() function.
+"""
+
 supported_db_names = [
     'rocksdb',
     'leveldb',
@@ -23,11 +29,11 @@ supported_db_names = [
 
 supported_sizes = [
     '100MB',
-    '1GB',
-    '10GB',
-    '100GB',
-    '1TB',
-    '10TB',
+    # '1GB',
+    # '10GB',
+    # '100GB',
+    # '1TB',
+    # '10TB',
 ]
 
 supported_workload_names = [
@@ -42,11 +48,6 @@ supported_workload_names = [
     'Remove',
 ]
  
-"""
-Defaults:
-The script takes this defaults if an user doesn't pass arguments
-"""
-default_size = '100MB'
 default_threads_count = 1
 default_main_dir_path = './tmp/'
 default_storage_disk_paths = [
@@ -164,7 +165,7 @@ def check_args(db_names, sizes):
 
 
 def main(db_names: Optional[list[str]] = supported_db_names,
-         sizes: Optional[list[str]] = [default_size],
+         sizes: Optional[list[str]] = supported_sizes,
          workload_names: Optional[list[str]] = supported_workload_names,
          main_dir_path: Optional[str] = default_main_dir_path,
          storage_disk_paths: Optional[list[str]] = default_storage_disk_paths,
