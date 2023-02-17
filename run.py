@@ -41,20 +41,20 @@ supported_workload_names = [
     'BatchUpsert',
     'Remove',
 ]
-
-# Path where a DB stores metadata (may also data if `storage_disk_paths` is empty)
-# Note: This can be overwritten by passed arguments of the script
+ 
+"""
+Defaults:
+The script takes this defaults if an user doesn't pass arguments
+"""
+default_size = '100MB'
+default_threads_count = 1
 default_main_dir_path = './tmp/'
-
-# Disks where a DB stores data (especially for multi disk benchmarks)
-# Note: This can be overwritten by passed arguments of the script
 default_storage_disk_paths = [
     # '/mnt/disk1/',
     # '/mnt/disk2/',
     # '/mnt/disk3/',
     # '/mnt/disk4/',
 ]
-
 
 
 def get_db_config_file_path(db_name: str, size: str) -> str:
@@ -69,14 +69,14 @@ def get_workloads_file_path(size: str) -> str:
 
 
 def get_db_main_dir_path(db_name: str, size: str, main_dir_path: str) -> str:
-    return os.path.join(main_dir_path, db_name, size, "")
+    return os.path.join(main_dir_path, db_name, size, '')
 
 
 def get_db_storage_dir_paths(db_name: str, size: str, storage_disk_paths: str) -> list:
     db_storage_dir_paths = []
     for storage_disk_path in storage_disk_paths:
         db_storage_dir_paths.append(os.path.join(
-            storage_disk_path, db_name, size, ""))
+            storage_disk_path, db_name, size, ''))
     return db_storage_dir_paths
 
 
@@ -163,9 +163,15 @@ def check_args(db_names, sizes):
         sys.exit('Database size not specified: ')
 
 
-def main(db_names: Optional[list[str]] = supported_db_names, sizes: Optional[list[str]] = ['100MB'], workload_names: Optional[list[str]] = supported_workload_names,
-         threads_count: Optional[int] = 1, transactional: Optional[bool] = False, main_dir_path: Optional[str] = default_main_dir_path,
-         storage_disk_paths: Optional[list[str]] = default_storage_disk_paths, cleanup_previous: Optional[bool] = False, drop_caches: Optional[bool] = False,
+def main(db_names: Optional[list[str]] = supported_db_names,
+         sizes: Optional[list[str]] = [default_size],
+         workload_names: Optional[list[str]] = supported_workload_names,
+         main_dir_path: Optional[str] = default_main_dir_path,
+         storage_disk_paths: Optional[list[str]] = default_storage_disk_paths,
+         threads_count: Optional[int] = default_threads_count,
+         transactional: Optional[bool] = False,
+         cleanup_previous: Optional[bool] = False,
+         drop_caches: Optional[bool] = False,
          run_docker_image: Optional[bool] = False) -> None:
 
     if os.geteuid() != 0:
