@@ -5,8 +5,8 @@ if [ $1 = "install" ]; then
 		mkdir -p build && cd build &&
 		cmake -DCMAKE_BUILD_TYPE=Release .. && cmake --build . &&
 		sudo make install &&
-		echo "Success install!!"
-elif [ $1 = "uninstall" ]; then
+		echo "Successfully installed!"
+elif [ $1 = "remove" ]; then
 	sudo rm -rf /usr/local/lib/libleveldb.a \
 		/usr/local/include/leveldb \
 		/usr/local/lib/cmake/leveldb/ \
@@ -31,5 +31,5 @@ elif [ $1 = "uninstall" ]; then
 			/usr/local/lib/pkgconfig/benchmark.pc \
 			/usr/local/lib/cmake/benchmark/benchmarkTargets.cmake \
 			/usr/local/lib/cmake/benchmark/benchmarkTargets-release.cmake &&
-		echo "Success removed!!"
+		echo "Successfully removed!"
 fi

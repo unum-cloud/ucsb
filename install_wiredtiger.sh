@@ -5,9 +5,9 @@ if [ $1 = "install" ]; then
 		mkdir -p build && cd build &&
 		cmake ../. && make &&
 		sudo make install &&
-		echo "Success install!!"
-elif [ $1 = "uninstall" ]; then
+		echo "Successfully installed!"
+elif [ $1 = "remove" ]; then
 	sudo cd ./wiredtiger/build &&
 		xargs rm <install_manifest.txt &&
-		echo "Success removed!!"
+		echo "Successfully removed!"
 fi

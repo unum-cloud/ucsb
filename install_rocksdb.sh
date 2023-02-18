@@ -7,8 +7,8 @@ if [ $1 = "install" ]; then
 		cd rocksdb-$VERSION &&
 		make static_lib &&
 		sudo make install static_lib &&
-		echo "Success Installed!!"
-elif [ $1 = "uninstall" ]; then
+		echo "Successfully installed!"
+elif [ $1 = "remove" ]; then
 	sudo rm -rf /usr/local/include/rocksdb \
 		/usr/local/lib/librocksdb.a \
 		/usr/local/lib/librocksdb.so.6.29.3 \
@@ -16,5 +16,5 @@ elif [ $1 = "uninstall" ]; then
 		/usr/local/lib/librocksdb.so.6 \
 		/usr/local/lib/librocksdb.so \
 		/usr/local/lib/pkgconfig/rocksdb.pc &&
-		echo "Success Removed!!"
+		echo "Successfully removed!"
 fi
