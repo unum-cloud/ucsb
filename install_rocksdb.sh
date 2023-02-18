@@ -1,4 +1,4 @@
-VERSION=6.29.3
+VERSION=7.9.2
 
 if [ $1 = "install" ]; then
 	wget https://github.com/facebook/rocksdb/archive/refs/tags/v$VERSION.zip &&
