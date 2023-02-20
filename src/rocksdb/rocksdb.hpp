@@ -304,9 +304,13 @@ operation_result_t rocksdb_t::bulk_load(keys_spanc_t keys, values_spanc_t values
     size_t this_thread_id = std::hash<std::thread::id> {}(std::this_thread::get_id());
     std::string this_thread_id_str = std::to_string(this_thread_id);
 
+    std::string sst_dir_path = main_dir_path_.string();
+    if (!storage_dir_paths_.empty())
+        sst_dir_path = storage_dir_paths_.front().string();
+
     while (true) {
         std::string sst_file_path =
-            fmt::format("{}pending_{}_{}.sst", main_dir_path_.string(), this_thread_id_str, files.size());
+            fmt::format("{}pending_{}_{}.sst", sst_dir_path, this_thread_id_str, files.size());
         files.push_back(sst_file_path);
 
         rocksdb::SstFileWriter sst_file_writer(rocksdb::EnvOptions(), options_, options_.comparator);
