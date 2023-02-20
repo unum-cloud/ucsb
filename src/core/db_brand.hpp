@@ -7,6 +7,7 @@
 #include "src/leveldb/leveldb.hpp"
 #include "src/wiredtiger/wiredtiger.hpp"
 #include "src/lmdb/lmdb.hpp"
+#include "src/ukv/ukv.hpp"
 #include "src/mongodb/mongodb.hpp"
 #include "src/redis/redis.hpp"
 
@@ -21,6 +22,7 @@ enum class db_brand_t {
     lmdb_k,
     mongodb_k,
     redis_k,
+    ukv_k,
 };
 
 std::shared_ptr<db_t> make_db(db_brand_t db_brand, bool transactional) {
@@ -38,6 +40,7 @@ std::shared_ptr<db_t> make_db(db_brand_t db_brand, bool transactional) {
         case db_brand_t::lmdb_k: return std::make_shared<symas::lmdb_t>();
         case db_brand_t::mongodb_k: return std::make_shared<mongo::mongodb_t>();
         case db_brand_t::redis_k: return std::make_shared<redis::redis_t>();
+        case db_brand_t::ukv_k: return std::make_shared<ukv::ukv_t>();
         default: break;
         }
     }
@@ -57,6 +60,8 @@ inline db_brand_t parse_db_brand(std::string const& name) {
         return db_brand_t::mongodb_k;
     if (name == "redis")
         return db_brand_t::redis_k;
+    if (name == "ukv")
+        return db_brand_t::ukv_k;
     return db_brand_t::unknown_k;
 }
 
