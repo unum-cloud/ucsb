@@ -11,7 +11,7 @@
 #include "src/core/helper.hpp"
 #include "src/core/printable.hpp"
 
-namespace ucsb::mongodb {
+namespace ucsb::mongo {
 
 namespace fs = ucsb::fs;
 
@@ -419,4 +419,4 @@ inline std::string wiredtiger_t::create_str_config(config_t const& config) const
     return fmt::format("{},{}", str_config, str_cache_size);
 }
 
-} // namespace ucsb::mongodb
+} // namespace ucsb::mongo

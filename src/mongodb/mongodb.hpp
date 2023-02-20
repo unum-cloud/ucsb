@@ -10,6 +10,7 @@
 #include "src/core/helper.hpp"
 
 namespace ucsb::mongo {
+
 namespace fs = ucsb::fs;
 
 using key_t = ucsb::key_t;
