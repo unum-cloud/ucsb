@@ -16,6 +16,7 @@ cmake/*
 .vscode/
 
 # Temporary files and folders
+db_main/
 tmp/
 .scripts/.log
 code-review*.bak
