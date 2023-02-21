@@ -115,7 +115,9 @@ else ()
   message(STATUS "Unknown CMAKE_CXX_COMPILER_ID: ${CMAKE_CXX_COMPILER_ID}")
 endif()
 
-# Use this if you are manually installing rockdb and leveldb, otherwise comment it
+include("${CMAKE_MODULE_PATH}/leveldb.cmake")
+include("${CMAKE_MODULE_PATH}/rocksdb.cmake")
+
 set(CXX_TARGET_LINK_LIBRARIES rocksdb leveldb)
 set(CXX_TARGET_LINK_LIBRARIES_WITH_FLAGS z uring)
 
@@ -127,7 +129,7 @@ if (${PKG_CONFIG})
   set(PKG_LIBRARIES ${PKG_PACKAGES_LIBRARIES})
 endif()
 
-include(${CMAKE_SOURCE_DIR}/cmake/conanbuildinfo.cmake)
+include(${CMAKE_MODULE_PATH}/conanbuildinfo.cmake)
 conan_basic_setup()
 
 set(CMAKE_THREAD_LIBS_INIT "-lpthread")

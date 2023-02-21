@@ -8,7 +8,9 @@ CMakeFiles
 Makefile
 CMakeCache.txt
 *.cmake
-cmake/
+cmake/*
+!cmake/rocksdb.cmake
+!cmake/leveldb.cmake
 *.ninja
 .clang-format
 .vscode/
