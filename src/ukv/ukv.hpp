@@ -42,16 +42,16 @@ class ukv_t : public ucsb::db_t {
     operation_result_t update(key_t key, value_spanc_t value) override;
     operation_result_t remove(key_t key) override;
 
-    operation_result_t read(key_t key, value_span_t value) override;
+    operation_result_t read(key_t key, value_span_t value) const override;
     operation_result_t batch_upsert(keys_spanc_t keys, values_spanc_t values, value_lengths_spanc_t sizes) override;
-    operation_result_t batch_read(keys_spanc_t keys, values_span_t values) override;
+    operation_result_t batch_read(keys_spanc_t keys, values_span_t values) const override;
 
     operation_result_t bulk_load(keys_spanc_t keys, values_spanc_t values, value_lengths_spanc_t sizes) override;
-    operation_result_t range_select(key_t key, size_t length, values_span_t values) override;
-    operation_result_t scan(key_t key, size_t length, value_span_t single_value) override;
+    operation_result_t range_select(key_t key, size_t length, values_span_t values) const override;
+    operation_result_t scan(key_t key, size_t length, value_span_t single_value) const override;
 
     void flush() override;
-    size_t size_on_disk() override;
+    size_t size_on_disk() const override;
     std::unique_ptr<transaction_t> create_transaction() override;
 
   private:
@@ -115,7 +115,7 @@ operation_result_t ukv_t::remove(key_t key) {
     return {bool(status), status ? operation_status_t::ok_k : operation_status_t::error_k};
 }
 
-operation_result_t ukv_t::read(key_t key, value_span_t value) {
+operation_result_t ukv_t::read(key_t key, value_span_t value) const {
     auto status = collection_[key].value();
     if (!status)
         return {0, operation_status_t::not_found_k};
@@ -139,7 +139,7 @@ operation_result_t ukv_t::batch_upsert(keys_spanc_t keys, values_spanc_t values,
     return {keys.size(), operation_status_t::ok_k};
 }
 
-operation_result_t ukv_t::batch_read(keys_spanc_t keys, values_span_t values) {
+operation_result_t ukv_t::batch_read(keys_spanc_t keys, values_span_t values) const {
 
     size_t offset = 0;
     size_t found_cnt = 0;
@@ -160,7 +160,7 @@ operation_result_t ukv_t::bulk_load(keys_spanc_t keys, values_spanc_t values, va
     return batch_upsert(keys, values, sizes);
 }
 
-operation_result_t ukv_t::range_select(key_t key, size_t length, values_span_t values) {
+operation_result_t ukv_t::range_select(key_t key, size_t length, values_span_t values) const {
 
     size_t i = 0;
     size_t offset = 0;
@@ -173,7 +173,7 @@ operation_result_t ukv_t::range_select(key_t key, size_t length, values_span_t v
     return {i, operation_status_t::ok_k};
 }
 
-operation_result_t ukv_t::scan(key_t key, size_t length, value_span_t single_value) {
+operation_result_t ukv_t::scan(key_t key, size_t length, value_span_t single_value) const {
 
     size_t i = 0;
     auto it = collection_.keys(key).begin();
@@ -189,7 +189,7 @@ void ukv_t::flush() {
     open();
 }
 
-size_t ukv_t::size_on_disk() {
+size_t ukv_t::size_on_disk() const {
     return ucsb::size_on_disk(main_dir_path_);
 }
 
