@@ -308,10 +308,8 @@ operation_result_t rocksdb_t::bulk_load(keys_spanc_t keys, values_spanc_t values
     if (!storage_dir_paths_.empty())
         sst_dir_path = storage_dir_paths_.front().string();
 
-    while (true) {
-        std::string sst_file_path =
-            fmt::format("{}pending_{}_{}.sst", sst_dir_path, this_thread_id_str, files.size());
-        files.push_back(sst_file_path);
+    while (idx < keys.size()) {
+        std::string sst_file_path = fmt::format("{}pending_{}_{}.sst", sst_dir_path, this_thread_id_str, files.size());
 
         rocksdb::SstFileWriter sst_file_writer(rocksdb::EnvOptions(), options_, options_.comparator);
         rocksdb::Status status = sst_file_writer.Open(sst_file_path);
@@ -325,17 +323,18 @@ operation_result_t rocksdb_t::bulk_load(keys_spanc_t keys, values_spanc_t values
                 break;
             data_offset += sizes[idx];
         }
-        if (!status.ok())
+        if (!status.ok() || !sst_file_writer.Finish().ok()) {
+            idx = 0;
             break;
-        status = sst_file_writer.Finish();
-        if (!status.ok() || idx == keys.size())
-            break;
+        }
+
+        files.push_back(sst_file_path);
     }
 
     if (idx != keys.size()) {
         for (auto const& file_path : files)
             fs::remove(file_path);
-        return {keys.size(), operation_status_t::error_k};
+        return {0, operation_status_t::error_k};
     }
 
     rocksdb::IngestExternalFileOptions ingest_options;
