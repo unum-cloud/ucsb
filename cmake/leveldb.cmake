@@ -16,7 +16,7 @@ if(NOT leveldb_POPULATED)
     set(LEVELDB_BUILD_TESTS OFF CACHE BOOL "Build LevelDB's unit tests")
     set(LEVELDB_BUILD_BENCHMARKS OFF CACHE BOOL "Build LevelDB's benchmarks")
     set(HAVE_SNAPPY OFF CACHE BOOL "Build with snappy compression library")
-    set(RTTI OFF CACHE BOOL "Build with RTTI")
+    set(RTTI ON CACHE BOOL "Build with RTTI")
 
     # Should not be set globally, but just for this target!
     FetchContent_Populate(leveldb)
