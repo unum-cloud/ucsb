@@ -1,7 +1,7 @@
-include(FetchContent)
-
 # LevelDB:
 # https://github.com/google/leveldb/blob/main/CMakeLists.txt
+
+include(FetchContent)
 FetchContent_Declare(
     leveldb
     GIT_REPOSITORY https://github.com/google/leveldb.git
