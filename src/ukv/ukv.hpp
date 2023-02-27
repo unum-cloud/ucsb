@@ -56,7 +56,7 @@ class ukv_t : public ucsb::db_t {
 
   private:
     inline value_view_t make_value(std::byte const* ptr, size_t length) {
-        return {reinterpret_cast<char const*>(ptr), length};
+        return {reinterpret_cast<ukv_bytes_cptr_t>(ptr), length};
     }
     fs::path config_path_;
     fs::path main_dir_path_;
@@ -97,62 +97,197 @@ void ukv_t::destroy() {
 }
 
 operation_result_t ukv_t::upsert(key_t key, value_spanc_t value) {
-    auto status = collection_[key].assign(make_value(value.data(), value.size()));
+    status_t status;
+    arena_t arena(db_.get());
+    ukv_key_t key_ = key;
+    ukv_length_t length = value.size();
+    ukv_length_t offsets = 0;
+    auto value_ = make_value(value.data(),value.size());
+    ukv_collection_t coll = collection_;
+
+    ukv_write_t write{
+        .db = db_.get()->to_ukv(),
+        .error = status.member_ptr(),
+        .transaction = nullptr,
+        .arena = arena.member_ptr(),
+        .options = ukv_option_dont_discard_memory_k,
+        .tasks_count = 1,
+        .collections = &coll,
+        .collections_stride = 0,
+        .keys = &key_,
+        .keys_stride = sizeof(ukv_key_t),
+        .presences = nullptr,
+        .offsets = &offsets,
+        .offsets_stride = sizeof(ukv_length_t),
+        .lengths = reinterpret_cast<ukv_length_t const*>(&length),
+        .lengths_stride = sizeof(ukv_length_t),
+        .values = value_.member_ptr(),
+        .values_stride = sizeof(ukv_bytes_cptr_t),
+    };
+    ukv_write(&write);
     return {size_t(status), status ? operation_status_t::ok_k : operation_status_t::error_k};
 }
 
 operation_result_t ukv_t::update(key_t key, value_spanc_t value) {
-    auto status = collection_[key].value();
+    status_t status;
+    arena_t arena(db_.get());
+    ukv_key_t key_ = key;
+    ukv_byte_t* value_ = nullptr;
+    ukv_collection_t coll = collection_;
+
+    ukv_read_t read{
+        .db = db_.get()->to_ukv(),
+        .error = status.member_ptr(),
+        .transaction = nullptr,
+        .snapshot = 0,
+        .arena = arena.member_ptr(),
+        .options = ukv_option_dont_discard_memory_k,
+        .tasks_count = 1,
+        .collections = &coll,
+        .collections_stride = 0,
+        .keys = &key_,
+        .keys_stride = sizeof(ukv_key_t),
+        .presences = nullptr,
+        .offsets = nullptr,
+        .lengths = nullptr,
+        .values = &value_,
+    };
+    ukv_read(&read);
     if (status)
         return {0, operation_status_t::not_found_k};
 
-    status = collection_[key].assign(make_value(value.data(), value.size()));
-    return {size_t(status), status ? operation_status_t::ok_k : operation_status_t::error_k};
+    return upsert(key,value);
 }
 
 operation_result_t ukv_t::remove(key_t key) {
-    auto status = collection_[key].erase();
-    return {bool(status), status ? operation_status_t::ok_k : operation_status_t::error_k};
+    status_t status;
+    arena_t arena(db_.get());
+    ukv_key_t key_ = key;
+    ukv_collection_t coll = collection_;
+
+    ukv_write_t write{
+        .db = db_.get()->to_ukv(),
+        .error = status.member_ptr(),
+        .transaction = nullptr,
+        .arena = arena.member_ptr(),
+        .options = ukv_option_dont_discard_memory_k,
+        .tasks_count = 1,
+        .collections = &coll,
+        .collections_stride = 0,
+        .keys = &key_,
+        .keys_stride = sizeof(ukv_key_t),
+        .presences = nullptr,
+        .offsets = nullptr,
+        .offsets_stride = 0,
+        .lengths = nullptr,
+        .lengths_stride = 0,
+        .values = nullptr,
+        .values_stride = 0,
+    };
+    ukv_write(&write);
+    return {status ? size_t(1) : 0, status ? operation_status_t::ok_k : operation_status_t::error_k};
 }
 
 operation_result_t ukv_t::read(key_t key, value_span_t value) const {
-    auto status = collection_[key].value();
+    status_t status;
+    arena_t arena(db_.get());
+    ukv_key_t key_ = key;
+    ukv_byte_t* value_ = nullptr;
+    ukv_length_t* lengths = nullptr;
+    ukv_collection_t coll = collection_;
+
+    ukv_read_t read{
+        .db = db_.get()->to_ukv(),
+        .error = status.member_ptr(),
+        .transaction = nullptr,
+        .snapshot = 0,
+        .arena = arena.member_ptr(),
+        .options = ukv_option_dont_discard_memory_k,
+        .tasks_count = 1,
+        .collections = &coll,
+        .collections_stride = 0,
+        .keys = &key_,
+        .keys_stride = sizeof(ukv_key_t),
+        .presences = nullptr,
+        .offsets = nullptr,
+        .lengths = &lengths,
+        .values = &value_,
+    };
+    ukv_read(&read);
     if (!status)
         return {0, operation_status_t::not_found_k};
 
-    auto data = *status;
-    memcpy(value.data(), data.data(), data.size());
+    memcpy(value.data(), value_, lengths[0]);
     return {1, operation_status_t::ok_k};
 }
 
 operation_result_t ukv_t::batch_upsert(keys_spanc_t keys, values_spanc_t values, value_lengths_spanc_t sizes) {
-
-    size_t offset = 0;
-    for (size_t idx = 0; idx != keys.size(); ++idx) {
-        key_t key = keys[idx];
-        auto span = values.subspan(offset, sizes[idx]);
-        auto status = collection_[key].assign(make_value(span.data(), span.size()));
-        if (!status)
-            return {0, operation_status_t::error_k};
-        offset += sizes[idx];
+    status_t status;
+    arena_t arena(db_.get());
+    size_t size = 0;
+    std::vector<ukv_length_t> offsets;
+    ukv_collection_t coll = collection_;
+    offsets.reserve(sizes.size() + 1);
+    offsets.push_back(0);
+    for(auto sz : sizes){
+        size += sz;
+        offsets.push_back(sz);
     }
-    return {keys.size(), operation_status_t::ok_k};
+
+    auto val = make_value(values.data(), size);
+    ukv_write_t write{
+        .db = db_.get()->to_ukv(),
+        .error = status.member_ptr(),
+        .transaction = nullptr,
+        .arena = arena.member_ptr(),
+        .options = ukv_option_dont_discard_memory_k,
+        .tasks_count = keys.size(),
+        .collections = &coll,
+        .collections_stride = 0,
+        .keys = reinterpret_cast<ukv_key_t const*>(keys.data()),
+        .keys_stride = sizeof(ukv_key_t),
+        .presences = nullptr,
+        .offsets = offsets.data(),
+        .offsets_stride = sizeof(ukv_length_t),
+        .lengths = reinterpret_cast<ukv_length_t const*>(sizes.data()),
+        .lengths_stride = sizeof(ukv_length_t),
+        .values = val.member_ptr(),
+        .values_stride = 0,
+    };
+    ukv_write(&write);
+    return {status ? keys.size() : 0, status ? operation_status_t::ok_k : operation_status_t::error_k};
 }
 
 operation_result_t ukv_t::batch_read(keys_spanc_t keys, values_span_t values) const {
-
-    size_t offset = 0;
+    status_t status;
+    arena_t arena(db_.get());
+    ukv_byte_t* value = nullptr;
+    ukv_length_t* lengths = nullptr;
+    ukv_length_t* offsets = nullptr;
     size_t found_cnt = 0;
-    for (auto key : keys) {
-        std::string data;
-        auto status = collection_[key].value();
-        if (status) {
-            data = *status;
-            memcpy(values.data() + offset, data.data(), data.size());
-            offset += data.size();
-            ++found_cnt;
-        }
-    }
+    ukv_collection_t coll = collection_;
+
+    ukv_read_t read{
+        .db = db_.get()->to_ukv(),
+        .error = status.member_ptr(),
+        .transaction = nullptr,
+        .snapshot = 0,
+        .arena = arena.member_ptr(),
+        .options = ukv_option_dont_discard_memory_k,
+        .tasks_count = keys.size(),
+        .collections = &coll,
+        .collections_stride = 0,
+        .keys = reinterpret_cast<ukv_key_t const*>(keys.data()),
+        .keys_stride = sizeof(ukv_key_t),
+        .presences = nullptr,
+        .offsets = &offsets,
+        .lengths = &lengths,
+        .values = &value,
+    };
+    ukv_read(&read);
+    while(found_cnt != keys.size() && lengths[found_cnt] != ukv_length_missing_k)
+        ++found_cnt;
+    memcpy(values.data(), value, offsets[found_cnt - 1] + lengths[found_cnt - 1]);
     return {found_cnt, operation_status_t::ok_k};
 }
 
@@ -161,27 +296,79 @@ operation_result_t ukv_t::bulk_load(keys_spanc_t keys, values_spanc_t values, va
 }
 
 operation_result_t ukv_t::range_select(key_t key, size_t length, values_span_t values) const {
-
-    size_t i = 0;
-    size_t offset = 0;
-    auto it = collection_.keys(key).begin();
-    for (; i != length; i++, ++it) {
-        auto data = *collection_[it.key()].value();
-        memcpy(values.data() + offset, data.data(), data.size());
-        offset += data.size();
-    }
-    return {i, operation_status_t::ok_k};
+    status_t status;
+    arena_t arena(db_.get());
+    keys_stream_t stream(db_.get()->to_ukv(), collection_, length);
+    ukv_byte_t* value = nullptr;
+    ukv_length_t* lengths = nullptr;
+    ukv_length_t* offsets = nullptr;
+    size_t found_cnt = 0;
+    status = stream.seek(key);
+    if(status)
+        return {0, operation_status_t::error_k};
+    auto batch = stream.keys_batch();
+    ukv_collection_t coll = collection_;
+    
+    ukv_read_t read{
+        .db = db_.get()->to_ukv(),
+        .error = status.member_ptr(),
+        .transaction = nullptr,
+        .snapshot = 0,
+        .arena = arena.member_ptr(),
+        .options = ukv_option_dont_discard_memory_k,
+        .tasks_count = batch.size(),
+        .collections = &coll,
+        .collections_stride = 0,
+        .keys = reinterpret_cast<ukv_key_t const*>(batch.begin()),
+        .keys_stride = sizeof(ukv_key_t),
+        .presences = nullptr,
+        .offsets = &offsets,
+        .lengths = &lengths,
+        .values = &value,
+    };
+    ukv_read(&read);
+    while(lengths[found_cnt - 1] != ukv_length_missing_k)
+        ++found_cnt;
+    memcpy(values.data(),value, offsets[found_cnt - 1] + lengths[found_cnt - 1]);
+    return {found_cnt, operation_status_t::ok_k};
 }
 
 operation_result_t ukv_t::scan(key_t key, size_t length, value_span_t single_value) const {
-
-    size_t i = 0;
-    auto it = collection_.keys(key).begin();
-    for (; i != length; i++, ++it) {
-        auto data = *collection_[it.key()].value();
-        memcpy(single_value.data(), data.data(), data.size());
-    }
-    return {i, operation_status_t::ok_k};
+    status_t status;
+    arena_t arena(db_.get());
+    keys_stream_t stream(db_.get()->to_ukv(), collection_, length);
+    ukv_byte_t* value = nullptr;
+    ukv_length_t* lengths = nullptr;
+    ukv_length_t* offsets = nullptr;
+    size_t found_cnt = 0;
+    status = stream.seek(key);
+    if(status)
+        return {0, operation_status_t::error_k};
+    auto batch = stream.keys_batch();
+    ukv_collection_t coll = collection_;
+    
+    ukv_read_t read{
+        .db = db_.get()->to_ukv(),
+        .error = status.member_ptr(),
+        .transaction = nullptr,
+        .snapshot = 0,
+        .arena = arena.member_ptr(),
+        .options = ukv_option_dont_discard_memory_k,
+        .tasks_count = batch.size(),
+        .collections = &coll,
+        .collections_stride = 0,
+        .keys = reinterpret_cast<ukv_key_t const*>(batch.begin()),
+        .keys_stride = sizeof(ukv_key_t),
+        .presences = nullptr,
+        .offsets = &offsets,
+        .lengths = &lengths,
+        .values = &value,
+    };
+    ukv_read(&read);
+    while(lengths[found_cnt - 1] != ukv_length_missing_k)
+        ++found_cnt;
+    memcpy(single_value.data(),value + offsets[found_cnt - 1], lengths[found_cnt - 1]);
+    return {found_cnt, operation_status_t::ok_k};
 }
 
 void ukv_t::flush() {
