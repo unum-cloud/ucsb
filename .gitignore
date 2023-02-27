@@ -11,6 +11,7 @@ CMakeCache.txt
 cmake/*
 !cmake/rocksdb.cmake
 !cmake/leveldb.cmake
+!cmake/wiredtiger.cmake
 *.ninja
 .clang-format
 .vscode/
