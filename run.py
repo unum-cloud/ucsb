@@ -174,7 +174,7 @@ def main(db_names: Optional[list[str]] = supported_db_names,
          threads_count: Optional[int] = default_threads_count,
          transactional: Optional[bool] = False,
          cleanup_previous: Optional[bool] = True,
-         drop_caches: Optional[bool] = False,
+         drop_caches: Optional[bool] = True,
          run_docker_image: Optional[bool] = False) -> None:
 
     if os.geteuid() != 0:
