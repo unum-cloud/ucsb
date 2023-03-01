@@ -126,7 +126,7 @@ class rocksdb_t : public ucsb::db_t {
     rocksdb::TransactionDB* transaction_db_;
     key_comparator_t key_cmp_;
     db_mode_t mode_;
-    bool full_compaction_;
+    std::atomic_bool full_compaction_;
 
     db_hints_t hints_;
 };
@@ -144,9 +144,6 @@ void rocksdb_t::set_config(fs::path const& config_path,
 bool rocksdb_t::open() {
     if (db_)
         return true;
-
-    cf_descs_.clear();
-    cf_handles_.clear();
 
     options_ = rocksdb::Options();
     rocksdb::Status status =
@@ -190,7 +187,9 @@ bool rocksdb_t::open() {
                                               &transaction_db_);
         db_raw = transaction_db_;
     }
+
     db_.reset(db_raw);
+    full_compaction_.store(false);
 
     return status.ok();
 }
@@ -202,6 +201,7 @@ bool rocksdb_t::close() {
     statuses.clear();
 
     db_.reset(nullptr);
+    cf_descs_.clear();
     cf_handles_.clear();
     transaction_db_ = nullptr;
     return true;
@@ -344,7 +344,7 @@ operation_result_t rocksdb_t::bulk_load(keys_spanc_t keys, values_spanc_t values
         fs::remove(file_path);
     if (!status.ok())
         return {0, operation_status_t::error_k};
-    full_compaction_ = true;
+    full_compaction_.store(true);
 
     return {keys.size(), operation_status_t::ok_k};
 }
@@ -378,7 +378,7 @@ operation_result_t rocksdb_t::scan(key_t key, size_t length, value_span_t single
 
 void rocksdb_t::flush() {
     db_->Flush(rocksdb::FlushOptions());
-    if (full_compaction_)
+    if (full_compaction_.load())
         db_->CompactRange(rocksdb::CompactRangeOptions(), nullptr, nullptr);
 }
 
