@@ -378,8 +378,11 @@ operation_result_t rocksdb_t::scan(key_t key, size_t length, value_span_t single
 
 void rocksdb_t::flush() {
     db_->Flush(rocksdb::FlushOptions());
-    if (full_compaction_.load())
-        db_->CompactRange(rocksdb::CompactRangeOptions(), nullptr, nullptr);
+    if (full_compaction_.load()) {
+        auto options = rocksdb::CompactRangeOptions();
+        options.bottommost_level_compaction = rocksdb::BottommostLevelCompaction::kForceOptimized;
+        db_->CompactRange(options, nullptr, nullptr);
+    }
 }
 
 size_t rocksdb_t::size_on_disk() const {
