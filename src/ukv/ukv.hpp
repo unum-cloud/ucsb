@@ -1,4 +1,5 @@
 #pragma once
+
 #include <cassert>
 
 #include <ukv/ukv.h>
@@ -58,6 +59,7 @@ class ukv_t : public ucsb::db_t {
     inline value_view_t make_value(std::byte const* ptr, size_t length) {
         return {reinterpret_cast<ukv_bytes_cptr_t>(ptr), length};
     }
+
     fs::path config_path_;
     fs::path main_dir_path_;
     std::vector<fs::path> storage_dir_paths_;
@@ -69,15 +71,19 @@ class ukv_t : public ucsb::db_t {
 
 void ukv_t::set_config(fs::path const& config_path,
                        fs::path const& main_dir_path,
-                       [[maybe_unused]] std::vector<fs::path> const& storage_dir_paths,
+                       std::vector<fs::path> const& storage_dir_paths,
                        [[maybe_unused]] db_hints_t const& hints) {
     config_path_ = config_path;
     main_dir_path_ = main_dir_path;
+    storage_dir_paths = storage_dir_paths;
 }
 
 bool ukv_t::open() {
     if (db_)
         return true;
+
+    // !!!TODO: DB gets paths from outside not from config file,
+    // so need to pass main_dir_path_ & storage_dir_paths with the config
     status_t status;
     ukv_database_init_t init {
         .config = config_path_.c_str(),
@@ -87,6 +93,7 @@ bool ukv_t::open() {
     ukv_database_init(&init);
     if (!status)
         return status;
+
     return true;
 }
 
@@ -96,7 +103,10 @@ bool ukv_t::close() {
     return true;
 }
 
-void ukv_t::destroy() {}
+void ukv_t::destroy() {
+    // TODO: Should to destroy DB by its interface
+    // Just drop collection for now
+}
 
 operation_result_t ukv_t::upsert(key_t key, value_spanc_t value) {
     status_t status;
@@ -135,7 +145,6 @@ operation_result_t ukv_t::update(key_t key, value_spanc_t value) {
     read.keys = &key_;
     read.values = &value_;
     ukv_read(&read);
-
     if (!status)
         return {0, operation_status_t::not_found_k};
 
@@ -147,7 +156,7 @@ operation_result_t ukv_t::remove(key_t key) {
     arena_t arena(db_);
     ukv_key_t key_ = key;
 
-    ukv_write_t write{}; 
+    ukv_write_t write {};
     write.db = db_;
     write.error = status.member_ptr();
     write.arena = arena.member_ptr();
@@ -156,7 +165,7 @@ operation_result_t ukv_t::remove(key_t key) {
     write.collections = &collection_;
     write.keys = &key_;
     ukv_write(&write);
-    
+
     return {status ? size_t(1) : 0, status ? operation_status_t::ok_k : operation_status_t::error_k};
 }
 
@@ -178,7 +187,6 @@ operation_result_t ukv_t::read(key_t key, value_span_t value) const {
     read.lengths = &lengths;
     read.values = &value_;
     ukv_read(&read);
-
     if (!status)
         return {0, operation_status_t::not_found_k};
 
@@ -189,16 +197,16 @@ operation_result_t ukv_t::read(key_t key, value_span_t value) const {
 operation_result_t ukv_t::batch_upsert(keys_spanc_t keys, values_spanc_t values, value_lengths_spanc_t sizes) {
     status_t status;
     arena_t arena(db_);
-    size_t size = 0;
     std::vector<ukv_length_t> offsets;
     offsets.reserve(sizes.size() + 1);
     offsets.push_back(0);
-    for (auto sz : sizes) {
-        size += sz;
-        offsets.push_back(sz);
+    size_t offset = 0;
+    for (auto size : sizes) {
+        offset += size;
+        offsets.push_back(offset);
     }
 
-    auto val = make_value(values.data(), size);
+    auto val = make_value(values.data(), values.size());
     ukv_write_t write {};
     write.db = db_;
     write.error = status.member_ptr();
@@ -221,7 +229,7 @@ operation_result_t ukv_t::batch_upsert(keys_spanc_t keys, values_spanc_t values,
 operation_result_t ukv_t::batch_read(keys_spanc_t keys, values_span_t values) const {
     status_t status;
     arena_t arena(db_);
-    ukv_byte_t* value = nullptr;
+    ukv_byte_t* values_ = nullptr;
     ukv_length_t* lengths = nullptr;
     ukv_length_t* offsets = nullptr;
     size_t found_cnt = 0;
@@ -237,12 +245,15 @@ operation_result_t ukv_t::batch_read(keys_spanc_t keys, values_span_t values) co
     read.keys_stride = sizeof(ukv_key_t);
     read.offsets = &offsets;
     read.lengths = &lengths;
-    read.values = &value;
+    read.values = &values_;
     ukv_read(&read);
+    if (!status)
+        return {0, operation_status_t::not_found_k};
 
+    // !!!TODO: Arman please fix the bug here that we have talked together
     while (found_cnt != keys.size() && lengths[found_cnt] != ukv_length_missing_k)
         ++found_cnt;
-    memcpy(values.data(), value, offsets[found_cnt - 1] + lengths[found_cnt - 1]);
+    memcpy(values.data(), values_, offsets[found_cnt - 1] + lengths[found_cnt - 1]);
     return {found_cnt, operation_status_t::ok_k};
 }
 
@@ -253,9 +264,9 @@ operation_result_t ukv_t::bulk_load(keys_spanc_t keys, values_spanc_t values, va
 operation_result_t ukv_t::range_select(key_t key, size_t length, values_span_t values) const {
     status_t status;
     arena_t arena(db_);
-    
-    ukv_key_t key_ = key; 
-    ukv_length_t len = length; 
+
+    ukv_key_t key_ = key;
+    ukv_length_t len = length;
     ukv_length_t* found_counts = nullptr;
     ukv_key_t* found_keys = nullptr;
 
@@ -271,13 +282,12 @@ operation_result_t ukv_t::range_select(key_t key, size_t length, values_span_t v
     scan.counts = &found_counts;
     scan.keys = &found_keys;
     ukv_scan(&scan);
-
     if (!status)
         return {0, operation_status_t::error_k};
 
     ukv_length_t* offsets = nullptr;
     ukv_length_t* lengths = nullptr;
-    ukv_byte_t* value = nullptr;
+    ukv_byte_t* values_ = nullptr;
 
     ukv_read_t read {};
     read.db = db_;
@@ -290,10 +300,11 @@ operation_result_t ukv_t::range_select(key_t key, size_t length, values_span_t v
     read.keys_stride = sizeof(ukv_key_t);
     read.offsets = &offsets;
     read.lengths = &lengths;
-    read.values = &value;
-
+    read.values = &values_;
     ukv_read(&read);
-    memcpy(values.data(), value, offsets[*found_counts - 1] + lengths[*found_counts - 1]);
+
+    // !!!TODO: Arman please fix the bug here that we have talked together
+    memcpy(values.data(), values_, offsets[*found_counts - 1] + lengths[*found_counts - 1]);
     return {*found_counts, operation_status_t::ok_k};
 }
 
@@ -301,8 +312,8 @@ operation_result_t ukv_t::scan(key_t key, size_t length, value_span_t single_val
     status_t status;
     arena_t arena(db_);
 
-    ukv_key_t key_ = key; 
-    ukv_length_t len = length; 
+    ukv_key_t key_ = key;
+    ukv_length_t len = length;
     ukv_length_t* found_counts = nullptr;
     ukv_key_t* found_keys = nullptr;
 
@@ -318,14 +329,12 @@ operation_result_t ukv_t::scan(key_t key, size_t length, value_span_t single_val
     scan.counts = &found_counts;
     scan.keys = &found_keys;
     ukv_scan(&scan);
-    
     if (!status)
         return {0, operation_status_t::error_k};
 
-
     ukv_length_t* offsets = nullptr;
     ukv_length_t* lengths = nullptr;
-    ukv_byte_t* value = nullptr;
+    ukv_byte_t* values_ = nullptr;
 
     ukv_read_t read {};
     read.db = db_;
@@ -338,24 +347,27 @@ operation_result_t ukv_t::scan(key_t key, size_t length, value_span_t single_val
     read.keys_stride = sizeof(ukv_key_t);
     read.offsets = &offsets;
     read.lengths = &lengths;
-    read.values = &value;
+    read.values = &values_;
     ukv_read(&read);
 
-    memcpy(single_value.data(), value + offsets[*found_counts - 1], lengths[*found_counts - 1]);
+    // !!!TODO: Arman please fix the bug here that we have talked together
+    memcpy(single_value.data(), values_ + offsets[*found_counts - 1], lengths[*found_counts - 1]);
     return {*found_counts, operation_status_t::ok_k};
 }
 
 void ukv_t::flush() {
-    close();
-    open();
+    // TODO: Think better solution when a new interface is available
+    bool ok = close();
+    assert(ok);
+    ok = open();
+    assert(ok);
 }
 
 size_t ukv_t::size_on_disk() const {
+    // !!!TODO: Calculate all used paths not only the main directory
     return ucsb::size_on_disk(main_dir_path_);
 }
 
-std::unique_ptr<transaction_t> ukv_t::create_transaction() {
-    return {};
-}
+std::unique_ptr<transaction_t> ukv_t::create_transaction() { return {}; }
 
 } // namespace ucsb::ukv
