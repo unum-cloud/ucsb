@@ -105,7 +105,15 @@ bool ukv_t::close() {
 
 void ukv_t::destroy() {
     // TODO: Should to destroy DB by its interface
-    // Just drop collection for now
+    status_t status;
+    ukv_collection_drop_t drop {
+        .db = db_,
+        .error = status.member_ptr(),
+        .id = ukv_collection_main_k,
+        .mode = ukv_drop_keys_vals_handle_k,
+    };
+    ukv_collection_drop(&drop);
+    assert(status);
 }
 
 operation_result_t ukv_t::upsert(key_t key, value_spanc_t value) {
@@ -232,7 +240,9 @@ operation_result_t ukv_t::batch_read(keys_spanc_t keys, values_span_t values) co
     ukv_byte_t* values_ = nullptr;
     ukv_length_t* lengths = nullptr;
     ukv_length_t* offsets = nullptr;
+    ukv_octet_t* presences;
     size_t found_cnt = 0;
+    size_t offset = 0;
 
     ukv_read_t read {};
     read.db = db_;
@@ -243,6 +253,7 @@ operation_result_t ukv_t::batch_read(keys_spanc_t keys, values_span_t values) co
     read.collections = &collection_;
     read.keys = reinterpret_cast<ukv_key_t const*>(keys.data());
     read.keys_stride = sizeof(ukv_key_t);
+    read.presences = &presences;
     read.offsets = &offsets;
     read.lengths = &lengths;
     read.values = &values_;
@@ -250,10 +261,14 @@ operation_result_t ukv_t::batch_read(keys_spanc_t keys, values_span_t values) co
     if (!status)
         return {0, operation_status_t::not_found_k};
 
-    // !!!TODO: Arman please fix the bug here that we have talked together
-    while (found_cnt != keys.size() && lengths[found_cnt] != ukv_length_missing_k)
+    for(size_t idx = 0; idx < keys.size(); ++idx){
+        if(!presences[idx])
+            continue;
+
+        memcpy(values.data() + offset, values_ + offsets[idx], lengths[idx]);
+        offset += lengths[idx];
         ++found_cnt;
-    memcpy(values.data(), values_, offsets[found_cnt - 1] + lengths[found_cnt - 1]);
+    }
     return {found_cnt, operation_status_t::ok_k};
 }
 
@@ -288,6 +303,7 @@ operation_result_t ukv_t::range_select(key_t key, size_t length, values_span_t v
     ukv_length_t* offsets = nullptr;
     ukv_length_t* lengths = nullptr;
     ukv_byte_t* values_ = nullptr;
+    size_t offset = 0;
 
     ukv_read_t read {};
     read.db = db_;
@@ -303,8 +319,10 @@ operation_result_t ukv_t::range_select(key_t key, size_t length, values_span_t v
     read.values = &values_;
     ukv_read(&read);
 
-    // !!!TODO: Arman please fix the bug here that we have talked together
-    memcpy(values.data(), values_, offsets[*found_counts - 1] + lengths[*found_counts - 1]);
+    for(size_t idx = 0; idx < *found_counts; ++idx){
+        memcpy(values.data() + offset, values_ + offsets[idx], lengths[idx]);
+        offset += lengths[idx];
+    }
     return {*found_counts, operation_status_t::ok_k};
 }
 
@@ -350,8 +368,8 @@ operation_result_t ukv_t::scan(key_t key, size_t length, value_span_t single_val
     read.values = &values_;
     ukv_read(&read);
 
-    // !!!TODO: Arman please fix the bug here that we have talked together
-    memcpy(single_value.data(), values_ + offsets[*found_counts - 1], lengths[*found_counts - 1]);
+    for(size_t idx = 0; idx < *found_counts; ++idx)
+        memcpy(single_value.data(), values_ + offsets[idx], lengths[idx]);
     return {*found_counts, operation_status_t::ok_k};
 }
 
@@ -368,6 +386,8 @@ size_t ukv_t::size_on_disk() const {
     return ucsb::size_on_disk(main_dir_path_);
 }
 
-std::unique_ptr<transaction_t> ukv_t::create_transaction() { return {}; }
+std::unique_ptr<transaction_t> ukv_t::create_transaction() {
+    return {};
+}
 
 } // namespace ucsb::ukv
