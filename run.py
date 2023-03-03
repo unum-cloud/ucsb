@@ -157,11 +157,13 @@ def run(db_name: str, size: str, workload_names: list, main_dir_path: str, stora
         exit(process.signalstatus)
 
 
-def check_args(db_names, sizes):
-    if len(db_names) == 0:
-        sys.exit('Database not specified')
-    if len(sizes) == 0:
-        sys.exit('Database size not specified: ')
+def check_args(db_names, sizes, workload_names):
+    if not db_names:
+        sys.exit('Database(s) not specified')
+    if not sizes:
+        sys.exit('Database size(s) not specified')
+    if not workload_names:
+        sys.exit('Workload name(s) not specified')
 
 
 def main(db_names: Optional[list[str]] = supported_db_names,
@@ -171,16 +173,16 @@ def main(db_names: Optional[list[str]] = supported_db_names,
          storage_disk_paths: Optional[list[str]] = default_storage_disk_paths,
          threads_count: Optional[int] = default_threads_count,
          transactional: Optional[bool] = False,
-         cleanup_previous: Optional[bool] = False,
-         drop_caches: Optional[bool] = False,
+         cleanup_previous: Optional[bool] = True,
+         drop_caches: Optional[bool] = True,
          run_docker_image: Optional[bool] = False) -> None:
 
     if os.geteuid() != 0:
         sys.exit('Run as sudo!')
-    check_args(db_names, sizes)
+    check_args(db_names, sizes, workload_names)
 
-    # Cleanup old DBs
-    if cleanup_previous:
+    # Cleanup old DBs (Note: It actually cleanups if the first workload is `Init`)
+    if cleanup_previous and workload_names[0] == 'Init':
         print('Cleanup...')
         for size in sizes:
             for db_name in db_names:

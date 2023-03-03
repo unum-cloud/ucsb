@@ -1,6 +1,6 @@
 include bench/configs/redis/redis.cfg
 # Directory
-dir tmp/redis/10TB/
+dir db_main/redis/10TB/
 pidfile redis.pid
 logfile redis.log
 

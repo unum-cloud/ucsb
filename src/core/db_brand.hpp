@@ -36,7 +36,7 @@ std::shared_ptr<db_t> make_db(db_brand_t db_brand, bool transactional) {
         switch (db_brand) {
         case db_brand_t::rocksdb_k: return std::make_shared<facebook::rocksdb_t>(facebook::db_mode_t::regular_k);
         case db_brand_t::leveldb_k: return std::make_shared<google::leveldb_t>();
-        case db_brand_t::wiredtiger_k: return std::make_shared<mongodb::wiredtiger_t>();
+        case db_brand_t::wiredtiger_k: return std::make_shared<mongo::wiredtiger_t>();
         case db_brand_t::lmdb_k: return std::make_shared<symas::lmdb_t>();
         case db_brand_t::mongodb_k: return std::make_shared<mongo::mongodb_t>();
         case db_brand_t::redis_k: return std::make_shared<redis::redis_t>();

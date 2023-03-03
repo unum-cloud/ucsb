@@ -126,7 +126,7 @@ class rocksdb_t : public ucsb::db_t {
     rocksdb::TransactionDB* transaction_db_;
     key_comparator_t key_cmp_;
     db_mode_t mode_;
-    bool full_compaction_;
+    std::atomic_bool full_compaction_;
 
     db_hints_t hints_;
 };
@@ -144,9 +144,6 @@ void rocksdb_t::set_config(fs::path const& config_path,
 bool rocksdb_t::open() {
     if (db_)
         return true;
-
-    cf_descs_.clear();
-    cf_handles_.clear();
 
     options_ = rocksdb::Options();
     rocksdb::Status status =
@@ -190,7 +187,9 @@ bool rocksdb_t::open() {
                                               &transaction_db_);
         db_raw = transaction_db_;
     }
+
     db_.reset(db_raw);
+    full_compaction_.store(false);
 
     return status.ok();
 }
@@ -202,6 +201,7 @@ bool rocksdb_t::close() {
     statuses.clear();
 
     db_.reset(nullptr);
+    cf_descs_.clear();
     cf_handles_.clear();
     transaction_db_ = nullptr;
     return true;
@@ -304,10 +304,12 @@ operation_result_t rocksdb_t::bulk_load(keys_spanc_t keys, values_spanc_t values
     size_t this_thread_id = std::hash<std::thread::id> {}(std::this_thread::get_id());
     std::string this_thread_id_str = std::to_string(this_thread_id);
 
-    while (true) {
-        std::string sst_file_path =
-            fmt::format("{}pending_{}_{}.sst", main_dir_path_.string(), this_thread_id_str, files.size());
-        files.push_back(sst_file_path);
+    std::string sst_dir_path = main_dir_path_.string();
+    if (!storage_dir_paths_.empty())
+        sst_dir_path = storage_dir_paths_.front().string();
+
+    while (idx < keys.size()) {
+        std::string sst_file_path = fmt::format("{}pending_{}_{}.sst", sst_dir_path, this_thread_id_str, files.size());
 
         rocksdb::SstFileWriter sst_file_writer(rocksdb::EnvOptions(), options_, options_.comparator);
         rocksdb::Status status = sst_file_writer.Open(sst_file_path);
@@ -321,17 +323,18 @@ operation_result_t rocksdb_t::bulk_load(keys_spanc_t keys, values_spanc_t values
                 break;
             data_offset += sizes[idx];
         }
-        if (!status.ok())
+        if (!status.ok() || !sst_file_writer.Finish().ok()) {
+            idx = 0;
             break;
-        status = sst_file_writer.Finish();
-        if (!status.ok() || idx == keys.size())
-            break;
+        }
+
+        files.push_back(sst_file_path);
     }
 
     if (idx != keys.size()) {
         for (auto const& file_path : files)
             fs::remove(file_path);
-        return {keys.size(), operation_status_t::error_k};
+        return {0, operation_status_t::error_k};
     }
 
     rocksdb::IngestExternalFileOptions ingest_options;
@@ -341,7 +344,7 @@ operation_result_t rocksdb_t::bulk_load(keys_spanc_t keys, values_spanc_t values
         fs::remove(file_path);
     if (!status.ok())
         return {0, operation_status_t::error_k};
-    full_compaction_ = true;
+    full_compaction_.store(true);
 
     return {keys.size(), operation_status_t::ok_k};
 }
@@ -375,8 +378,11 @@ operation_result_t rocksdb_t::scan(key_t key, size_t length, value_span_t single
 
 void rocksdb_t::flush() {
     db_->Flush(rocksdb::FlushOptions());
-    if (full_compaction_)
-        db_->CompactRange(rocksdb::CompactRangeOptions(), nullptr, nullptr);
+    if (full_compaction_.load()) {
+        auto options = rocksdb::CompactRangeOptions();
+        options.bottommost_level_compaction = rocksdb::BottommostLevelCompaction::kForceOptimized;
+        db_->CompactRange(options, nullptr, nullptr);
+    }
 }
 
 size_t rocksdb_t::size_on_disk() const {

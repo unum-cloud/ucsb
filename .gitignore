@@ -8,12 +8,16 @@ CMakeFiles
 Makefile
 CMakeCache.txt
 *.cmake
-cmake/
+cmake/*
+!cmake/rocksdb.cmake
+!cmake/leveldb.cmake
+!cmake/wiredtiger.cmake
 *.ninja
 .clang-format
 .vscode/
 
 # Temporary files and folders
+db_main/
 tmp/
 .scripts/.log
 code-review*.bak
