@@ -75,7 +75,7 @@ void ukv_t::set_config(fs::path const& config_path,
                        [[maybe_unused]] db_hints_t const& hints) {
     config_path_ = config_path;
     main_dir_path_ = main_dir_path;
-    storage_dir_paths = storage_dir_paths;
+    storage_dir_paths_ = storage_dir_paths;
 }
 
 bool ukv_t::open() {
