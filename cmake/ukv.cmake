@@ -29,7 +29,7 @@ ExternalProject_Add(
     UPDATE_COMMAND ""
 
     CMAKE_ARGS
-    -DCMAKE_INSTALL_PREFIX:PATH=${CMAKE_BINARY_DIR}/${UKV_PREFIX_DIR}/ukv-install
+    -DCMAKE_INSTALL_PREFIX:PATH=${UKV_PREFIX_DIR}/ukv-install
     -DCMAKE_INSTALL_LIBDIR=lib
     -DCMAKE_INSTALL_RPATH:PATH=<INSTALL_DIR>/lib
     -DCMAKE_BUILD_TYPE:STRING=${CMAKE_BUILD_TYPE}
@@ -39,8 +39,8 @@ ExternalProject_Add(
     "${UKV_BUILD_ARGS}"
 )
 
-set(ukv_INCLUDE_DIR ${CMAKE_BINARY_DIR}/${UKV_PREFIX_DIR}/ukv-src/include)
-set(ukv_LIBRARY_PATH ${CMAKE_BINARY_DIR}/${UKV_PREFIX_DIR}/ukv-build/build/lib/libukv_umem_bundle.a)
+set(ukv_INCLUDE_DIR ${UKV_PREFIX_DIR}/ukv-src/include)
+set(ukv_LIBRARY_PATH ${UKV_PREFIX_DIR}/ukv-build/build/lib/libukv_umem_bundle.a)
 
 file(MAKE_DIRECTORY ${ukv_INCLUDE_DIR})
 add_library(ukv STATIC IMPORTED)
