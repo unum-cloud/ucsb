@@ -4,7 +4,8 @@
 set(ENGINE_NAME LEVELDB)
 
 set(UKV_PREFIX_DIR ${CMAKE_BINARY_DIR}/_deps)
-list(APPEND UKV_BUILD_ARGS "-DUKV_BUILD_ENGINE_${ENGINE_NAME}=1" "-DUKV_BUILD_BUNDLES=0" "-DUKV_BUILD_TESTS=0" "-DUKV_BUILD_BENCHMARKS=0")
+list(APPEND UKV_BUILD_ARGS "-DUKV_BUILD_ENGINE_${ENGINE_NAME}=1" "-DUKV_BUILD_BUNDLES=1" "-DUKV_BUILD_TESTS=0" "-DUKV_BUILD_BENCHMARKS=0")
+string(TOLOWER ${ENGINE_NAME} ENGINE_LIBNAME)
 
 include(ExternalProject)
 
@@ -40,7 +41,7 @@ ExternalProject_Add(
 )
 
 set(ukv_INCLUDE_DIR ${UKV_PREFIX_DIR}/ukv-src/include)
-set(ukv_LIBRARY_PATH ${UKV_PREFIX_DIR}/ukv-build/build/lib/libukv_umem_bundle.a)
+set(ukv_LIBRARY_PATH ${UKV_PREFIX_DIR}/ukv-build/build/lib/libukv_${ENGINE_LIBNAME}_bundle.a)
 
 file(MAKE_DIRECTORY ${ukv_INCLUDE_DIR})
 add_library(ukv STATIC IMPORTED)
