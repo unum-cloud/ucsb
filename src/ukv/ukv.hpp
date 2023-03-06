@@ -57,7 +57,7 @@ class ukv_t : public ucsb::db_t {
 
   private:
     inline value_view_t make_value(std::byte const* ptr, size_t length) {
-        return {reinterpret_cast<ukv_bytes_cptr_t>(ptr), length};
+        return {reinterpret_cast<ukv_bytes_cptr_t>(ptr), static_cast<ukv_length_t>(length)};
     }
 
     fs::path config_path_;
@@ -261,8 +261,8 @@ operation_result_t ukv_t::batch_read(keys_spanc_t keys, values_span_t values) co
     if (!status)
         return {0, operation_status_t::not_found_k};
 
-    for(size_t idx = 0; idx < keys.size(); ++idx){
-        if(!presences[idx])
+    for (size_t idx = 0; idx < keys.size(); ++idx) {
+        if (!presences[idx])
             continue;
 
         memcpy(values.data() + offset, values_ + offsets[idx], lengths[idx]);
@@ -319,7 +319,7 @@ operation_result_t ukv_t::range_select(key_t key, size_t length, values_span_t v
     read.values = &values_;
     ukv_read(&read);
 
-    for(size_t idx = 0; idx < *found_counts; ++idx){
+    for (size_t idx = 0; idx < *found_counts; ++idx) {
         memcpy(values.data() + offset, values_ + offsets[idx], lengths[idx]);
         offset += lengths[idx];
     }
@@ -368,14 +368,14 @@ operation_result_t ukv_t::scan(key_t key, size_t length, value_span_t single_val
     read.values = &values_;
     ukv_read(&read);
 
-    for(size_t idx = 0; idx < *found_counts; ++idx)
+    for (size_t idx = 0; idx < *found_counts; ++idx)
         memcpy(single_value.data(), values_ + offsets[idx], lengths[idx]);
     return {*found_counts, operation_status_t::ok_k};
 }
 
 void ukv_t::flush() {
     // TODO: Think better solution when a new interface is available
-    bool ok = close();
+    [[maybe_unused]] bool ok = close();
     assert(ok);
     ok = open();
     assert(ok);
@@ -386,8 +386,6 @@ size_t ukv_t::size_on_disk() const {
     return ucsb::size_on_disk(main_dir_path_);
 }
 
-std::unique_ptr<transaction_t> ukv_t::create_transaction() {
-    return {};
-}
+std::unique_ptr<transaction_t> ukv_t::create_transaction() { return {}; }
 
 } // namespace ucsb::ukv
