@@ -12,6 +12,7 @@ cmake/*
 !cmake/rocksdb.cmake
 !cmake/leveldb.cmake
 !cmake/wiredtiger.cmake
+!cmake/ukv.cmake
 *.ninja
 .clang-format
 .vscode/
