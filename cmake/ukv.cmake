@@ -49,6 +49,7 @@ add_library(ukv STATIC IMPORTED)
 if(${ENGINE_NAME} STREQUAL "UDISK")
     target_link_libraries(ukv INTERFACE dl pthread explain uring numa)
 endif()
+target_compile_definitions(ukv INTERFACE UKV_ENGINE_IS_${ENGINE_NAME}=1) 
 
 set_property(TARGET ukv PROPERTY IMPORTED_LOCATION ${ukv_LIBRARY_PATH})
 set_property(TARGET ukv APPEND PROPERTY INTERFACE_INCLUDE_DIRECTORIES ${ukv_INCLUDE_DIR})
