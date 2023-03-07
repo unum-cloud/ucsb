@@ -43,9 +43,12 @@ ExternalProject_Add(
 
 set(ukv_INCLUDE_DIR ${UKV_PREFIX_DIR}/ukv-src/include)
 set(ukv_LIBRARY_PATH ${UKV_PREFIX_DIR}/ukv-build/build/lib/libukv_${ENGINE_LIBNAME}_bundle.a)
-
 file(MAKE_DIRECTORY ${ukv_INCLUDE_DIR})
+
 add_library(ukv STATIC IMPORTED)
+if(${ENGINE_NAME} STREQUAL "UDISK")
+    target_link_libraries(ukv INTERFACE dl pthread explain uring numa)
+endif()
 
 set_property(TARGET ukv PROPERTY IMPORTED_LOCATION ${ukv_LIBRARY_PATH})
 set_property(TARGET ukv APPEND PROPERTY INTERFACE_INCLUDE_DIRECTORIES ${ukv_INCLUDE_DIR})

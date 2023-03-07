@@ -5,7 +5,7 @@ include(FetchContent)
 FetchContent_Declare(
     leveldb
     GIT_REPOSITORY https://github.com/google/leveldb.git
-    GIT_TAG 1.23
+    GIT_TAG main
     GIT_SHALLOW TRUE
 )
 
@@ -16,7 +16,10 @@ if(NOT leveldb_POPULATED)
     set(LEVELDB_BUILD_TESTS OFF CACHE BOOL "Build LevelDB's unit tests")
     set(LEVELDB_BUILD_BENCHMARKS OFF CACHE BOOL "Build LevelDB's benchmarks")
     set(HAVE_SNAPPY OFF CACHE BOOL "Build with snappy compression library")
-    set(RTTI ON CACHE BOOL "Build with RTTI")
+
+    # Enable RTTI (Note: LevelDB forcibly disables RTTI in CMakeList.txt:CMAKE_CXX_FLAGS)
+    set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -frtti")
+    set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -frtti")
 
     # Should not be set globally, but just for this target!
     FetchContent_Populate(leveldb)
