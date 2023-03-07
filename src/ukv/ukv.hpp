@@ -95,6 +95,10 @@ bool ukv_t::open() {
   ukv_database_init_t init{};
   init.db = &db_;
   init.error = status.member_ptr();
+#if defined(UKV_ENGINE_IS_UMEM)
+  auto path = config_path_.parent_path();
+  init.config = path.c_str();
+#endif
   ukv_database_init(&init);
   if (!status)
     return status;
