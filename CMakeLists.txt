@@ -144,4 +144,5 @@ target_link_libraries(ucsb_bench${ARTIFACT_SUFFIX}
   ${CONAN_LIBS}
   ${CMAKE_DL_LIBS}
   ${CXX_TARGET_LINK_LIBRARIES_WITH_FLAGS}
+  -fsanitize=address # Temp solution, wating for Darvin
 )
