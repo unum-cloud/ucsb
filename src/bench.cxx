@@ -34,36 +34,35 @@ using operation_chooser_ptr_t = std::unique_ptr<operation_chooser_t>;
 void parse_and_validate_args(int argc, char* argv[], settings_t& settings) {
 
     argparse::ArgumentParser program(argv[0]);
-    program.add_argument("-db", "--db_name").required().help("Database name");
-    program.add_argument("-w", "--workload_path").required().help("Workloads file path");
-    program.add_argument("-c", "--cfg_path").required().help("Database configuration file path");
-    program.add_argument("-t", "--txn").default_value(false).implicit_value(true).help("transactional");
-    program.add_argument("-r", "--result_path").required().help("Result file path");
-    program.add_argument("-m", "--main_dir").required().help("Database main directory path");
-    program.add_argument("-s", "--storage_dir")
+    program.add_argument("-db", "--db-name").required().help("Database name");
+    program.add_argument("-cfg", "--config-path").required().help("Database configuration file path");
+    program.add_argument("-wl", "--workload-path").required().help("Workloads file path");
+    program.add_argument("-t", "--transaction").default_value(false).implicit_value(true).help("Transactional");
+    program.add_argument("-res", "--results-path").required().help("Results file path");
+    program.add_argument("-md", "--main-dir").required().help("Database main directory path");
+    program.add_argument("-sd", "--storage-dirs")
         .default_value(std::string(""))
-        .implicit_value(std::string(""))
-        .help("Database storage directory path");
-    program.add_argument("-f", "--filter").required().help("Workloads filter (Optional)");
-    program.add_argument("-ts", "--threads").required().default_value(1).help("Threads Count");
+        .help("Database storage directory paths");
+    program.add_argument("-fl", "--filter").required().help("Workloads filter");
+    program.add_argument("-th", "--threads").required().default_value(1).help("Threads count");
 
     program.parse_known_args(argc, argv);
 
-    settings.db_name = program.get("db_name");
-    settings.db_config_file_path = program.get("cfg_path");
-    settings.workloads_file_path = program.get("workload_path");
-    settings.results_file_path = program.get("result_path");
+    settings.db_name = program.get("db-name");
+    settings.db_config_file_path = program.get("config-path");
+    settings.workloads_file_path = program.get("workload-path");
+    settings.transactional = program.get<bool>("transaction");
+    settings.results_file_path = program.get("results-path");
     settings.threads_count = std::stoi(program.get("threads"));
     settings.workload_filter = program.get("filter");
-    settings.transactional = program.get<bool>("txn");
 
-    auto path = program.get("main_dir");
+    auto path = program.get("main-dir");
     if (!path.empty() && path.back() != '/')
         path.push_back('/');
     settings.db_main_dir_path = path;
 
     settings.db_storage_dir_paths.clear();
-    std::string str_dir_paths = program.get("storage_dir");
+    std::string str_dir_paths = program.get("storage-dirs");
     auto dir_paths = split(str_dir_paths, ',');
     for (auto& dir_path : dir_paths) {
         if (!dir_path.empty() && dir_path.back() != '/')
@@ -72,7 +71,7 @@ void parse_and_validate_args(int argc, char* argv[], settings_t& settings) {
     }
 
     if (settings.threads_count == 0) {
-        fmt::print("-threads: Zero threads count specified\n");
+        fmt::print("Zero threads count specified\n");
         exit(1);
     }
 }

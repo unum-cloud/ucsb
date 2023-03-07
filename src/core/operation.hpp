@@ -50,7 +50,7 @@ class operation_chooser_t {
 
   private:
     std::vector<std::pair<operation_kind_t, float>> ops_;
-    core::generators::random_double_generator_t generator_;
+    core::random_double_generator_t generator_;
     float sum_;
 };
 

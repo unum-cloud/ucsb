@@ -4,7 +4,7 @@
 #include "src/core/exception.hpp"
 #include "src/core/generators/counter_generator.hpp"
 
-namespace ucsb::core::generators {
+namespace ucsb::core {
 
 class acknowledged_counter_generator_t : public counter_generator_t {
   public:
@@ -39,4 +39,4 @@ class acknowledged_counter_generator_t : public counter_generator_t {
     uint64_t limit_;
 };
 
-} // namespace ucsb
+} // namespace ucsb::core

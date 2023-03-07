@@ -423,13 +423,9 @@ void lmdb_t::flush() {
     // Nothing to do
 }
 
-size_t lmdb_t::size_on_disk() const {
-    return ucsb::size_on_disk(main_dir_path_);
-}
+size_t lmdb_t::size_on_disk() const { return ucsb::size_on_disk(main_dir_path_); }
 
-std::unique_ptr<transaction_t> lmdb_t::create_transaction() {
-    return {};
-}
+std::unique_ptr<transaction_t> lmdb_t::create_transaction() { return {}; }
 
 bool lmdb_t::load_config(config_t& config) {
     if (!fs::exists(config_path_))
@@ -448,4 +444,4 @@ bool lmdb_t::load_config(config_t& config) {
     return true;
 }
 
-} // namespace symas
+} // namespace ucsb::symas

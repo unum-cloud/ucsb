@@ -11,7 +11,7 @@
 #include "src/core/helper.hpp"
 #include "src/core/printable.hpp"
 
-namespace ucsb::mongodb {
+namespace ucsb::mongo {
 
 namespace fs = ucsb::fs;
 
@@ -395,13 +395,9 @@ void wiredtiger_t::flush() {
     bulk_load_session_.reset();
 }
 
-size_t wiredtiger_t::size_on_disk() const {
-    return ucsb::size_on_disk(main_dir_path_);
-}
+size_t wiredtiger_t::size_on_disk() const { return ucsb::size_on_disk(main_dir_path_); }
 
-std::unique_ptr<transaction_t> wiredtiger_t::create_transaction() {
-    return {};
-}
+std::unique_ptr<transaction_t> wiredtiger_t::create_transaction() { return {}; }
 
 bool wiredtiger_t::load_config(config_t& config) {
     if (!fs::exists(config_path_))
@@ -423,4 +419,4 @@ inline std::string wiredtiger_t::create_str_config(config_t const& config) const
     return fmt::format("{},{}", str_config, str_cache_size);
 }
 
-} // namespace ucsb::mongodb
+} // namespace ucsb::mongo

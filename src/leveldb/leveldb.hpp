@@ -35,9 +35,7 @@ using operation_result_t = ucsb::operation_result_t;
 using db_hints_t = ucsb::db_hints_t;
 using transaction_t = ucsb::transaction_t;
 
-inline leveldb::Slice to_slice(key_t& key) {
-    return {reinterpret_cast<char const*>(&key), sizeof(key_t)};
-}
+inline leveldb::Slice to_slice(key_t& key) { return {reinterpret_cast<char const*>(&key), sizeof(key_t)}; }
 
 inline leveldb::Slice to_slice(value_spanc_t value) {
     return {reinterpret_cast<char const*>(value.data()), value.size()};
@@ -277,13 +275,9 @@ void leveldb_t::flush() {
     // Nothing to do
 }
 
-size_t leveldb_t::size_on_disk() const {
-    return ucsb::size_on_disk(main_dir_path_);
-}
+size_t leveldb_t::size_on_disk() const { return ucsb::size_on_disk(main_dir_path_); }
 
-std::unique_ptr<transaction_t> leveldb_t::create_transaction() {
-    return {};
-}
+std::unique_ptr<transaction_t> leveldb_t::create_transaction() { return {}; }
 
 bool leveldb_t::load_config(config_t& config) {
     if (!fs::exists(config_path_))
