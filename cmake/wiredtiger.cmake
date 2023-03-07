@@ -9,7 +9,7 @@ ExternalProject_Add(
     wiredtiger_external
 
     GIT_REPOSITORY "https://github.com/wiredtiger/wiredtiger.git"
-    GIT_TAG develop
+    GIT_TAG 11.1.0
     GIT_SHALLOW 1
     GIT_PROGRESS 0
     
