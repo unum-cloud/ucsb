@@ -9,7 +9,7 @@ ExternalProject_Add(
     wiredtiger_external
 
     GIT_REPOSITORY "https://github.com/wiredtiger/wiredtiger.git"
-    GIT_TAG 11.1.0
+    GIT_TAG develop
     GIT_SHALLOW 1
     GIT_PROGRESS 0
     
@@ -33,6 +33,7 @@ ExternalProject_Add(
     -DENABLE_STATIC:STRING=ON
     -DENABLE_CPPSUITE:BOOL=OFF
     -DCMAKE_C_FLAGS=-Wno-maybe-uninitialized
+    -DCMAKE_CXX_FLAGS=-Wno-unused-variable
 )
 
 set(wiredtiger_INCLUDE_DIR ${UKV_PREFIX_DIR}/wiredtiger-install/include)
