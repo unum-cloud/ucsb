@@ -146,10 +146,8 @@ bool rocksdb_t::open() {
         return true;
 
     options_ = rocksdb::Options();
-    auto config_options = rocksdb::ConfigOptions();
-    config_options.ignore_unknown_options = false;
-    config_options.ignore_unsupported_options = false;
-    rocksdb::Status status = rocksdb::LoadOptionsFromFile(config_options, config_path_.string(), &options_, &cf_descs_);
+    rocksdb::Status status =
+        rocksdb::LoadOptionsFromFile(config_path_.string(), rocksdb::Env::Default(), &options_, &cf_descs_);
     if (!status.ok() || cf_descs_.empty())
         return false;
     if (!load_additional_options())
