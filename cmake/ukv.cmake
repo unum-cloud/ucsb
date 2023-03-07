@@ -47,7 +47,7 @@ file(MAKE_DIRECTORY ${ukv_INCLUDE_DIR})
 
 add_library(ukv STATIC IMPORTED)
 if(${ENGINE_NAME} STREQUAL "UDISK")
-    target_link_libraries(ukv INTERFACE dl pthread explain uring numa)
+    target_link_libraries(ukv INTERFACE dl pthread explain uring numa tbb)
 endif()
 target_compile_definitions(ukv INTERFACE UKV_ENGINE_IS_${ENGINE_NAME}=1) 
 
