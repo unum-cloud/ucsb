@@ -396,11 +396,7 @@ operation_result_t ukv_t::scan(key_t key, size_t length, value_span_t single_val
 }
 
 void ukv_t::flush() {
-    // TODO: Think better solution when a new interface is available
-    [[maybe_unused]] bool ok = close();
-    assert(ok);
-    ok = open();
-    assert(ok);
+    // !!!TODO: Think solution
 }
 
 size_t ukv_t::size_on_disk() const {
