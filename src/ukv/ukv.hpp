@@ -1,10 +1,14 @@
 #pragma once
 
 #include <cassert>
+#include <string>
+#include <fstream>
+#include <streambuf>
 
 #include <ukv/cpp/status.hpp>
 #include <ukv/cpp/types.hpp>
 #include <ukv/ukv.h>
+#include <helpers/config_loader.hpp>
 
 #include "src/core/db.hpp"
 #include "src/core/helper.hpp"
@@ -65,6 +69,7 @@ class ukv_t : public ucsb::db_t {
     fs::path config_path_;
     fs::path main_dir_path_;
     std::vector<fs::path> storage_dir_paths_;
+    db_hints_t hints_;
 
     ukv_database_t db_;
     ukv_collection_t collection_ = ukv_collection_main_k;
@@ -74,29 +79,51 @@ class ukv_t : public ucsb::db_t {
 void ukv_t::set_config(fs::path const& config_path,
                        fs::path const& main_dir_path,
                        std::vector<fs::path> const& storage_dir_paths,
-                       [[maybe_unused]] db_hints_t const& hints) {
+                       db_hints_t const& hints) {
     config_path_ = config_path;
     main_dir_path_ = main_dir_path;
     storage_dir_paths_ = storage_dir_paths;
+    hints_ = hints;
 }
 
 bool ukv_t::open() {
     if (db_)
         return true;
 
-    // !!!TODO: DB gets paths from outside not from config file,
-    // so need to pass main_dir_path_ & storage_dir_paths with the config
-    status_t status;
+    // Read config from file
+    std::ifstream stream(config_path_);
+    if (!stream)
+        return false;
+    std::string str_config((std::istreambuf_iterator<char>(stream)), std::istreambuf_iterator<char>());
+
+    // Load and overwrite
+    config_t config;
+    auto status = config_loader_t::load_from_json_string(str_config, config);
+    if (!status)
+        return false;
+    config.directory = main_dir_path_;
+    config.data_directories.clear();
+#if defined(UKV_ENGINE_IS_ROCKSDB) || defined(UKV_ENGINE_IS_UDISK)
+    for (auto const& dir : storage_dir_paths_) {
+        size_t storage_size_on_disk = (hints_.records_count * hints_.value_length) / storage_dir_paths_.size();
+        config.data_directories.push_back({dir, storage_size_on_disk});    
+    }
+#endif
+    config.engine_config_path = ""; // !!!TODO: Think solution
+
+    // Convert to json string
+    status = config_loader_t::save_to_json_string(config, str_config);
+    if (!status)
+        return false;
+
     ukv_database_init_t init {};
+    init.config = str_config.c_str();
     init.db = &db_;
     init.error = status.member_ptr();
-#if defined(UKV_ENGINE_IS_UMEM)
-    auto path = config_path_.parent_path();
-    init.config = path.c_str();
-#endif
     ukv_database_init(&init);
     if (!status)
         return status;
+
     arena = arena_t(db_);
     return true;
 }

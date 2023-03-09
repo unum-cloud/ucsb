@@ -14,7 +14,7 @@ ExternalProject_Add(
     ukv_external
 
     GIT_REPOSITORY "https://github.com/unum-cloud/ukv"
-    GIT_TAG dev
+    GIT_TAG config
     GIT_SHALLOW 1
     GIT_PROGRESS 0
     
@@ -41,9 +41,9 @@ ExternalProject_Add(
     "${UKV_BUILD_ARGS}"
 )
 
-set(ukv_INCLUDE_DIR ${UKV_PREFIX_DIR}/ukv-src/include)
+list(APPEND ukv_INCLUDE_DIRS ${UKV_PREFIX_DIR}/ukv-src/include ${UKV_PREFIX_DIR}/ukv-src/src)
 set(ukv_LIBRARY_PATH ${UKV_PREFIX_DIR}/ukv-build/build/lib/libukv_${ENGINE_LIBNAME}_bundle.a)
-file(MAKE_DIRECTORY ${ukv_INCLUDE_DIR})
+file(MAKE_DIRECTORY ${ukv_INCLUDE_DIRS})
 
 add_library(ukv STATIC IMPORTED)
 if(${ENGINE_NAME} STREQUAL "UDISK")
@@ -52,7 +52,7 @@ endif()
 target_compile_definitions(ukv INTERFACE UKV_ENGINE_IS_${ENGINE_NAME}=1) 
 
 set_property(TARGET ukv PROPERTY IMPORTED_LOCATION ${ukv_LIBRARY_PATH})
-set_property(TARGET ukv APPEND PROPERTY INTERFACE_INCLUDE_DIRECTORIES ${ukv_INCLUDE_DIR})
+set_property(TARGET ukv APPEND PROPERTY INTERFACE_INCLUDE_DIRECTORIES ${ukv_INCLUDE_DIRS})
 
-include_directories(${ukv_INCLUDE_DIR})
+include_directories(${ukv_INCLUDE_DIRS})
 add_dependencies(ukv ukv_external)

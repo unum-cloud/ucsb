@@ -97,6 +97,7 @@ class rocksdb_t : public ucsb::db_t {
     fs::path config_path_;
     fs::path main_dir_path_;
     std::vector<fs::path> storage_dir_paths_;
+    db_hints_t hints_;
 
     bool load_additional_options();
 
@@ -127,8 +128,6 @@ class rocksdb_t : public ucsb::db_t {
     key_comparator_t key_cmp_;
     db_mode_t mode_;
     std::atomic_bool full_compaction_;
-
-    db_hints_t hints_;
 };
 
 void rocksdb_t::set_config(fs::path const& config_path,
@@ -408,7 +407,7 @@ bool rocksdb_t::load_additional_options() {
 
     // DB multiple paths
     if (!storage_dir_paths_.empty()) {
-        size_t db_size_per_disk = hints_.records_count * hints_.value_length / storage_dir_paths_.size();
+        size_t db_size_per_disk = (hints_.records_count * hints_.value_length) / storage_dir_paths_.size();
         if (db_size_per_disk == 0)
             return false;
 
