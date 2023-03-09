@@ -416,8 +416,12 @@ void ukv_t::flush() {
 }
 
 size_t ukv_t::size_on_disk() const {
-    // !!!TODO: Calculate all used paths not only the main directory
-    return ucsb::size_on_disk(main_dir_path_);
+    size_t files_size = ucsb::size_on_disk(main_dir_path_);
+    for (auto const& db_path : storage_dir_paths_) {
+        if (fs::exists(db_path))
+            files_size += ucsb::size_on_disk(db_path);
+    }
+    return files_size;
 }
 
 std::unique_ptr<transaction_t> ukv_t::create_transaction() { return {}; }
