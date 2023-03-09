@@ -42,8 +42,6 @@ class ukv_t : public ucsb::db_t {
                     db_hints_t const& hints) override;
     bool open() override;
     bool close() override;
-    void destroy() override;
-    void free();
 
     operation_result_t upsert(key_t key, value_spanc_t value) override;
     operation_result_t update(key_t key, value_spanc_t value) override;
@@ -65,6 +63,8 @@ class ukv_t : public ucsb::db_t {
     inline value_view_t make_value(std::byte const* ptr, size_t length) {
         return {reinterpret_cast<ukv_bytes_cptr_t>(ptr), static_cast<ukv_length_t>(length)};
     }
+
+    void free();
 
     fs::path config_path_;
     fs::path main_dir_path_;
@@ -138,18 +138,6 @@ bool ukv_t::close() {
     free();
 #endif
     return true;
-}
-
-void ukv_t::destroy() {
-    // TODO: Should to destroy DB by its interface
-    status_t status;
-    ukv_collection_drop_t drop {};
-    drop.db = db_;
-    drop.error = status.member_ptr();
-    drop.id = ukv_collection_main_k;
-    drop.mode = ukv_drop_keys_vals_handle_k;
-    ukv_collection_drop(&drop);
-    assert(status);
 }
 
 operation_result_t ukv_t::upsert(key_t key, value_spanc_t value) {

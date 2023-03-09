@@ -73,7 +73,6 @@ class rocksdb_t : public ucsb::db_t {
                     db_hints_t const& hints) override;
     bool open() override;
     bool close() override;
-    void destroy() override;
 
     operation_result_t upsert(key_t key, value_spanc_t value) override;
     operation_result_t update(key_t key, value_spanc_t value) override;
@@ -204,12 +203,6 @@ bool rocksdb_t::close() {
     cf_handles_.clear();
     transaction_db_ = nullptr;
     return true;
-}
-
-void rocksdb_t::destroy() {
-    [[maybe_unused]] bool ok = close();
-    assert(ok);
-    rocksdb::DestroyDB(main_dir_path_.string(), options_, cf_descs_);
 }
 
 operation_result_t rocksdb_t::upsert(key_t key, value_spanc_t value) {

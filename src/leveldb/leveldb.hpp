@@ -57,7 +57,6 @@ class leveldb_t : public ucsb::db_t {
                     db_hints_t const& hints) override;
     bool open() override;
     bool close() override;
-    void destroy() override;
 
     operation_result_t upsert(key_t key, value_spanc_t value) override;
     operation_result_t update(key_t key, value_spanc_t value) override;
@@ -159,12 +158,6 @@ bool leveldb_t::open() {
 bool leveldb_t::close() {
     db_.reset(nullptr);
     return true;
-}
-
-void leveldb_t::destroy() {
-    [[maybe_unused]] bool ok = close();
-    assert(ok);
-    leveldb::DestroyDB(main_dir_path_.string(), options_);
 }
 
 operation_result_t leveldb_t::upsert(key_t key, value_spanc_t value) {

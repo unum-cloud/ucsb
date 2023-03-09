@@ -58,7 +58,6 @@ class mongodb_t : public ucsb::db_t {
                     db_hints_t const& hints) override;
     bool open() override;
     bool close() override;
-    void destroy() override;
 
     operation_result_t upsert(key_t key, value_spanc_t value) override;
     operation_result_t update(key_t key, value_spanc_t value) override;
@@ -134,12 +133,6 @@ bool mongodb_t::close() {
     exec_cmd(stop_cmd.c_str());
     return true;
 }
-
-void mongodb_t::destroy() {
-    auto client = (*pool_).acquire();
-    auto coll = (*client)["mongodb"][coll_name];
-    coll.drop();
-};
 
 operation_result_t mongodb_t::upsert(key_t key, value_spanc_t value) {
     auto client = (*pool_).acquire();

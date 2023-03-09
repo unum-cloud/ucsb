@@ -44,7 +44,6 @@ class lmdb_t : public ucsb::db_t {
                     db_hints_t const& hints) override;
     bool open() override;
     bool close() override;
-    void destroy() override;
 
     operation_result_t upsert(key_t key, value_spanc_t value) override;
     operation_result_t update(key_t key, value_spanc_t value) override;
@@ -161,26 +160,6 @@ bool lmdb_t::close() {
     dbi_ = 0;
     env_ = nullptr;
     return true;
-}
-
-void lmdb_t::destroy() {
-    if (!env_ || !dbi_) {
-        ucsb::clear_directory(main_dir_path_);
-        return;
-    }
-
-    MDB_txn* txn = nullptr;
-    int res = mdb_txn_begin(env_, nullptr, 0, &txn);
-    if (res)
-        return;
-    mdb_drop(txn, dbi_, 1);
-    res = mdb_txn_commit(txn);
-    assert(res == 0);
-
-    [[maybe_unused]] bool ok = close();
-    assert(ok);
-
-    ucsb::clear_directory(main_dir_path_);
 }
 
 operation_result_t lmdb_t::upsert(key_t key, value_spanc_t value) {

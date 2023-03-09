@@ -47,7 +47,6 @@ struct redis_t : public ucsb::db_t {
                     db_hints_t const& hints) override;
     bool open() override;
     bool close() override;
-    void destroy() override;
 
     operation_result_t upsert(key_t key, value_spanc_t value) override;
     operation_result_t update(key_t key, value_spanc_t value) override;
@@ -140,8 +139,6 @@ bool redis_t::open() {
 }
 
 bool redis_t::close() { return true; }
-
-void redis_t::destroy() {}
 
 operation_result_t redis_t::upsert(key_t key, value_spanc_t value) {
     auto status = (*redis_).hset("hash", to_string_view(key), to_string_view(value.data(), value.size()));

@@ -46,11 +46,6 @@ class db_t : public data_accessor_t {
                             std::vector<fs::path> const& storage_dir_paths,
                             db_hints_t const& hints) = 0;
 
-    /**
-     * @brief Removes all the information stored in the DB and deletes the files on disk.
-     */
-    virtual void destroy() = 0;
-
     virtual void flush() = 0;
 
     /**
