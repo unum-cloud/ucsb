@@ -106,7 +106,7 @@ bool ukv_t::open() {
 #if defined(UKV_ENGINE_IS_ROCKSDB) || defined(UKV_ENGINE_IS_UDISK)
     for (auto const& dir : storage_dir_paths_) {
         size_t storage_size_on_disk = (hints_.records_count * hints_.value_length) / storage_dir_paths_.size();
-        config.data_directories.push_back({dir, storage_size_on_disk});    
+        config.data_directories.push_back({dir, storage_size_on_disk});
     }
 #endif
     config.engine_config_path = ""; // !!!TODO: Think solution
