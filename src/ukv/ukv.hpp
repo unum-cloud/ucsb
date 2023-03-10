@@ -113,7 +113,21 @@ bool ukv_t::open() {
 #endif
     }
 #endif
-    config.engine_config_path = ""; // !!!TODO: Think solution
+    // Resolve engine config path
+    // TODO: Workaround, Think better solution
+    auto config_file_name = config_path_.filename();
+    auto configs_root = config_path_.parent_path().parent_path();
+    if (configs_root.filename() != "configs")
+        return false;
+#if defined(UKV_ENGINE_IS_ROCKSDB)
+    config.engine_config_path = configs_root / "rocksdb" / config_file_name;
+#elif defined(UKV_ENGINE_IS_LEVELDB)
+    config.engine_config_path = configs_root / "leveldb" / config_file_name;
+#elif defined(UKV_ENGINE_IS_UDISK)
+    config.engine_config_path = configs_root / "unumdb" / config_file_name;
+#else
+    config.engine_config_path = "";
+#endif
 
     // Convert to json string
     status = config_loader_t::save_to_json_string(config, str_config);
@@ -401,7 +415,7 @@ operation_result_t ukv_t::scan(key_t key, size_t length, value_span_t single_val
 
 void ukv_t::flush() {
     // !!!TODO: Think solution
-    fmt::print("WARNING: flush() has not been implemented yet");
+    fmt::print("WARNING: flush() has not been implemented yet\n");
 }
 
 size_t ukv_t::size_on_disk() const {
