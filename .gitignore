@@ -6,6 +6,7 @@ build_release/
 bin/
 CMakeFiles
 Makefile
+!docs/Makefile
 CMakeCache.txt
 *.cmake
 cmake/
