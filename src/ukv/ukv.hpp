@@ -416,8 +416,7 @@ operation_result_t ukv_t::scan(key_t key, size_t length, value_span_t single_val
 }
 
 void ukv_t::flush() {
-    // !!!TODO: Think solution
-    fmt::print("WARNING: flush() has not been implemented yet\n");
+    // TODO: Think solution
 }
 
 size_t ukv_t::size_on_disk() const {
