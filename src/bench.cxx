@@ -551,7 +551,7 @@ int main(int argc, char** argv) {
 
         run_benchmarks(argc, argv, in_progress_results_file_path);
 
-        marge_results(in_progress_results_file_path, final_results_file_path, settings.db_name);
+        merge_results(in_progress_results_file_path, final_results_file_path, settings.db_name);
         fs::remove(in_progress_results_file_path);
     }
     catch (exception_t const& ex) {
