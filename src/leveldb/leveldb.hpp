@@ -58,6 +58,8 @@ class leveldb_t : public ucsb::db_t {
     bool open() override;
     bool close() override;
 
+    std::string info() override;
+
     operation_result_t upsert(key_t key, value_spanc_t value) override;
     operation_result_t update(key_t key, value_spanc_t value) override;
     operation_result_t remove(key_t key) override;
@@ -72,6 +74,7 @@ class leveldb_t : public ucsb::db_t {
     operation_result_t scan(key_t key, size_t length, value_span_t single_value) const override;
 
     void flush() override;
+
     size_t size_on_disk() const override;
 
     std::unique_ptr<transaction_t> create_transaction() override;
@@ -263,6 +266,8 @@ operation_result_t leveldb_t::scan(key_t key, size_t length, value_span_t single
         memcpy(single_value.data(), it->value().data(), it->value().size());
     return {i, operation_status_t::ok_k};
 }
+
+std::string leveldb_t::info() { return fmt::format("v{}.{}", leveldb::kMajorVersion, leveldb::kMinorVersion); }
 
 void leveldb_t::flush() {
     // Nothing to do

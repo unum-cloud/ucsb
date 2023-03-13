@@ -1,5 +1,7 @@
 #pragma once
+
 #include <set>
+#include <string>
 #include <memory>
 
 #include "src/core/types.hpp"
@@ -27,6 +29,11 @@ class db_t : public data_accessor_t {
 
     virtual bool open() = 0;
     virtual bool close() = 0;
+
+    /**
+     * @brief Returns high level description about the DB
+     */
+    virtual std::string info() = 0;
 
     /**
      * @brief Initializes the DB before usage.

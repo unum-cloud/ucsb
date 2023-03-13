@@ -43,6 +43,8 @@ class ukv_t : public ucsb::db_t {
     bool open() override;
     bool close() override;
 
+    std::string info() override;
+
     operation_result_t upsert(key_t key, value_spanc_t value) override;
     operation_result_t update(key_t key, value_spanc_t value) override;
     operation_result_t remove(key_t key) override;
@@ -56,7 +58,9 @@ class ukv_t : public ucsb::db_t {
     operation_result_t scan(key_t key, size_t length, value_span_t single_value) const override;
 
     void flush() override;
+
     size_t size_on_disk() const override;
+
     std::unique_ptr<transaction_t> create_transaction() override;
 
   private:
@@ -414,6 +418,8 @@ operation_result_t ukv_t::scan(key_t key, size_t length, value_span_t single_val
     }
     return {*found_counts, operation_status_t::ok_k};
 }
+
+std::string ukv_t::info() { return fmt::format("v{}, {} engine", UKV_VERSION, UKV_ENGINE_NAME); }
 
 void ukv_t::flush() {
     // TODO: Think solution

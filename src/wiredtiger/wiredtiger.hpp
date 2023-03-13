@@ -58,6 +58,8 @@ class wiredtiger_t : public ucsb::db_t {
     bool open() override;
     bool close() override;
 
+    std::string info() override;
+
     operation_result_t upsert(key_t key, value_spanc_t value) override;
     operation_result_t update(key_t key, value_spanc_t value) override;
     operation_result_t remove(key_t key) override;
@@ -72,6 +74,7 @@ class wiredtiger_t : public ucsb::db_t {
     operation_result_t scan(key_t key, size_t length, value_span_t single_value) const override;
 
     void flush() override;
+
     size_t size_on_disk() const override;
 
     std::unique_ptr<transaction_t> create_transaction() override;
@@ -380,6 +383,10 @@ operation_result_t wiredtiger_t::scan(key_t key, size_t length, value_span_t sin
     }
 
     return {scanned_records_count, operation_status_t::ok_k};
+}
+
+std::string wiredtiger_t::info() {
+    return fmt::format("v{}.{}.{}", WIREDTIGER_VERSION_MAJOR, WIREDTIGER_VERSION_MINOR, WIREDTIGER_VERSION_PATCH);
 }
 
 void wiredtiger_t::flush() {

@@ -5,8 +5,10 @@ set(ENGINE_NAME UMEM)
 set(ENGINE_UDISK_PATH "${CMAKE_BINARY_DIR}/build/lib/libudisk.a")
 
 list(APPEND UKV_BUILD_ARGS "-DUKV_BUILD_ENGINE_${ENGINE_NAME}=1" "-DUKV_ENGINE_UDISK_PATH=${ENGINE_UDISK_PATH}" "-DUKV_BUILD_BUNDLES=1" "-DUKV_BUILD_TESTS=0" "-DUKV_BUILD_BENCHMARKS=0")
-string(TOLOWER ${ENGINE_NAME} ENGINE_LIBNAME)
+string(TOLOWER ${ENGINE_NAME} LOWERCASE_ENGINE_NAME)
 set(UKV_PREFIX_DIR ${CMAKE_BINARY_DIR}/_deps)
+
+file(READ "${UKV_PREFIX_DIR}/ukv-src/VERSION" UKV_VERSION)
 
 include(ExternalProject)
 
@@ -42,14 +44,17 @@ ExternalProject_Add(
 )
 
 list(APPEND ukv_INCLUDE_DIRS ${UKV_PREFIX_DIR}/ukv-src/include ${UKV_PREFIX_DIR}/ukv-src/src)
-set(ukv_LIBRARY_PATH ${UKV_PREFIX_DIR}/ukv-build/build/lib/libukv_${ENGINE_LIBNAME}_bundle.a)
+set(ukv_LIBRARY_PATH ${UKV_PREFIX_DIR}/ukv-build/build/lib/libukv_${LOWERCASE_ENGINE_NAME}_bundle.a)
 file(MAKE_DIRECTORY ${ukv_INCLUDE_DIRS})
 
 add_library(ukv STATIC IMPORTED)
 if(${ENGINE_NAME} STREQUAL "UDISK")
     target_link_libraries(ukv INTERFACE dl pthread explain uring numa tbb)
 endif()
+
+target_compile_definitions(ukv INTERFACE UKV_VERSION="${UKV_VERSION}") 
 target_compile_definitions(ukv INTERFACE UKV_ENGINE_IS_${ENGINE_NAME}=1) 
+target_compile_definitions(ukv INTERFACE UKV_ENGINE_NAME="${LOWERCASE_ENGINE_NAME}") 
 
 set_property(TARGET ukv PROPERTY IMPORTED_LOCATION ${ukv_LIBRARY_PATH})
 set_property(TARGET ukv APPEND PROPERTY INTERFACE_INCLUDE_DIRECTORIES ${ukv_INCLUDE_DIRS})

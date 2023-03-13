@@ -45,6 +45,8 @@ class lmdb_t : public ucsb::db_t {
     bool open() override;
     bool close() override;
 
+    std::string info() override;
+
     operation_result_t upsert(key_t key, value_spanc_t value) override;
     operation_result_t update(key_t key, value_spanc_t value) override;
     operation_result_t remove(key_t key) override;
@@ -59,6 +61,7 @@ class lmdb_t : public ucsb::db_t {
     operation_result_t scan(key_t key, size_t length, value_span_t single_value) const override;
 
     void flush() override;
+
     size_t size_on_disk() const override;
 
     std::unique_ptr<transaction_t> create_transaction() override;
@@ -397,6 +400,8 @@ operation_result_t lmdb_t::scan(key_t key, size_t length, value_span_t single_va
     mdb_txn_abort(txn);
     return {scanned_records_count, operation_status_t::ok_k};
 }
+
+std::string lmdb_t::info() { return fmt::format("v{}.{}.{}", MDB_VERSION_MAJOR, MDB_VERSION_MINOR, MDB_VERSION_PATCH); }
 
 void lmdb_t::flush() {
     // Nothing to do

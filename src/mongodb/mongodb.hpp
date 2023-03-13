@@ -59,6 +59,8 @@ class mongodb_t : public ucsb::db_t {
     bool open() override;
     bool close() override;
 
+    std::string info() override;
+
     operation_result_t upsert(key_t key, value_spanc_t value) override;
     operation_result_t update(key_t key, value_spanc_t value) override;
     operation_result_t remove(key_t key) override;
@@ -72,7 +74,9 @@ class mongodb_t : public ucsb::db_t {
     operation_result_t scan(key_t key, size_t length, value_span_t single_value) const override;
 
     void flush() override;
+
     size_t size_on_disk() const override;
+
     std::unique_ptr<transaction_t> create_transaction() override;
 
   private:
@@ -283,6 +287,8 @@ operation_result_t mongodb_t::scan([[maybe_unused]] key_t key, size_t length, va
     }
     return {i, operation_status_t::ok_k};
 }
+
+std::string mongodb_t::info() { return {}; }
 
 void mongodb_t::flush() {}
 
