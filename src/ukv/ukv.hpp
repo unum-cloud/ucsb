@@ -98,36 +98,38 @@ bool ukv_t::open() {
 
     // Load and overwrite
     config_t config;
-    auto status = config_loader_t::load_from_json_string(str_config, config);
+    auto status = config_loader_t::load_from_json_string(str_config, config, true);
     if (!status)
         return false;
-    config.directory = main_dir_path_;
-    config.data_directories.clear();
+
+    // Overwrite if it's empty
+    if (config.directory.empty())
+        config.directory = main_dir_path_;
+    if (config.data_directories.empty()) {
 #if defined(UKV_ENGINE_IS_ROCKSDB) || defined(UKV_ENGINE_IS_UDISK)
-    for (auto const& dir : storage_dir_paths_) {
+        for (auto const& dir : storage_dir_paths_) {
 #if defined(UKV_ENGINE_IS_ROCKSDB)
-        size_t storage_size_on_disk = (hints_.records_count * hints_.value_length) / storage_dir_paths_.size();
-        config.data_directories.push_back({dir, storage_size_on_disk});
+            size_t storage_size_on_disk = (hints_.records_count * hints_.value_length) / storage_dir_paths_.size();
+            config.data_directories.push_back({dir, storage_size_on_disk});
 #else
-        config.data_directories.push_back({dir, disk_config_t::unlimited_space_k});
+            config.data_directories.push_back({dir, disk_config_t::unlimited_space_k});
+#endif
+        }
 #endif
     }
-#endif
     // Resolve engine config path
-    // TODO: Workaround, Think better solution
-    auto config_file_name = config_path_.filename();
-    auto configs_root = config_path_.parent_path().parent_path();
-    if (configs_root.filename() != "configs")
-        return false;
+    if (config.engine_config_path.empty()) {
+        auto configs_root = config_path_.parent_path().parent_path();
+        if (configs_root.filename() != "configs")
+            return false;
 #if defined(UKV_ENGINE_IS_ROCKSDB)
-    config.engine_config_path = configs_root / "rocksdb" / config_file_name;
+        config.engine_config_path = configs_root / "rocksdb" / config_path_.filename();
 #elif defined(UKV_ENGINE_IS_LEVELDB)
-    config.engine_config_path = configs_root / "leveldb" / config_file_name;
+        config.engine_config_path = configs_root / "leveldb" / config_path_.filename();
 #elif defined(UKV_ENGINE_IS_UDISK)
-    config.engine_config_path = configs_root / "unumdb" / config_file_name;
-#else
-    config.engine_config_path = "";
+        config.engine_config_path = configs_root / "udisk" / config_path_.filename();
 #endif
+    }
 
     // Convert to json string
     status = config_loader_t::save_to_json_string(config, str_config);
