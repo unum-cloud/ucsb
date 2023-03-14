@@ -214,7 +214,7 @@ operation_result_t ukv_t::remove(key_t key) {
     write.db = db_;
     write.error = status.member_ptr();
     write.arena = arena.member_ptr();
-    write.options = option;
+    write.options = options_;
     write.tasks_count = 1;
     write.collections = &collection_;
     write.keys = &key_;
@@ -432,7 +432,7 @@ void ukv_t::flush() {
     write.db = db_;
     write.error = status.member_ptr();
     write.arena = arena.member_ptr();
-    write.options = options_ | ukv_option_write_flush_k;
+    write.options = ukv_options_t(options_ | ukv_option_write_flush_k);
     write.tasks_count = 0;
     write.collections = &collection_;
     write.keys = nullptr;
