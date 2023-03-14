@@ -257,7 +257,7 @@ operation_result_t ukv_t::batch_upsert(keys_spanc_t keys, values_spanc_t values,
     for (auto size : sizes)
         offsets.push_back(offsets.back() + size);
 
-    auto val = make_value(values.data(), values.size());
+    auto values_ = make_value(values.data(), values.size());
     ukv_write_t write {};
     write.db = db_;
     write.error = status.member_ptr();
@@ -271,7 +271,7 @@ operation_result_t ukv_t::batch_upsert(keys_spanc_t keys, values_spanc_t values,
     write.offsets_stride = sizeof(ukv_length_t);
     write.lengths = reinterpret_cast<ukv_length_t const*>(sizes.data());
     write.lengths_stride = sizeof(ukv_length_t);
-    write.values = val.member_ptr();
+    write.values = values_.member_ptr();
     ukv_write(&write);
 
     return {status ? keys.size() : 0, status ? operation_status_t::ok_k : operation_status_t::error_k};
