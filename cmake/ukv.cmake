@@ -8,6 +8,7 @@ list(APPEND UKV_BUILD_ARGS "-DUKV_BUILD_ENGINE_${ENGINE_NAME}=1" "-DUKV_ENGINE_U
 string(TOLOWER ${ENGINE_NAME} LOWERCASE_ENGINE_NAME)
 set(UKV_PREFIX_DIR ${CMAKE_BINARY_DIR}/_deps)
 
+file(DOWNLOAD "https://github.com/unum-cloud/ukv/blob/main/VERSION" "${UKV_PREFIX_DIR}/ukv-src/VERSION")
 file(READ "${UKV_PREFIX_DIR}/ukv-src/VERSION" UKV_VERSION)
 
 include(ExternalProject)
