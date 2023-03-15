@@ -133,6 +133,9 @@ bool ukv_t::open() {
 #elif defined(UKV_ENGINE_IS_UDISK)
         config.engine_config_path = configs_root / "udisk" / config_path_.filename();
 #endif
+        // Select default config if the specified doesn't exist
+        if (!fs::exists(config.engine_config_path))
+            config.engine_config_path = fs::path(config.engine_config_path).parent_path() / "default.cfg";
     }
 
     // Convert to json string
