@@ -88,13 +88,17 @@ std::string section_name(settings_t const& settings, workloads_t const& workload
     std::vector<std::string> infos;
     if (settings.transactional)
         infos.push_back("transactional");
-    infos.push_back(fmt::format("threads: {}", settings.threads_count));
+
     if (!workloads.empty()) {
         size_t db_size = workloads.front().db_records_count * workloads.front().value_length;
         infos.push_back(fmt::format("size: {}", printable_bytes_t {db_size}));
     }
+
+    infos.push_back(fmt::format("threads: {}", settings.threads_count));
+    infos.push_back(fmt::format("disks: {}", std::max(size_t(1), settings.db_storage_dir_paths.size())));
+
     if (!db_info.empty())
-        infos.push_back(fmt::format("DB info: {}", db_info));
+        infos.push_back(fmt::format("info: {}", db_info));
 
     std::string info = fmt::format("{}", fmt::join(infos, " | "));
     return fmt::format("{} [{}]", settings.db_name, info);

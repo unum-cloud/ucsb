@@ -92,6 +92,7 @@ class wiredtiger_t : public ucsb::db_t {
 
     fs::path config_path_;
     fs::path main_dir_path_;
+    std::vector<fs::path> storage_dir_paths_;
 
     WT_CONNECTION* conn_;
     session_uptr_t bulk_load_session_;
@@ -114,10 +115,11 @@ WT_COLLATOR key_comparator = {compare_keys, nullptr, nullptr};
 
 void wiredtiger_t::set_config(fs::path const& config_path,
                               fs::path const& main_dir_path,
-                              [[maybe_unused]] std::vector<fs::path> const& storage_dir_paths,
+                              std::vector<fs::path> const& storage_dir_paths,
                               [[maybe_unused]] db_hints_t const& hints) {
     config_path_ = config_path;
     main_dir_path_ = main_dir_path;
+    storage_dir_paths_ = storage_dir_paths;
 }
 
 session_uptr_t wiredtiger_t::start_session() const {
@@ -150,6 +152,9 @@ bool wiredtiger_t::open() {
 
     if (conn_)
         return true;
+
+    if (!storage_dir_paths_.empty())
+        return false;
 
     config_t config;
     if (!load_config(config))

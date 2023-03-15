@@ -80,11 +80,12 @@ class mongodb_t : public ucsb::db_t {
     std::unique_ptr<transaction_t> create_transaction() override;
 
   private:
-    mongocxx::instance inst_;
-    std::unique_ptr<mongocxx::pool> pool_;
-
     fs::path config_path_;
     fs::path main_dir_path_;
+    std::vector<fs::path> storage_dir_paths_;
+
+    mongocxx::instance inst_;
+    std::unique_ptr<mongocxx::pool> pool_;
     std::string coll_name;
 };
 
@@ -113,14 +114,19 @@ static void exec_cmd(const char* cmd) {
 
 void mongodb_t::set_config(fs::path const& config_path,
                            fs::path const& main_dir_path,
-                           [[maybe_unused]] std::vector<fs::path> const& storage_dir_paths,
+                           std::vector<fs::path> const& storage_dir_paths,
                            [[maybe_unused]] db_hints_t const& hints) {
     config_path_ = config_path;
     main_dir_path_ = main_dir_path;
+    storage_dir_paths_ = storage_dir_paths;
     coll_name = main_dir_path.parent_path().filename();
 };
 
 bool mongodb_t::open() {
+
+    if (!storage_dir_paths_.empty())
+        return false;
+
     std::string start_cmd = "mongod --config ";
     start_cmd += config_path_;
     exec_cmd(start_cmd.c_str());
