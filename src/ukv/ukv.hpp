@@ -309,7 +309,7 @@ operation_result_t ukv_t::batch_read(keys_spanc_t keys, values_span_t values) co
         return {0, operation_status_t::error_k};
 
     for (size_t idx = 0; idx < keys.size(); ++idx) {
-        if (!presences[idx])
+        if (lengths[idx] == ukv_length_missing_k)
             continue;
         memcpy(values.data() + offsets[idx], values_ + offsets[idx], lengths[idx]);
         ++found_cnt;
