@@ -58,6 +58,8 @@ class wiredtiger_t : public ucsb::db_t {
     bool open() override;
     bool close() override;
 
+    std::string info() override;
+
     operation_result_t upsert(key_t key, value_spanc_t value) override;
     operation_result_t update(key_t key, value_spanc_t value) override;
     operation_result_t remove(key_t key) override;
@@ -72,6 +74,7 @@ class wiredtiger_t : public ucsb::db_t {
     operation_result_t scan(key_t key, size_t length, value_span_t single_value) const override;
 
     void flush() override;
+
     size_t size_on_disk() const override;
 
     std::unique_ptr<transaction_t> create_transaction() override;
@@ -89,6 +92,7 @@ class wiredtiger_t : public ucsb::db_t {
 
     fs::path config_path_;
     fs::path main_dir_path_;
+    std::vector<fs::path> storage_dir_paths_;
 
     WT_CONNECTION* conn_;
     session_uptr_t bulk_load_session_;
@@ -111,10 +115,11 @@ WT_COLLATOR key_comparator = {compare_keys, nullptr, nullptr};
 
 void wiredtiger_t::set_config(fs::path const& config_path,
                               fs::path const& main_dir_path,
-                              [[maybe_unused]] std::vector<fs::path> const& storage_dir_paths,
+                              std::vector<fs::path> const& storage_dir_paths,
                               [[maybe_unused]] db_hints_t const& hints) {
     config_path_ = config_path;
     main_dir_path_ = main_dir_path;
+    storage_dir_paths_ = storage_dir_paths;
 }
 
 session_uptr_t wiredtiger_t::start_session() const {
@@ -147,6 +152,9 @@ bool wiredtiger_t::open() {
 
     if (conn_)
         return true;
+
+    if (!storage_dir_paths_.empty())
+        return false;
 
     config_t config;
     if (!load_config(config))
@@ -380,6 +388,10 @@ operation_result_t wiredtiger_t::scan(key_t key, size_t length, value_span_t sin
     }
 
     return {scanned_records_count, operation_status_t::ok_k};
+}
+
+std::string wiredtiger_t::info() {
+    return fmt::format("v{}.{}.{}", WIREDTIGER_VERSION_MAJOR, WIREDTIGER_VERSION_MINOR, WIREDTIGER_VERSION_PATCH);
 }
 
 void wiredtiger_t::flush() {

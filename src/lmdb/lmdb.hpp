@@ -45,6 +45,8 @@ class lmdb_t : public ucsb::db_t {
     bool open() override;
     bool close() override;
 
+    std::string info() override;
+
     operation_result_t upsert(key_t key, value_spanc_t value) override;
     operation_result_t update(key_t key, value_spanc_t value) override;
     operation_result_t remove(key_t key) override;
@@ -59,6 +61,7 @@ class lmdb_t : public ucsb::db_t {
     operation_result_t scan(key_t key, size_t length, value_span_t single_value) const override;
 
     void flush() override;
+
     size_t size_on_disk() const override;
 
     std::unique_ptr<transaction_t> create_transaction() override;
@@ -76,6 +79,7 @@ class lmdb_t : public ucsb::db_t {
 
     fs::path config_path_;
     fs::path main_dir_path_;
+    std::vector<fs::path> storage_dir_paths_;
 
     MDB_env* env_;
     MDB_dbi dbi_;
@@ -89,15 +93,19 @@ inline static int compare_keys(MDB_val const* left, MDB_val const* right) noexce
 
 void lmdb_t::set_config(fs::path const& config_path,
                         fs::path const& main_dir_path,
-                        [[maybe_unused]] std::vector<fs::path> const& storage_dir_paths,
+                        std::vector<fs::path> const& storage_dir_paths,
                         [[maybe_unused]] db_hints_t const& hints) {
     config_path_ = config_path;
     main_dir_path_ = main_dir_path;
+    storage_dir_paths_ = storage_dir_paths;
 }
 
 bool lmdb_t::open() {
     if (env_)
         return true;
+
+    if (!storage_dir_paths_.empty())
+        return false;
 
     config_t config;
     if (!load_config(config))
@@ -397,6 +405,8 @@ operation_result_t lmdb_t::scan(key_t key, size_t length, value_span_t single_va
     mdb_txn_abort(txn);
     return {scanned_records_count, operation_status_t::ok_k};
 }
+
+std::string lmdb_t::info() { return fmt::format("v{}.{}.{}", MDB_VERSION_MAJOR, MDB_VERSION_MINOR, MDB_VERSION_PATCH); }
 
 void lmdb_t::flush() {
     // Nothing to do

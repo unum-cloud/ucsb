@@ -48,6 +48,8 @@ struct redis_t : public ucsb::db_t {
     bool open() override;
     bool close() override;
 
+    std::string info() override;
+
     operation_result_t upsert(key_t key, value_spanc_t value) override;
     operation_result_t update(key_t key, value_spanc_t value) override;
     operation_result_t remove(key_t key) override;
@@ -61,18 +63,22 @@ struct redis_t : public ucsb::db_t {
     operation_result_t scan(key_t key, size_t length, value_span_t single_value) const override;
 
     void flush() override;
+
     size_t size_on_disk() const override;
+
     std::unique_ptr<transaction_t> create_transaction() override;
 
     void get_options(fs::path const& path);
     std::string exec_cmd(const char* cmd);
 
   private:
+    fs::path config_path_;
+    fs::path main_dir_path_;
+    std::vector<fs::path> storage_dir_paths_;
+
     std::unique_ptr<sw::redis::Redis> redis_;
     sw::redis::ConnectionOptions connection_options_;
     sw::redis::ConnectionPoolOptions connection_pool_options_;
-    fs::path config_path_;
-    fs::path main_dir_path_;
     bool is_opened_ = false;
 };
 
@@ -118,15 +124,20 @@ void redis_t::get_options(fs::path const& path) {
 
 void redis_t::set_config(fs::path const& config_path,
                          fs::path const& main_dir_path,
-                         [[maybe_unused]] std::vector<fs::path> const& storage_dir_paths,
+                         std::vector<fs::path> const& storage_dir_paths,
                          [[maybe_unused]] db_hints_t const& hints) {
     config_path_ = config_path;
     main_dir_path_ = main_dir_path;
+    storage_dir_paths_ = storage_dir_paths;
 }
 
 bool redis_t::open() {
     if (is_opened_)
         return true;
+
+    if (!storage_dir_paths_.empty())
+        return false;
+
     std::string start_cmd("redis-server ");
     start_cmd += config_path_;
     start_cmd += ".redis";
@@ -262,6 +273,8 @@ operation_result_t redis_t::range_select(key_t /* key */, size_t /* length */, v
 operation_result_t redis_t::scan(key_t /* key */, size_t /* length */, value_span_t /* single_value */) const {
     return {0, operation_status_t::not_implemented_k};
 }
+
+std::string redis_t::info() { return {}; }
 
 void redis_t::flush() {}
 

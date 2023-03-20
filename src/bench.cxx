@@ -83,18 +83,24 @@ inline void register_section(std::string const& name) {
     });
 }
 
-std::string section_name(settings_t const& settings, workloads_t const& workloads) {
+std::string section_name(settings_t const& settings, workloads_t const& workloads, std::string const& db_info) {
 
     std::vector<std::string> infos;
     if (settings.transactional)
         infos.push_back("transactional");
-    infos.push_back(fmt::format("threads: {}", settings.threads_count));
+
     if (!workloads.empty()) {
         size_t db_size = workloads.front().db_records_count * workloads.front().value_length;
         infos.push_back(fmt::format("size: {}", printable_bytes_t {db_size}));
     }
 
-    std::string info = fmt::format("{}", fmt::join(infos, ", "));
+    infos.push_back(fmt::format("threads: {}", settings.threads_count));
+    infos.push_back(fmt::format("disks: {}", std::max(size_t(1), settings.db_storage_dir_paths.size())));
+
+    if (!db_info.empty())
+        infos.push_back(fmt::format("info: {}", db_info));
+
+    std::string info = fmt::format("{}", fmt::join(infos, " | "));
     return fmt::format("{} [{}]", settings.db_name, info);
 }
 
@@ -538,7 +544,7 @@ int main(int argc, char** argv) {
         threads_fence_t fence(settings.threads_count);
 
         // Register benchmarks
-        register_section(section_name(settings, workloads));
+        register_section(section_name(settings, workloads, db->info()));
         for (auto const& splitted_workloads : threads_workloads) {
             std::string bench_name = splitted_workloads.front().name;
             register_benchmark(bench_name, settings.threads_count, [&](bm::State& state) {
@@ -549,7 +555,7 @@ int main(int argc, char** argv) {
 
         run_benchmarks(argc, argv, in_progress_results_file_path);
 
-        marge_results(in_progress_results_file_path, final_results_file_path, settings.db_name);
+        merge_results(in_progress_results_file_path, final_results_file_path, settings.db_name);
         fs::remove(in_progress_results_file_path);
     }
     catch (exception_t const& ex) {

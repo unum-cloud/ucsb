@@ -43,6 +43,8 @@ class ukv_t : public ucsb::db_t {
     bool open() override;
     bool close() override;
 
+    std::string info() override;
+
     operation_result_t upsert(key_t key, value_spanc_t value) override;
     operation_result_t update(key_t key, value_spanc_t value) override;
     operation_result_t remove(key_t key) override;
@@ -56,7 +58,9 @@ class ukv_t : public ucsb::db_t {
     operation_result_t scan(key_t key, size_t length, value_span_t single_value) const override;
 
     void flush() override;
+
     size_t size_on_disk() const override;
+
     std::unique_ptr<transaction_t> create_transaction() override;
 
   private:
@@ -73,7 +77,7 @@ class ukv_t : public ucsb::db_t {
 
     ukv_database_t db_;
     ukv_collection_t collection_ = ukv_collection_main_k;
-    ukv_options_t option = ukv_option_dont_discard_memory_k;
+    ukv_options_t options_ = ukv_option_dont_discard_memory_k;
 };
 
 void ukv_t::set_config(fs::path const& config_path,
@@ -129,6 +133,9 @@ bool ukv_t::open() {
 #elif defined(UKV_ENGINE_IS_UDISK)
         config.engine_config_path = configs_root / "udisk" / config_path_.filename();
 #endif
+        // Select default config if the specified doesn't exist
+        if (!fs::exists(config.engine_config_path))
+            config.engine_config_path = fs::path(config.engine_config_path).parent_path() / "default.cfg";
     }
 
     // Convert to json string
@@ -170,13 +177,14 @@ operation_result_t ukv_t::upsert(key_t key, value_spanc_t value) {
     write.db = db_;
     write.error = status.member_ptr();
     write.arena = arena.member_ptr();
-    write.options = option;
+    write.options = options_;
     write.tasks_count = 1;
     write.collections = &collection_;
     write.keys = &key_;
     write.lengths = reinterpret_cast<ukv_length_t const*>(&length);
     write.values = value_.member_ptr();
     ukv_write(&write);
+
     return {size_t(status), status ? operation_status_t::ok_k : operation_status_t::error_k};
 }
 
@@ -189,7 +197,7 @@ operation_result_t ukv_t::update(key_t key, value_spanc_t value) {
     read.db = db_;
     read.error = status.member_ptr();
     read.arena = arena.member_ptr();
-    read.options = option;
+    read.options = options_;
     read.tasks_count = 1;
     read.collections = &collection_;
     read.keys = &key_;
@@ -209,7 +217,7 @@ operation_result_t ukv_t::remove(key_t key) {
     write.db = db_;
     write.error = status.member_ptr();
     write.arena = arena.member_ptr();
-    write.options = option;
+    write.options = options_;
     write.tasks_count = 1;
     write.collections = &collection_;
     write.keys = &key_;
@@ -228,7 +236,7 @@ operation_result_t ukv_t::read(key_t key, value_span_t value) const {
     read.db = db_;
     read.error = status.member_ptr();
     read.arena = arena.member_ptr();
-    read.options = option;
+    read.options = options_;
     read.tasks_count = 1;
     read.collections = &collection_;
     read.keys = &key_;
@@ -237,9 +245,9 @@ operation_result_t ukv_t::read(key_t key, value_span_t value) const {
     ukv_read(&read);
     if (!status)
         return {0, operation_status_t::error_k};
-
     if (lengths[0] == ukv_length_missing_k)
         return {0, operation_status_t::not_found_k};
+
     memcpy(value.data(), value_, lengths[0]);
     return {1, operation_status_t::ok_k};
 }
@@ -249,18 +257,15 @@ operation_result_t ukv_t::batch_upsert(keys_spanc_t keys, values_spanc_t values,
     std::vector<ukv_length_t> offsets;
     offsets.reserve(sizes.size() + 1);
     offsets.push_back(0);
-    size_t offset = 0;
-    for (auto size : sizes) {
-        offset += size;
-        offsets.push_back(offset);
-    }
+    for (auto size : sizes)
+        offsets.push_back(offsets.back() + size);
 
-    auto val = make_value(values.data(), values.size());
+    auto values_ = make_value(values.data(), values.size());
     ukv_write_t write {};
     write.db = db_;
     write.error = status.member_ptr();
     write.arena = arena.member_ptr();
-    write.options = option;
+    write.options = options_;
     write.tasks_count = keys.size();
     write.collections = &collection_;
     write.keys = reinterpret_cast<ukv_key_t const*>(keys.data());
@@ -269,7 +274,7 @@ operation_result_t ukv_t::batch_upsert(keys_spanc_t keys, values_spanc_t values,
     write.offsets_stride = sizeof(ukv_length_t);
     write.lengths = reinterpret_cast<ukv_length_t const*>(sizes.data());
     write.lengths_stride = sizeof(ukv_length_t);
-    write.values = val.member_ptr();
+    write.values = values_.member_ptr();
     ukv_write(&write);
 
     return {status ? keys.size() : 0, status ? operation_status_t::ok_k : operation_status_t::error_k};
@@ -287,7 +292,7 @@ operation_result_t ukv_t::batch_read(keys_spanc_t keys, values_span_t values) co
     read.db = db_;
     read.error = status.member_ptr();
     read.arena = arena.member_ptr();
-    read.options = option;
+    read.options = options_;
     read.tasks_count = keys.size();
     read.collections = &collection_;
     read.keys = reinterpret_cast<ukv_key_t const*>(keys.data());
@@ -301,13 +306,12 @@ operation_result_t ukv_t::batch_read(keys_spanc_t keys, values_span_t values) co
         return {0, operation_status_t::error_k};
 
     for (size_t idx = 0; idx < keys.size(); ++idx) {
-
         if (!presences[idx])
             continue;
-
         memcpy(values.data() + offsets[idx], values_ + offsets[idx], lengths[idx]);
         ++found_cnt;
     }
+
     return {found_cnt, operation_status_t::ok_k};
 }
 
@@ -323,11 +327,12 @@ operation_result_t ukv_t::range_select(key_t key, size_t length, values_span_t v
     ukv_length_t* found_counts = nullptr;
     ukv_key_t* found_keys = nullptr;
 
+    // First scan keys
     ukv_scan_t scan {};
     scan.db = db_;
     scan.error = status.member_ptr();
     scan.arena = arena.member_ptr();
-    scan.options = option;
+    scan.options = options_;
     scan.tasks_count = 1;
     scan.collections = &collection_;
     scan.start_keys = &key_;
@@ -343,11 +348,12 @@ operation_result_t ukv_t::range_select(key_t key, size_t length, values_span_t v
     ukv_byte_t* values_ = nullptr;
     size_t offset = 0;
 
+    // Then do batch read
     ukv_read_t read {};
     read.db = db_;
     read.error = status.member_ptr();
     read.arena = arena.member_ptr();
-    read.options = option;
+    read.options = options_;
     read.tasks_count = *found_counts;
     read.collections = &collection_;
     read.keys = found_keys;
@@ -363,6 +369,7 @@ operation_result_t ukv_t::range_select(key_t key, size_t length, values_span_t v
         memcpy(values.data() + offset, values_ + offsets[idx], lengths[idx]);
         offset += lengths[idx];
     }
+
     return {*found_counts, operation_status_t::ok_k};
 }
 
@@ -374,11 +381,12 @@ operation_result_t ukv_t::scan(key_t key, size_t length, value_span_t single_val
     ukv_length_t* found_counts = nullptr;
     ukv_key_t* found_keys = nullptr;
 
+    // First scan keys
     ukv_scan_t scan {};
     scan.db = db_;
     scan.error = status.member_ptr();
     scan.arena = arena.member_ptr();
-    scan.options = option;
+    scan.options = options_;
     scan.tasks_count = 1;
     scan.collections = &collection_;
     scan.start_keys = &key_;
@@ -393,11 +401,12 @@ operation_result_t ukv_t::scan(key_t key, size_t length, value_span_t single_val
     ukv_length_t* lengths = nullptr;
     ukv_byte_t* values_ = nullptr;
 
+    // Then do batch read
     ukv_read_t read {};
     read.db = db_;
     read.error = status.member_ptr();
     read.arena = arena.member_ptr();
-    read.options = option;
+    read.options = options_;
     read.tasks_count = *found_counts;
     read.collections = &collection_;
     read.keys = found_keys;
@@ -412,12 +421,27 @@ operation_result_t ukv_t::scan(key_t key, size_t length, value_span_t single_val
             continue;
         memcpy(single_value.data(), values_ + offsets[idx], lengths[idx]);
     }
+
     return {*found_counts, operation_status_t::ok_k};
 }
 
+std::string ukv_t::info() { return fmt::format("v{}, {} engine", UKV_VERSION, UKV_ENGINE_NAME); }
+
 void ukv_t::flush() {
-    // !!!TODO: Think solution
-    fmt::print("WARNING: flush() has not been implemented yet\n");
+
+    // Note: Workaround for flush
+    status_t status;
+    ukv_write_t write {};
+    write.db = db_;
+    write.error = status.member_ptr();
+    write.arena = arena.member_ptr();
+    write.options = ukv_options_t(options_ | ukv_option_write_flush_k);
+    write.tasks_count = 0;
+    write.collections = &collection_;
+    write.keys = nullptr;
+    write.lengths = nullptr;
+    write.values = nullptr;
+    ukv_write(&write);
 }
 
 size_t ukv_t::size_on_disk() const {
