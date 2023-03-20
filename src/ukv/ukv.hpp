@@ -145,6 +145,9 @@ bool ukv_t::open() {
 
     ukv_database_init_t init {};
     init.config = str_config.c_str();
+#if defined(UKV_ENGINE_IS_FLIGHT_CLIENT)
+    init.config = "grpc://0.0.0.0:38709";
+#endif
     init.db = &db_;
     init.error = status.member_ptr();
     ukv_database_init(&init);
