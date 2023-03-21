@@ -312,7 +312,7 @@ operation_result_t ukv_t::batch_read(keys_spanc_t keys, values_span_t values) co
         ++found_cnt;
     }
 
-    return {found_cnt, operation_status_t::ok_k};
+    return {found_cnt, found_cnt > 0 ? operation_status_t::ok_k : operation_status_t::not_found_k};
 }
 
 operation_result_t ukv_t::bulk_load(keys_spanc_t keys, values_spanc_t values, value_lengths_spanc_t sizes) {
@@ -370,7 +370,7 @@ operation_result_t ukv_t::range_select(key_t key, size_t length, values_span_t v
         offset += lengths[idx];
     }
 
-    return {*found_counts, operation_status_t::ok_k};
+    return {*found_counts, *found_counts > 0 ? operation_status_t::ok_k : operation_status_t::not_found_k};
 }
 
 operation_result_t ukv_t::scan(key_t key, size_t length, value_span_t single_value) const {
@@ -422,7 +422,7 @@ operation_result_t ukv_t::scan(key_t key, size_t length, value_span_t single_val
         memcpy(single_value.data(), values_ + offsets[idx], lengths[idx]);
     }
 
-    return {*found_counts, operation_status_t::ok_k};
+    return {*found_counts, *found_counts > 0 ? operation_status_t::ok_k : operation_status_t::not_found_k};
 }
 
 std::string ukv_t::info() { return fmt::format("v{}, {} engine", UKV_VERSION, UKV_ENGINE_NAME); }
