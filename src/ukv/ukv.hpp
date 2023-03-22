@@ -77,7 +77,7 @@ class ukv_t : public ucsb::db_t {
 
     ukv_database_t db_;
     ukv_collection_t collection_ = ukv_collection_main_k;
-    ukv_options_t options_ = ukv_option_dont_discard_memory_k;
+    ukv_options_t options_ = ukv_options_default_k;
 };
 
 void ukv_t::set_config(fs::path const& config_path,
@@ -356,7 +356,7 @@ operation_result_t ukv_t::range_select(key_t key, size_t length, values_span_t v
     read.db = db_;
     read.error = status.member_ptr();
     read.arena = arena.member_ptr();
-    read.options = options_;
+    read.options = ukv_options_t(options_ | ukv_option_dont_discard_memory_k);
     read.tasks_count = *found_counts;
     read.collections = &collection_;
     read.keys = found_keys;
@@ -409,7 +409,7 @@ operation_result_t ukv_t::scan(key_t key, size_t length, value_span_t single_val
     read.db = db_;
     read.error = status.member_ptr();
     read.arena = arena.member_ptr();
-    read.options = options_;
+    read.options = ukv_options_t(options_ | ukv_option_dont_discard_memory_k);
     read.tasks_count = *found_counts;
     read.collections = &collection_;
     read.keys = found_keys;
