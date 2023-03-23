@@ -25,7 +25,7 @@ ExternalProject_Add(
     ukv_external
 
     GIT_REPOSITORY "https://github.com/unum-cloud/ukv"
-    GIT_TAG config
+    GIT_TAG main-dev
     GIT_SHALLOW 1
     GIT_PROGRESS 0
     
