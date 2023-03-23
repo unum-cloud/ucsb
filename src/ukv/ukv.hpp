@@ -380,7 +380,7 @@ operation_result_t ukv_t::scan(key_t key, size_t length, value_span_t single_val
     status_t status;
 
     ukv_key_t key_ = key;
-    ukv_length_t len = std::min<ukv_length_t>(length, 1'000'000);
+    ukv_length_t len = std::min<ukv_length_t>(length, 1'000'000); // Note: Don't scan all at once because the DB might be very big
     ukv_length_t* found_counts = nullptr;
     ukv_key_t* found_keys = nullptr;
 
@@ -413,7 +413,6 @@ operation_result_t ukv_t::scan(key_t key, size_t length, value_span_t single_val
     read.lengths = &lengths;
     read.values = &values_;
 
-    // Note: Don't scan all at once because the DB might be very big
     ukv_length_t scanned = 0;
     ukv_length_t remaining_keys_cnt = length;
     while (remaining_keys_cnt) {
