@@ -78,7 +78,7 @@ class ukv_t : public ucsb::db_t {
 
     ukv_database_t db_;
     ukv_collection_t collection_ = ukv_collection_main_k;
-    ukv_options_t options_ = ukv_option_dont_discard_memory_k;
+    ukv_options_t options_ = ukv_options_default_k;
 };
 
 void ukv_t::set_config(fs::path const& config_path,
@@ -134,6 +134,9 @@ bool ukv_t::open() {
 #elif defined(UKV_ENGINE_IS_UDISK)
         config.engine_config_path = configs_root / "udisk" / config_path_.filename();
 #endif
+        // Select default config if the specified doesn't exist
+        if (!fs::exists(config.engine_config_path))
+            config.engine_config_path = fs::path(config.engine_config_path).parent_path() / "default.cfg";
     }
 
     // Convert to json string
@@ -143,6 +146,9 @@ bool ukv_t::open() {
 
     ukv_database_init_t init {};
     init.config = str_config.c_str();
+#if defined(UKV_ENGINE_IS_FLIGHT_CLIENT)
+    init.config = "grpc://0.0.0.0:38709";
+#endif
     init.db = &db_;
     init.error = status.member_ptr();
     ukv_database_init(&init);
@@ -258,7 +264,7 @@ operation_result_t ukv_t::batch_upsert(keys_spanc_t keys, values_spanc_t values,
     for (auto size : sizes)
         offsets.push_back(offsets.back() + size);
 
-    auto val = make_value(values.data(), values.size());
+    auto values_ = make_value(values.data(), values.size());
     ukv_write_t write {};
     write.db = db_;
     write.error = status.member_ptr();
@@ -272,7 +278,7 @@ operation_result_t ukv_t::batch_upsert(keys_spanc_t keys, values_spanc_t values,
     write.offsets_stride = sizeof(ukv_length_t);
     write.lengths = reinterpret_cast<ukv_length_t const*>(sizes.data());
     write.lengths_stride = sizeof(ukv_length_t);
-    write.values = val.member_ptr();
+    write.values = values_.member_ptr();
     ukv_write(&write);
 
     return {status ? keys.size() : 0, status ? operation_status_t::ok_k : operation_status_t::error_k};
@@ -304,13 +310,13 @@ operation_result_t ukv_t::batch_read(keys_spanc_t keys, values_span_t values) co
         return {0, operation_status_t::error_k};
 
     for (size_t idx = 0; idx < keys.size(); ++idx) {
-        if (!presences[idx])
+        if (lengths[idx] == ukv_length_missing_k)
             continue;
         memcpy(values.data() + offsets[idx], values_ + offsets[idx], lengths[idx]);
         ++found_cnt;
     }
 
-    return {found_cnt, operation_status_t::ok_k};
+    return {found_cnt, found_cnt > 0 ? operation_status_t::ok_k : operation_status_t::not_found_k};
 }
 
 operation_result_t ukv_t::bulk_load(keys_spanc_t keys, values_spanc_t values, value_lengths_spanc_t sizes) {
@@ -344,14 +350,13 @@ operation_result_t ukv_t::range_select(key_t key, size_t length, values_span_t v
     ukv_length_t* offsets = nullptr;
     ukv_length_t* lengths = nullptr;
     ukv_byte_t* values_ = nullptr;
-    size_t offset = 0;
 
     // Then do batch read
     ukv_read_t read {};
     read.db = db_;
     read.error = status.member_ptr();
     read.arena = arena.member_ptr();
-    read.options = options_;
+    read.options = ukv_options_t(options_ | ukv_option_dont_discard_memory_k);
     read.tasks_count = *found_counts;
     read.collections = &collection_;
     read.keys = found_keys;
@@ -361,6 +366,7 @@ operation_result_t ukv_t::range_select(key_t key, size_t length, values_span_t v
     read.values = &values_;
     ukv_read(&read);
 
+    size_t offset = 0;
     for (size_t idx = 0; idx < *found_counts; ++idx) {
         if (lengths[idx] == ukv_length_missing_k)
             continue;
@@ -368,18 +374,22 @@ operation_result_t ukv_t::range_select(key_t key, size_t length, values_span_t v
         offset += lengths[idx];
     }
 
-    return {*found_counts, operation_status_t::ok_k};
+    return {*found_counts, *found_counts > 0 ? operation_status_t::ok_k : operation_status_t::not_found_k};
 }
 
 operation_result_t ukv_t::scan(key_t key, size_t length, value_span_t single_value) const {
     status_t status;
 
     ukv_key_t key_ = key;
-    ukv_length_t len = length;
+    ukv_length_t len = std::min<ukv_length_t>(length, 1'000'000); // Note: Don't scan all at once because the DB might be very big
     ukv_length_t* found_counts = nullptr;
     ukv_key_t* found_keys = nullptr;
 
-    // First scan keys
+    ukv_length_t* offsets = nullptr;
+    ukv_length_t* lengths = nullptr;
+    ukv_byte_t* values_ = nullptr;
+
+    // Init scan
     ukv_scan_t scan {};
     scan.db = db_;
     scan.error = status.member_ptr();
@@ -391,36 +401,45 @@ operation_result_t ukv_t::scan(key_t key, size_t length, value_span_t single_val
     scan.count_limits = &len;
     scan.counts = &found_counts;
     scan.keys = &found_keys;
-    ukv_scan(&scan);
-    if (!status)
-        return {0, operation_status_t::error_k};
 
-    ukv_length_t* offsets = nullptr;
-    ukv_length_t* lengths = nullptr;
-    ukv_byte_t* values_ = nullptr;
-
-    // Then do batch read
+    // Init batch read
     ukv_read_t read {};
     read.db = db_;
     read.error = status.member_ptr();
     read.arena = arena.member_ptr();
-    read.options = options_;
-    read.tasks_count = *found_counts;
+    read.options = ukv_options_t(options_ | ukv_option_dont_discard_memory_k);
     read.collections = &collection_;
-    read.keys = found_keys;
     read.keys_stride = sizeof(ukv_key_t);
     read.offsets = &offsets;
     read.lengths = &lengths;
     read.values = &values_;
-    ukv_read(&read);
 
-    for (size_t idx = 0; idx < *found_counts; ++idx) {
-        if (lengths[idx] == ukv_length_missing_k)
-            continue;
-        memcpy(single_value.data(), values_ + offsets[idx], lengths[idx]);
+    ukv_length_t scanned = 0;
+    ukv_length_t remaining_keys_cnt = length;
+    while (remaining_keys_cnt) {
+        // First scan
+        ukv_scan(&scan);
+        if (!status)
+            return {0, operation_status_t::error_k};
+
+        // Then read
+        read.tasks_count = *found_counts;
+        read.keys = found_keys;
+        ukv_read(&read);
+        if (!status)
+            return {0, operation_status_t::error_k};
+
+        scanned += *found_counts;
+        for (size_t idx = 0; idx < *found_counts; ++idx)
+            if (lengths[idx] != ukv_length_missing_k)
+                memcpy(single_value.data(), values_ + offsets[idx], lengths[idx]);
+
+        key_ += len;
+        remaining_keys_cnt = remaining_keys_cnt - len;
+        len = std::min(len, remaining_keys_cnt);
     }
 
-    return {*found_counts, operation_status_t::ok_k};
+    return {scanned, scanned > 0 ? operation_status_t::ok_k : operation_status_t::not_found_k};
 }
 
 std::string ukv_t::info() { return fmt::format("v{}, {} engine", UKV_VERSION, UKV_ENGINE_NAME); }

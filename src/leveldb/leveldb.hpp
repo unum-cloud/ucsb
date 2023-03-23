@@ -108,6 +108,7 @@ class leveldb_t : public ucsb::db_t {
 
     fs::path config_path_;
     fs::path main_dir_path_;
+    std::vector<fs::path> storage_dir_paths_;
 
     leveldb::Options options_;
     leveldb::ReadOptions read_options_;
@@ -119,15 +120,19 @@ class leveldb_t : public ucsb::db_t {
 
 void leveldb_t::set_config(fs::path const& config_path,
                            fs::path const& main_dir_path,
-                           [[maybe_unused]] std::vector<fs::path> const& storage_dir_paths,
+                           std::vector<fs::path> const& storage_dir_paths,
                            [[maybe_unused]] db_hints_t const& hints) {
     config_path_ = config_path;
     main_dir_path_ = main_dir_path;
+    storage_dir_paths_ = storage_dir_paths;
 }
 
 bool leveldb_t::open() {
     if (db_)
         return true;
+
+    if (!storage_dir_paths_.empty())
+        return false;
 
     config_t config;
     if (!load_config(config))
