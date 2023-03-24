@@ -21,7 +21,7 @@ using value_lengths_spanc_t = ucsb::value_lengths_spanc_t;
 using operation_status_t = ucsb::operation_status_t;
 using operation_result_t = ucsb::operation_result_t;
 
-thread_local ukv::arena_t transaction_arena(nullptr);
+thread_local ukv::arena_t arena_(nullptr);
 
 inline ukv::value_view_t make_value(std::byte const* ptr, size_t length) {
     return {reinterpret_cast<ukv_bytes_cptr_t>(ptr), static_cast<ukv_length_t>(length)};
@@ -29,7 +29,8 @@ inline ukv::value_view_t make_value(std::byte const* ptr, size_t length) {
 
 class ukv_transact_t : public ucsb::transaction_t {
   public:
-    inline ukv_transact_t(ukv_database_t db, ukv_transaction_t transaction) : db_(db), transaction_(transaction) {}
+    inline ukv_transact_t(ukv_database_t db, ukv_transaction_t transaction)
+        : db_(db), transaction_(transaction), arena_(db_) {}
     ~ukv_transact_t();
 
     operation_result_t upsert(key_t key, value_spanc_t value) override;
@@ -61,6 +62,7 @@ class ukv_transact_t : public ucsb::transaction_t {
     ukv_transaction_t transaction_;
     ukv_collection_t collection_ = ukv_collection_main_k;
     ukv_options_t options_ = ukv_options_default_k;
+    ukv::arena_t mutable arena_;
 };
 
 ukv_transact_t::~ukv_transact_t() {
@@ -79,7 +81,7 @@ operation_result_t ukv_transact_t::upsert(key_t key, value_spanc_t value) {
     write.db = db_;
     write.transaction = transaction_;
     write.error = status.member_ptr();
-    write.arena = transaction_arena.member_ptr();
+    write.arena = arena_.member_ptr();
     write.options = options_;
     write.tasks_count = 1;
     write.collections = &collection_;
@@ -104,7 +106,7 @@ operation_result_t ukv_transact_t::update(key_t key, value_spanc_t value) {
     read.db = db_;
     read.transaction = transaction_;
     read.error = status.member_ptr();
-    read.arena = transaction_arena.member_ptr();
+    read.arena = arena_.member_ptr();
     read.options = options_;
     read.tasks_count = 1;
     read.collections = &collection_;
@@ -125,7 +127,7 @@ operation_result_t ukv_transact_t::remove(key_t key) {
     write.db = db_;
     write.transaction = transaction_;
     write.error = status.member_ptr();
-    write.arena = transaction_arena.member_ptr();
+    write.arena = arena_.member_ptr();
     write.options = options_;
     write.tasks_count = 1;
     write.collections = &collection_;
@@ -149,7 +151,7 @@ operation_result_t ukv_transact_t::read(key_t key, value_span_t value) const {
     read.db = db_;
     read.transaction = transaction_;
     read.error = status.member_ptr();
-    read.arena = transaction_arena.member_ptr();
+    read.arena = arena_.member_ptr();
     read.options = options_;
     read.tasks_count = 1;
     read.collections = &collection_;
@@ -179,7 +181,7 @@ operation_result_t ukv_transact_t::batch_upsert(keys_spanc_t keys, values_spanc_
     write.db = db_;
     write.transaction = transaction_;
     write.error = status.member_ptr();
-    write.arena = transaction_arena.member_ptr();
+    write.arena = arena_.member_ptr();
     write.options = options_;
     write.tasks_count = keys.size();
     write.collections = &collection_;
@@ -211,7 +213,7 @@ operation_result_t ukv_transact_t::batch_read(keys_spanc_t keys, values_span_t v
     read.db = db_;
     read.transaction = transaction_;
     read.error = status.member_ptr();
-    read.arena = transaction_arena.member_ptr();
+    read.arena = arena_.member_ptr();
     read.options = options_;
     read.tasks_count = keys.size();
     read.collections = &collection_;
@@ -251,7 +253,7 @@ operation_result_t ukv_transact_t::range_select(key_t key, size_t length, values
     scan.db = db_;
     scan.transaction = transaction_;
     scan.error = status.member_ptr();
-    scan.arena = transaction_arena.member_ptr();
+    scan.arena = arena_.member_ptr();
     scan.options = options_;
     scan.tasks_count = 1;
     scan.collections = &collection_;
@@ -272,7 +274,7 @@ operation_result_t ukv_transact_t::range_select(key_t key, size_t length, values
     read.db = db_;
     read.transaction = transaction_;
     read.error = status.member_ptr();
-    read.arena = transaction_arena.member_ptr();
+    read.arena = arena_.member_ptr();
     read.options = ukv_options_t(options_ | ukv_option_dont_discard_memory_k);
     read.tasks_count = *found_counts;
     read.collections = &collection_;
@@ -311,7 +313,7 @@ operation_result_t ukv_transact_t::scan(key_t key, size_t length, value_span_t s
     scan.db = db_;
     scan.transaction = transaction_;
     scan.error = status.member_ptr();
-    scan.arena = transaction_arena.member_ptr();
+    scan.arena = arena_.member_ptr();
     scan.options = options_;
     scan.tasks_count = 1;
     scan.collections = &collection_;
@@ -325,7 +327,7 @@ operation_result_t ukv_transact_t::scan(key_t key, size_t length, value_span_t s
     read.db = db_;
     read.transaction = transaction_;
     read.error = status.member_ptr();
-    read.arena = transaction_arena.member_ptr();
+    read.arena = arena_.member_ptr();
     read.options = ukv_options_t(options_ | ukv_option_dont_discard_memory_k);
     read.collections = &collection_;
     read.keys_stride = sizeof(ukv_key_t);
