@@ -203,11 +203,10 @@ operation_result_t ukv_transact_t::batch_upsert(keys_spanc_t keys, values_spanc_
 
 operation_result_t ukv_transact_t::batch_read(keys_spanc_t keys, values_span_t values) const {
     ukv::status_t status;
-    ukv_byte_t* values_ = nullptr;
-    ukv_length_t* lengths = nullptr;
-    ukv_length_t* offsets = nullptr;
     ukv_octet_t* presences = nullptr;
-    size_t found_cnt = 0;
+    ukv_length_t* offsets = nullptr;
+    ukv_length_t* lengths = nullptr;
+    ukv_byte_t* values_ = nullptr;
 
     ukv_read_t read {};
     read.db = db_;
@@ -227,10 +226,13 @@ operation_result_t ukv_transact_t::batch_read(keys_spanc_t keys, values_span_t v
     if (!status)
         return {0, operation_status_t::error_k};
 
+    size_t offset = 0;
+    size_t found_cnt = 0;
     for (size_t idx = 0; idx < keys.size(); ++idx) {
         if (lengths[idx] == ukv_length_missing_k)
             continue;
-        memcpy(values.data() + offsets[idx], values_ + offsets[idx], lengths[idx]);
+        memcpy(values.data() + offset, values_ + offsets[idx], lengths[idx]);
+        offset += lengths[idx];
         ++found_cnt;
     }
 
@@ -284,6 +286,8 @@ operation_result_t ukv_transact_t::range_select(key_t key, size_t length, values
     read.lengths = &lengths;
     read.values = &values_;
     ukv_read(&read);
+    if (!status)
+        return {0, operation_status_t::error_k};
 
     size_t offset = 0;
     for (size_t idx = 0; idx < *found_counts; ++idx) {
