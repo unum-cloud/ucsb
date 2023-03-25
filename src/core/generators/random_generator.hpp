@@ -3,7 +3,7 @@
 
 #include "src/core/generators/generator.hpp"
 
-namespace ucsb::core::generators {
+namespace ucsb::core {
 
 class random_int_generator_t final : public generator_gt<uint32_t> {
   public:
@@ -65,4 +65,4 @@ inline char random_byte_generator_t::generate() {
     return buf_[off_++];
 }
 
-} // namespace ucsb
+} // namespace ucsb::core

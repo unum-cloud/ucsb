@@ -6,11 +6,11 @@
 #include <nlohmann/json.hpp>
 #include <sw/redis++/redis++.h>
 
-#include "ucsb/core/types.hpp"
-#include "ucsb/core/db.hpp"
-#include "ucsb/core/helper.hpp"
+#include "src/core/types.hpp"
+#include "src/core/db.hpp"
+#include "src/core/helper.hpp"
 
-namespace redis {
+namespace ucsb::redis {
 
 namespace fs = ucsb::fs;
 
@@ -24,6 +24,7 @@ using values_spanc_t = ucsb::values_spanc_t;
 using value_lengths_spanc_t = ucsb::value_lengths_spanc_t;
 using operation_status_t = ucsb::operation_status_t;
 using operation_result_t = ucsb::operation_result_t;
+using db_hints_t = ucsb::db_hints_t;
 using transaction_t = ucsb::transaction_t;
 
 /**
@@ -40,36 +41,45 @@ struct redis_t : public ucsb::db_t {
         stop_cmd += " shutdown";
         exec_cmd(stop_cmd.c_str());
     }
-    void set_config(fs::path const& config_path, fs::path const& dir_path) override;
+    void set_config(fs::path const& config_path,
+                    fs::path const& main_dir_path,
+                    std::vector<fs::path> const& storage_dir_paths,
+                    db_hints_t const& hints) override;
     bool open() override;
     bool close() override;
-    void destroy() override;
+
+    std::string info() override;
 
     operation_result_t upsert(key_t key, value_spanc_t value) override;
     operation_result_t update(key_t key, value_spanc_t value) override;
     operation_result_t remove(key_t key) override;
-
     operation_result_t read(key_t key, value_span_t value) const override;
+
     operation_result_t batch_upsert(keys_spanc_t keys, values_spanc_t values, value_lengths_spanc_t sizes) override;
     operation_result_t batch_read(keys_spanc_t keys, values_span_t values) const override;
 
     operation_result_t bulk_load(keys_spanc_t keys, values_spanc_t values, value_lengths_spanc_t sizes) override;
+
     operation_result_t range_select(key_t key, size_t length, values_span_t values) const override;
     operation_result_t scan(key_t key, size_t length, value_span_t single_value) const override;
 
     void flush() override;
+
     size_t size_on_disk() const override;
+
     std::unique_ptr<transaction_t> create_transaction() override;
 
     void get_options(fs::path const& path);
     std::string exec_cmd(const char* cmd);
 
   private:
+    fs::path config_path_;
+    fs::path main_dir_path_;
+    std::vector<fs::path> storage_dir_paths_;
+
     std::unique_ptr<sw::redis::Redis> redis_;
     sw::redis::ConnectionOptions connection_options_;
     sw::redis::ConnectionPoolOptions connection_pool_options_;
-    fs::path config_path_;
-    fs::path dir_path_;
     bool is_opened_ = false;
 };
 
@@ -113,14 +123,22 @@ void redis_t::get_options(fs::path const& path) {
     connection_pool_options_.size = j_config["pool_size"].get<int>();
 }
 
-void redis_t::set_config(fs::path const& config_path, fs::path const& dir_path) {
+void redis_t::set_config(fs::path const& config_path,
+                         fs::path const& main_dir_path,
+                         std::vector<fs::path> const& storage_dir_paths,
+                         [[maybe_unused]] db_hints_t const& hints) {
     config_path_ = config_path;
-    dir_path_ = dir_path;
+    main_dir_path_ = main_dir_path;
+    storage_dir_paths_ = storage_dir_paths;
 }
 
 bool redis_t::open() {
     if (is_opened_)
         return true;
+
+    if (!storage_dir_paths_.empty())
+        return false;
+
     std::string start_cmd("redis-server ");
     start_cmd += config_path_;
     start_cmd += ".redis";
@@ -132,16 +150,11 @@ bool redis_t::open() {
     return true;
 }
 
-bool redis_t::close() {
-    return true;
-}
-
-void redis_t::destroy() {
-}
+bool redis_t::close() { return true; }
 
 operation_result_t redis_t::upsert(key_t key, value_spanc_t value) {
     auto status = (*redis_).hset("hash", to_string_view(key), to_string_view(value.data(), value.size()));
-    return {status, status ? operation_status_t::ok_k : operation_status_t::error_k};
+    return {size_t(status), status ? operation_status_t::ok_k : operation_status_t::error_k};
 }
 
 operation_result_t redis_t::update(key_t key, value_spanc_t value) {
@@ -262,15 +275,12 @@ operation_result_t redis_t::scan(key_t /* key */, size_t /* length */, value_spa
     return {0, operation_status_t::not_implemented_k};
 }
 
-void redis_t::flush() {
-}
+std::string redis_t::info() { return {}; }
 
-size_t redis_t::size_on_disk() const {
-    return 0;
-}
+void redis_t::flush() {}
 
-std::unique_ptr<transaction_t> redis_t::create_transaction() {
-    return {};
-}
+size_t redis_t::size_on_disk() const { return 0; }
 
-} // namespace redis
+std::unique_ptr<transaction_t> redis_t::create_transaction() { return {}; }
+
+} // namespace ucsb::redis

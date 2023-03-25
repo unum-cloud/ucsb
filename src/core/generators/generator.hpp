@@ -2,7 +2,7 @@
 
 #include "src/core/types.hpp"
 
-namespace ucsb::core::generators {
+namespace ucsb::core {
 
 template <typename value_at>
 class generator_gt {
@@ -15,4 +15,4 @@ class generator_gt {
     virtual value_t last() = 0;
 };
 
-} // namespace ucsb
+} // namespace ucsb::core

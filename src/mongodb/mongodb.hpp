@@ -5,11 +5,12 @@
 #include <mongocxx/instance.hpp>
 #include <mongocxx/pool.hpp>
 
-#include "ucsb/core/types.hpp"
-#include "ucsb/core/db.hpp"
-#include "ucsb/core/helper.hpp"
+#include "src/core/types.hpp"
+#include "src/core/db.hpp"
+#include "src/core/helper.hpp"
 
-namespace mongo {
+namespace ucsb::mongo {
+
 namespace fs = ucsb::fs;
 
 using key_t = ucsb::key_t;
@@ -23,6 +24,7 @@ using value_length_t = ucsb::value_length_t;
 using value_lengths_spanc_t = ucsb::value_lengths_spanc_t;
 using operation_status_t = ucsb::operation_status_t;
 using operation_result_t = ucsb::operation_result_t;
+using db_hints_t = ucsb::db_hints_t;
 using transaction_t = ucsb::transaction_t;
 
 using bsoncxx::builder::basic::kvp;
@@ -46,37 +48,45 @@ struct oid_hash_t {
 thread_local std::unordered_map<bsoncxx::oid, size_t, oid_hash_t> batch_keys_map;
 thread_local bsoncxx::builder::basic::array batch_keys_array;
 
-struct mongodb_t : public ucsb::db_t {
+class mongodb_t : public ucsb::db_t {
   public:
     inline mongodb_t() : inst_(mongocxx::instance {}) {}
 
-    void set_config(fs::path const& config_path, fs::path const& dir_path) override;
+    void set_config(fs::path const& config_path,
+                    fs::path const& main_dir_path,
+                    std::vector<fs::path> const& storage_dir_paths,
+                    db_hints_t const& hints) override;
     bool open() override;
     bool close() override;
-    void destroy() override;
+
+    std::string info() override;
 
     operation_result_t upsert(key_t key, value_spanc_t value) override;
     operation_result_t update(key_t key, value_spanc_t value) override;
     operation_result_t remove(key_t key) override;
-
     operation_result_t read(key_t key, value_span_t value) const override;
+
     operation_result_t batch_upsert(keys_spanc_t keys, values_spanc_t values, value_lengths_spanc_t sizes) override;
     operation_result_t batch_read(keys_spanc_t keys, values_span_t values) const override;
 
     operation_result_t bulk_load(keys_spanc_t keys, values_spanc_t values, value_lengths_spanc_t sizes) override;
+
     operation_result_t range_select(key_t key, size_t length, values_span_t values) const override;
     operation_result_t scan(key_t key, size_t length, value_span_t single_value) const override;
 
     void flush() override;
+
     size_t size_on_disk() const override;
+
     std::unique_ptr<transaction_t> create_transaction() override;
 
   private:
+    fs::path config_path_;
+    fs::path main_dir_path_;
+    std::vector<fs::path> storage_dir_paths_;
+
     mongocxx::instance inst_;
     std::unique_ptr<mongocxx::pool> pool_;
-
-    fs::path config_path_;
-    fs::path dir_path_;
     std::string coll_name;
 };
 
@@ -103,13 +113,21 @@ static void exec_cmd(const char* cmd) {
     std::this_thread::sleep_for(2s);
 }
 
-void mongodb_t::set_config(fs::path const& config_path, fs::path const& dir_path) {
+void mongodb_t::set_config(fs::path const& config_path,
+                           fs::path const& main_dir_path,
+                           std::vector<fs::path> const& storage_dir_paths,
+                           [[maybe_unused]] db_hints_t const& hints) {
     config_path_ = config_path;
-    dir_path_ = dir_path;
-    coll_name = dir_path.parent_path().filename();
+    main_dir_path_ = main_dir_path;
+    storage_dir_paths_ = storage_dir_paths;
+    coll_name = main_dir_path.parent_path().filename();
 };
 
 bool mongodb_t::open() {
+
+    if (!storage_dir_paths_.empty())
+        return false;
+
     std::string start_cmd = "mongod --config ";
     start_cmd += config_path_;
     exec_cmd(start_cmd.c_str());
@@ -126,12 +144,6 @@ bool mongodb_t::close() {
     exec_cmd(stop_cmd.c_str());
     return true;
 }
-
-void mongodb_t::destroy() {
-    auto client = (*pool_).acquire();
-    auto coll = (*client)["mongodb"][coll_name];
-    coll.drop();
-};
 
 operation_result_t mongodb_t::upsert(key_t key, value_spanc_t value) {
     auto client = (*pool_).acquire();
@@ -167,7 +179,7 @@ operation_result_t mongodb_t::remove(key_t key) {
     auto coll = (*client)["mongodb"][coll_name];
     if (coll.delete_one(make_document(kvp("_id", make_oid(key))))->deleted_count())
         return {1, operation_status_t::ok_k};
-    return {1, operation_status_t::not_found_k};
+    return {0, operation_status_t::not_found_k};
 };
 
 operation_result_t mongodb_t::read(key_t key, value_span_t value) const {
@@ -175,7 +187,7 @@ operation_result_t mongodb_t::read(key_t key, value_span_t value) const {
     auto coll = (*client)["mongodb"][coll_name];
     bsoncxx::stdx::optional<bsoncxx::document::value> doc = coll.find_one(make_document(kvp("_id", make_oid(key))));
     if (!doc)
-        return {1, operation_status_t::not_found_k};
+        return {0, operation_status_t::not_found_k};
     auto data = (*doc).view()["data"].get_binary();
     memcpy(value.data(), data.bytes, data.size);
     return {1, operation_status_t::ok_k};
@@ -198,7 +210,7 @@ operation_result_t mongodb_t::batch_upsert(keys_spanc_t keys, values_spanc_t val
     size_t modified_count = bulk.execute()->modified_count();
     if (modified_count == keys.size())
         return {keys.size(), operation_status_t::ok_k};
-    return {modified_count, operation_status_t::error_k};
+    return {0, operation_status_t::error_k};
 }
 
 operation_result_t mongodb_t::batch_read(keys_spanc_t keys, values_span_t values) const {
@@ -230,7 +242,7 @@ operation_result_t mongodb_t::batch_read(keys_spanc_t keys, values_span_t values
     if (found_cnt == keys.size())
         return {keys.size(), operation_status_t::ok_k};
 
-    return {found_cnt, operation_status_t::error_k};
+    return {0, operation_status_t::error_k};
 }
 
 operation_result_t mongodb_t::bulk_load(keys_spanc_t keys, values_spanc_t values, value_lengths_spanc_t sizes) {
@@ -249,7 +261,7 @@ operation_result_t mongodb_t::bulk_load(keys_spanc_t keys, values_spanc_t values
     size_t inserted_count = bulk.execute()->inserted_count();
     if (inserted_count == keys.size())
         return {keys.size(), operation_status_t::ok_k};
-    return {inserted_count, operation_status_t::error_k};
+    return {0, operation_status_t::error_k};
 }
 
 operation_result_t mongodb_t::range_select(key_t key, size_t length, [[maybe_unused]] values_span_t values) const {
@@ -283,15 +295,12 @@ operation_result_t mongodb_t::scan([[maybe_unused]] key_t key, size_t length, va
     return {i, operation_status_t::ok_k};
 }
 
-void mongodb_t::flush() {
-}
+std::string mongodb_t::info() { return {}; }
 
-size_t mongodb_t::size_on_disk() const {
-    return ucsb::size_on_disk(dir_path_);
-}
+void mongodb_t::flush() {}
 
-std::unique_ptr<transaction_t> mongodb_t::create_transaction() {
-    return {};
-}
+size_t mongodb_t::size_on_disk() const { return ucsb::size_on_disk(main_dir_path_); }
 
-} // namespace mongo
+std::unique_ptr<transaction_t> mongodb_t::create_transaction() { return {}; }
+
+} // namespace ucsb::mongo

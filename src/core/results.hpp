@@ -20,7 +20,7 @@ std::string parse_workload_name(std::string const& benchmark_name) {
     return name;
 }
 
-void marge_results(ucsb::fs::path const& source_file_path,
+void merge_results(ucsb::fs::path const& source_file_path,
                    ucsb::fs::path const& destination_file_path,
                    std::string const& db_name) {
 

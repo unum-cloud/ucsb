@@ -11,7 +11,7 @@
 #include "src/core/helper.hpp"
 #include "src/core/printable.hpp"
 
-namespace ucsb::mongodb {
+namespace ucsb::mongo {
 
 namespace fs = ucsb::fs;
 
@@ -57,13 +57,14 @@ class wiredtiger_t : public ucsb::db_t {
                     db_hints_t const& hints) override;
     bool open() override;
     bool close() override;
-    void destroy() override;
+
+    std::string info() override;
 
     operation_result_t upsert(key_t key, value_spanc_t value) override;
     operation_result_t update(key_t key, value_spanc_t value) override;
     operation_result_t remove(key_t key) override;
-
     operation_result_t read(key_t key, value_span_t value) const override;
+
     operation_result_t batch_upsert(keys_spanc_t keys, values_spanc_t values, value_lengths_spanc_t sizes) override;
     operation_result_t batch_read(keys_spanc_t keys, values_span_t values) const override;
 
@@ -73,6 +74,7 @@ class wiredtiger_t : public ucsb::db_t {
     operation_result_t scan(key_t key, size_t length, value_span_t single_value) const override;
 
     void flush() override;
+
     size_t size_on_disk() const override;
 
     std::unique_ptr<transaction_t> create_transaction() override;
@@ -90,6 +92,7 @@ class wiredtiger_t : public ucsb::db_t {
 
     fs::path config_path_;
     fs::path main_dir_path_;
+    std::vector<fs::path> storage_dir_paths_;
 
     WT_CONNECTION* conn_;
     session_uptr_t bulk_load_session_;
@@ -112,10 +115,11 @@ WT_COLLATOR key_comparator = {compare_keys, nullptr, nullptr};
 
 void wiredtiger_t::set_config(fs::path const& config_path,
                               fs::path const& main_dir_path,
-                              [[maybe_unused]] std::vector<fs::path> const& storage_dir_paths,
+                              std::vector<fs::path> const& storage_dir_paths,
                               [[maybe_unused]] db_hints_t const& hints) {
     config_path_ = config_path;
     main_dir_path_ = main_dir_path;
+    storage_dir_paths_ = storage_dir_paths;
 }
 
 session_uptr_t wiredtiger_t::start_session() const {
@@ -149,6 +153,9 @@ bool wiredtiger_t::open() {
     if (conn_)
         return true;
 
+    if (!storage_dir_paths_.empty())
+        return false;
+
     config_t config;
     if (!load_config(config))
         return false;
@@ -171,13 +178,6 @@ bool wiredtiger_t::close() {
 
     conn_ = nullptr;
     return true;
-}
-
-void wiredtiger_t::destroy() {
-    [[maybe_unused]] bool ok = close();
-    assert(ok);
-
-    ucsb::clear_directory(main_dir_path_);
 }
 
 operation_result_t wiredtiger_t::upsert(key_t key, value_spanc_t value) {
@@ -390,18 +390,18 @@ operation_result_t wiredtiger_t::scan(key_t key, size_t length, value_span_t sin
     return {scanned_records_count, operation_status_t::ok_k};
 }
 
+std::string wiredtiger_t::info() {
+    return fmt::format("v{}.{}.{}", WIREDTIGER_VERSION_MAJOR, WIREDTIGER_VERSION_MINOR, WIREDTIGER_VERSION_PATCH);
+}
+
 void wiredtiger_t::flush() {
     bulk_load_cursor_.reset();
     bulk_load_session_.reset();
 }
 
-size_t wiredtiger_t::size_on_disk() const {
-    return ucsb::size_on_disk(main_dir_path_);
-}
+size_t wiredtiger_t::size_on_disk() const { return ucsb::size_on_disk(main_dir_path_); }
 
-std::unique_ptr<transaction_t> wiredtiger_t::create_transaction() {
-    return {};
-}
+std::unique_ptr<transaction_t> wiredtiger_t::create_transaction() { return {}; }
 
 bool wiredtiger_t::load_config(config_t& config) {
     if (!fs::exists(config_path_))
@@ -423,4 +423,4 @@ inline std::string wiredtiger_t::create_str_config(config_t const& config) const
     return fmt::format("{},{}", str_config, str_cache_size);
 }
 
-} // namespace ucsb::mongodb
+} // namespace ucsb::mongo
