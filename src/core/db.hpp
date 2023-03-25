@@ -1,5 +1,7 @@
 #pragma once
+
 #include <set>
+#include <string>
 #include <memory>
 
 #include "src/core/types.hpp"
@@ -29,6 +31,11 @@ class db_t : public data_accessor_t {
     virtual bool close() = 0;
 
     /**
+     * @brief Returns high level description about the DB
+     */
+    virtual std::string info() = 0;
+
+    /**
      * @brief Initializes the DB before usage.
      *
      * This function can't be used more than once.
@@ -45,11 +52,6 @@ class db_t : public data_accessor_t {
                             fs::path const& main_dir_path,
                             std::vector<fs::path> const& storage_dir_paths,
                             db_hints_t const& hints) = 0;
-
-    /**
-     * @brief Removes all the information stored in the DB and deletes the files on disk.
-     */
-    virtual void destroy() = 0;
 
     virtual void flush() = 0;
 

@@ -3,12 +3,10 @@
 #include <memory>
 #include <vector>
 
-#include <fmt/format.h>
 #include <rocksdb/utilities/transaction_db.h>
 
 #include "src/core/types.hpp"
 #include "src/core/data_accessor.hpp"
-#include "src/core/helper.hpp"
 
 namespace ucsb::facebook {
 
@@ -60,8 +58,8 @@ class rocksdb_transaction_t : public ucsb::transaction_t {
     operation_result_t upsert(key_t key, value_spanc_t value) override;
     operation_result_t update(key_t key, value_spanc_t value) override;
     operation_result_t remove(key_t key) override;
-
     operation_result_t read(key_t key, value_span_t value) const override;
+
     operation_result_t batch_upsert(keys_spanc_t keys, values_spanc_t values, value_lengths_spanc_t sizes) override;
     operation_result_t batch_read(keys_spanc_t keys, values_span_t values) const override;
 
@@ -88,49 +86,42 @@ rocksdb_transaction_t::~rocksdb_transaction_t() {
 }
 
 operation_result_t rocksdb_transaction_t::upsert(key_t key, value_spanc_t value) {
-    rocksdb::Status status = transaction_->Put(to_slice(key), to_slice(value));
+    auto key_slice = to_slice(key);
+    rocksdb::Status status = transaction_->Put(key_slice, to_slice(value));
     if (!status.ok()) {
         assert(status.IsTryAgain());
         status = transaction_->Commit();
         assert(status.ok());
-        status = transaction_->Put(to_slice(key), to_slice(value));
+        status = transaction_->Put(key_slice, to_slice(value));
         assert(status.ok());
     }
-    return {1, operation_status_t::ok_k};
+    return {size_t(status.ok()), status.ok() ? operation_status_t::ok_k : operation_status_t::error_k};
 }
 
 operation_result_t rocksdb_transaction_t::update(key_t key, value_spanc_t value) {
-
-    key_t key_to_read = key, key_to_write = key;
+    key_t original_key = key;
     rocksdb::PinnableSlice data;
-    rocksdb::Status status = transaction_->Get(read_options_, to_slice(key_to_read), &data);
+    rocksdb::Status status = transaction_->Get(read_options_, to_slice(key), &data);
     if (status.IsNotFound())
         return {0, operation_status_t::not_found_k};
     else if (!status.ok())
         return {0, operation_status_t::error_k};
 
-    status = transaction_->Put(to_slice(key_to_write), to_slice(value));
-    if (!status.ok()) {
-        assert(status.IsTryAgain());
-        status = transaction_->Commit();
-        assert(status.ok());
-        status = transaction_->Put(to_slice(key_to_write), to_slice(value));
-        assert(status.ok());
-    }
-    return {1, operation_status_t::ok_k};
+    return upsert(original_key, value);
 }
 
 operation_result_t rocksdb_transaction_t::remove(key_t key) {
-    rocksdb::Status status = transaction_->Delete(to_slice(key));
+    auto key_slice = to_slice(key);
+    rocksdb::Status status = transaction_->Delete(key_slice);
     if (!status.ok()) {
         assert(status.IsTryAgain());
         status = transaction_->Commit();
         assert(status.ok());
-        status = transaction_->Delete(to_slice(key));
+        status = transaction_->Delete(key_slice);
         assert(status.ok());
     }
 
-    return {1, operation_status_t::ok_k};
+    return {size_t(status.ok()), status.ok() ? operation_status_t::ok_k : operation_status_t::error_k};
 }
 
 operation_result_t rocksdb_transaction_t::read(key_t key, value_span_t value) const {
@@ -152,12 +143,13 @@ operation_result_t rocksdb_transaction_t::batch_upsert(keys_spanc_t keys,
     size_t offset = 0;
     for (size_t idx = 0; idx < keys.size(); ++idx) {
         auto key = keys[idx];
-        rocksdb::Status status = transaction_->Put(to_slice(key), to_slice(values.subspan(offset, sizes[idx])));
+        auto key_slice = to_slice(key);
+        rocksdb::Status status = transaction_->Put(key_slice, to_slice(values.subspan(offset, sizes[idx])));
         if (!status.ok()) {
             assert(status.IsTryAgain());
             status = transaction_->Commit();
             assert(status.ok());
-            status = transaction_->Put(to_slice(key), to_slice(values.subspan(offset, sizes[idx])));
+            status = transaction_->Put(key_slice, to_slice(values.subspan(offset, sizes[idx])));
             assert(status.ok());
         }
         offset += sizes[idx];

@@ -57,13 +57,14 @@ class leveldb_t : public ucsb::db_t {
                     db_hints_t const& hints) override;
     bool open() override;
     bool close() override;
-    void destroy() override;
+
+    std::string info() override;
 
     operation_result_t upsert(key_t key, value_spanc_t value) override;
     operation_result_t update(key_t key, value_spanc_t value) override;
     operation_result_t remove(key_t key) override;
-
     operation_result_t read(key_t key, value_span_t value) const override;
+
     operation_result_t batch_upsert(keys_spanc_t keys, values_spanc_t values, value_lengths_spanc_t sizes) override;
     operation_result_t batch_read(keys_spanc_t keys, values_span_t values) const override;
 
@@ -73,6 +74,7 @@ class leveldb_t : public ucsb::db_t {
     operation_result_t scan(key_t key, size_t length, value_span_t single_value) const override;
 
     void flush() override;
+
     size_t size_on_disk() const override;
 
     std::unique_ptr<transaction_t> create_transaction() override;
@@ -106,6 +108,7 @@ class leveldb_t : public ucsb::db_t {
 
     fs::path config_path_;
     fs::path main_dir_path_;
+    std::vector<fs::path> storage_dir_paths_;
 
     leveldb::Options options_;
     leveldb::ReadOptions read_options_;
@@ -117,15 +120,19 @@ class leveldb_t : public ucsb::db_t {
 
 void leveldb_t::set_config(fs::path const& config_path,
                            fs::path const& main_dir_path,
-                           [[maybe_unused]] std::vector<fs::path> const& storage_dir_paths,
+                           std::vector<fs::path> const& storage_dir_paths,
                            [[maybe_unused]] db_hints_t const& hints) {
     config_path_ = config_path;
     main_dir_path_ = main_dir_path;
+    storage_dir_paths_ = storage_dir_paths;
 }
 
 bool leveldb_t::open() {
     if (db_)
         return true;
+
+    if (!storage_dir_paths_.empty())
+        return false;
 
     config_t config;
     if (!load_config(config))
@@ -159,12 +166,6 @@ bool leveldb_t::open() {
 bool leveldb_t::close() {
     db_.reset(nullptr);
     return true;
-}
-
-void leveldb_t::destroy() {
-    [[maybe_unused]] bool ok = close();
-    assert(ok);
-    leveldb::DestroyDB(main_dir_path_.string(), options_);
 }
 
 operation_result_t leveldb_t::upsert(key_t key, value_spanc_t value) {
@@ -270,6 +271,8 @@ operation_result_t leveldb_t::scan(key_t key, size_t length, value_span_t single
         memcpy(single_value.data(), it->value().data(), it->value().size());
     return {i, operation_status_t::ok_k};
 }
+
+std::string leveldb_t::info() { return fmt::format("v{}.{}", leveldb::kMajorVersion, leveldb::kMinorVersion); }
 
 void leveldb_t::flush() {
     // Nothing to do

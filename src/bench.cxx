@@ -43,8 +43,8 @@ void parse_and_validate_args(int argc, char* argv[], settings_t& settings) {
     program.add_argument("-sd", "--storage-dirs")
         .default_value(std::string(""))
         .help("Database storage directory paths");
-    program.add_argument("-fl", "--filter").required().help("Workloads filter");
-    program.add_argument("-th", "--threads").required().default_value(1).help("Threads count");
+    program.add_argument("-fl", "--filter").default_value(std::string("")).help("Workloads filter");
+    program.add_argument("-th", "--threads").default_value(std::string("1")).help("Threads count");
 
     program.parse_known_args(argc, argv);
 
@@ -83,18 +83,24 @@ inline void register_section(std::string const& name) {
     });
 }
 
-std::string section_name(settings_t const& settings, workloads_t const& workloads) {
+std::string section_name(settings_t const& settings, workloads_t const& workloads, std::string const& db_info) {
 
     std::vector<std::string> infos;
     if (settings.transactional)
         infos.push_back("transactional");
-    infos.push_back(fmt::format("threads: {}", settings.threads_count));
+
     if (!workloads.empty()) {
         size_t db_size = workloads.front().db_records_count * workloads.front().value_length;
         infos.push_back(fmt::format("size: {}", printable_bytes_t {db_size}));
     }
 
-    std::string info = fmt::format("{}", fmt::join(infos, ", "));
+    infos.push_back(fmt::format("threads: {}", settings.threads_count));
+    infos.push_back(fmt::format("disks: {}", std::max(size_t(1), settings.db_storage_dir_paths.size())));
+
+    if (!db_info.empty())
+        infos.push_back(fmt::format("info: {}", db_info));
+
+    std::string info = fmt::format("{}", fmt::join(infos, " | "));
     return fmt::format("{} [{}]", settings.db_name, info);
 }
 
@@ -108,7 +114,7 @@ inline void register_benchmark(std::string const& name, size_t threads_count, fu
         ->Iterations(1);
 }
 
-void run_benchmarks(int argc, char* argv[], settings_t const& settings) {
+void run_benchmarks(int argc, char* argv[], std::string const& results_file_path) {
     (void)argc;
 
     int bm_argc = 4;
@@ -119,7 +125,7 @@ void run_benchmarks(int argc, char* argv[], settings_t const& settings) {
     std::string arg1("--benchmark_format=console");
     bm_argv[1] = const_cast<char*>(arg1.c_str());
 
-    std::string arg2(fmt::format("--benchmark_out={}", settings.results_file_path.c_str()));
+    std::string arg2(fmt::format("--benchmark_out={}", results_file_path.c_str()));
     bm_argv[2] = const_cast<char*>(arg2.c_str());
 
     std::string arg3("--benchmark_out_format=json");
@@ -459,18 +465,17 @@ int main(int argc, char** argv) {
         parse_and_validate_args(argc, argv, settings);
 
         // Resolve results paths
-        std::string in_progress_results_file_path;
-        std::string final_results_file_path = settings.results_file_path;
-        if (!settings.workload_filter.empty()) {
-            auto results_dir_path = settings.results_file_path.parent_path();
-            in_progress_results_file_path = fmt::format("{}/{}_pending.json",
-                                                        results_dir_path.string(),
-                                                        settings.results_file_path.filename().stem().string());
-            settings.results_file_path = in_progress_results_file_path;
-            // Remove if exists
-            if (fs::exists(in_progress_results_file_path))
-                fs::remove(in_progress_results_file_path);
-        }
+        fs::path final_results_file_path = settings.results_file_path;
+        if (final_results_file_path.string().back() == '/')
+            final_results_file_path = fmt::format("{}/{}.json",
+                                                  final_results_file_path.parent_path().string(),
+                                                  settings.workloads_file_path.filename().stem().string());
+        fs::path in_progress_results_file_path = fmt::format("{}/{}_in_progress.json",
+                                                             final_results_file_path.parent_path().string(),
+                                                             final_results_file_path.filename().stem().string());
+        // Remove if exists
+        if (fs::exists(in_progress_results_file_path))
+            fs::remove(in_progress_results_file_path);
 
         // Create directories
         std::error_code ec;
@@ -481,11 +486,11 @@ int main(int argc, char** argv) {
                 return 1;
             }
         }
-        if (!fs::exists(settings.results_file_path.parent_path())) {
-            fs::create_directories(settings.results_file_path.parent_path(), ec);
+        if (!fs::exists(in_progress_results_file_path.parent_path())) {
+            fs::create_directories(in_progress_results_file_path.parent_path(), ec);
             if (ec) {
                 fmt::print("Failed to create results directory. path: {}\n",
-                           settings.results_file_path.parent_path().string());
+                           in_progress_results_file_path.parent_path().string());
                 return 1;
             }
         }
@@ -539,7 +544,7 @@ int main(int argc, char** argv) {
         threads_fence_t fence(settings.threads_count);
 
         // Register benchmarks
-        register_section(section_name(settings, workloads));
+        register_section(section_name(settings, workloads, db->info()));
         for (auto const& splitted_workloads : threads_workloads) {
             std::string bench_name = splitted_workloads.front().name;
             register_benchmark(bench_name, settings.threads_count, [&](bm::State& state) {
@@ -548,12 +553,10 @@ int main(int argc, char** argv) {
             });
         }
 
-        run_benchmarks(argc, argv, settings);
+        run_benchmarks(argc, argv, in_progress_results_file_path);
 
-        if (!in_progress_results_file_path.empty()) {
-            marge_results(in_progress_results_file_path, final_results_file_path, settings.db_name);
-            fs::remove(in_progress_results_file_path);
-        }
+        merge_results(in_progress_results_file_path, final_results_file_path, settings.db_name);
+        fs::remove(in_progress_results_file_path);
     }
     catch (exception_t const& ex) {
         fmt::print("ucsb exception: {}\n", ex.what());

@@ -1,4 +1,5 @@
 #pragma once
+
 #include <set>
 
 #include "src/core/types.hpp"
