@@ -47,33 +47,39 @@ struct redis_t : public ucsb::db_t {
                     db_hints_t const& hints) override;
     bool open() override;
     bool close() override;
-    void destroy() override;
+
+    std::string info() override;
 
     operation_result_t upsert(key_t key, value_spanc_t value) override;
     operation_result_t update(key_t key, value_spanc_t value) override;
     operation_result_t remove(key_t key) override;
-
     operation_result_t read(key_t key, value_span_t value) const override;
+
     operation_result_t batch_upsert(keys_spanc_t keys, values_spanc_t values, value_lengths_spanc_t sizes) override;
     operation_result_t batch_read(keys_spanc_t keys, values_span_t values) const override;
 
     operation_result_t bulk_load(keys_spanc_t keys, values_spanc_t values, value_lengths_spanc_t sizes) override;
+
     operation_result_t range_select(key_t key, size_t length, values_span_t values) const override;
     operation_result_t scan(key_t key, size_t length, value_span_t single_value) const override;
 
     void flush() override;
+
     size_t size_on_disk() const override;
+
     std::unique_ptr<transaction_t> create_transaction() override;
 
     void get_options(fs::path const& path);
     std::string exec_cmd(const char* cmd);
 
   private:
+    fs::path config_path_;
+    fs::path main_dir_path_;
+    std::vector<fs::path> storage_dir_paths_;
+
     std::unique_ptr<sw::redis::Redis> redis_;
     sw::redis::ConnectionOptions connection_options_;
     sw::redis::ConnectionPoolOptions connection_pool_options_;
-    fs::path config_path_;
-    fs::path main_dir_path_;
     bool is_opened_ = false;
 };
 
@@ -119,15 +125,20 @@ void redis_t::get_options(fs::path const& path) {
 
 void redis_t::set_config(fs::path const& config_path,
                          fs::path const& main_dir_path,
-                         [[maybe_unused]] std::vector<fs::path> const& storage_dir_paths,
+                         std::vector<fs::path> const& storage_dir_paths,
                          [[maybe_unused]] db_hints_t const& hints) {
     config_path_ = config_path;
     main_dir_path_ = main_dir_path;
+    storage_dir_paths_ = storage_dir_paths;
 }
 
 bool redis_t::open() {
     if (is_opened_)
         return true;
+
+    if (!storage_dir_paths_.empty())
+        return false;
+
     std::string start_cmd("redis-server ");
     start_cmd += config_path_;
     start_cmd += ".redis";
@@ -140,8 +151,6 @@ bool redis_t::open() {
 }
 
 bool redis_t::close() { return true; }
-
-void redis_t::destroy() {}
 
 operation_result_t redis_t::upsert(key_t key, value_spanc_t value) {
     auto status = (*redis_).hset("hash", to_string_view(key), to_string_view(value.data(), value.size()));
@@ -265,6 +274,8 @@ operation_result_t redis_t::range_select(key_t /* key */, size_t /* length */, v
 operation_result_t redis_t::scan(key_t /* key */, size_t /* length */, value_span_t /* single_value */) const {
     return {0, operation_status_t::not_implemented_k};
 }
+
+std::string redis_t::info() { return {}; }
 
 void redis_t::flush() {}
 

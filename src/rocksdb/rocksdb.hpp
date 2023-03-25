@@ -73,13 +73,14 @@ class rocksdb_t : public ucsb::db_t {
                     db_hints_t const& hints) override;
     bool open() override;
     bool close() override;
-    void destroy() override;
+
+    std::string info() override;
 
     operation_result_t upsert(key_t key, value_spanc_t value) override;
     operation_result_t update(key_t key, value_spanc_t value) override;
     operation_result_t remove(key_t key) override;
-
     operation_result_t read(key_t key, value_span_t value) const override;
+
     operation_result_t batch_upsert(keys_spanc_t keys, values_spanc_t values, value_lengths_spanc_t sizes) override;
     operation_result_t batch_read(keys_spanc_t keys, values_span_t values) const override;
 
@@ -89,6 +90,7 @@ class rocksdb_t : public ucsb::db_t {
     operation_result_t scan(key_t key, size_t length, value_span_t single_value) const override;
 
     void flush() override;
+
     size_t size_on_disk() const override;
 
     std::unique_ptr<transaction_t> create_transaction() override;
@@ -97,6 +99,7 @@ class rocksdb_t : public ucsb::db_t {
     fs::path config_path_;
     fs::path main_dir_path_;
     std::vector<fs::path> storage_dir_paths_;
+    db_hints_t hints_;
 
     bool load_additional_options();
 
@@ -127,8 +130,6 @@ class rocksdb_t : public ucsb::db_t {
     key_comparator_t key_cmp_;
     db_mode_t mode_;
     std::atomic_bool full_compaction_;
-
-    db_hints_t hints_;
 };
 
 void rocksdb_t::set_config(fs::path const& config_path,
@@ -205,12 +206,6 @@ bool rocksdb_t::close() {
     cf_handles_.clear();
     transaction_db_ = nullptr;
     return true;
-}
-
-void rocksdb_t::destroy() {
-    [[maybe_unused]] bool ok = close();
-    assert(ok);
-    rocksdb::DestroyDB(main_dir_path_.string(), options_, cf_descs_);
 }
 
 operation_result_t rocksdb_t::upsert(key_t key, value_spanc_t value) {
@@ -376,6 +371,8 @@ operation_result_t rocksdb_t::scan(key_t key, size_t length, value_span_t single
     return {i, operation_status_t::ok_k};
 }
 
+std::string rocksdb_t::info() { return fmt::format("v{}.{}", rocksdb::kMajorVersion, rocksdb::kMinorVersion); }
+
 void rocksdb_t::flush() {
     db_->Flush(rocksdb::FlushOptions());
     if (full_compaction_.load()) {
@@ -408,7 +405,7 @@ bool rocksdb_t::load_additional_options() {
 
     // DB multiple paths
     if (!storage_dir_paths_.empty()) {
-        size_t db_size_per_disk = hints_.records_count * hints_.value_length / storage_dir_paths_.size();
+        size_t db_size_per_disk = (hints_.records_count * hints_.value_length) / storage_dir_paths_.size();
         if (db_size_per_disk == 0)
             return false;
 

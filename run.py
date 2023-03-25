@@ -24,7 +24,8 @@ supported_db_names = [
     'wiredtiger',
     'lmdb',
     'mongodb',
-    'redis'
+    'redis',
+    'ukv'
 ]
 
 supported_sizes = [
