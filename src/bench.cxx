@@ -435,8 +435,9 @@ void bench(bm::State& state, workload_t const& workload, db_t& db, bool transact
 
     if (state.thread_index() == 0) {
         progress_t::print_db_open();
-        if (!db.open())
-            throw exception_t("Failed to open DB");
+        std::string error;
+        if (!db.open(error))
+            throw exception_t(error);
     }
     fence.sync();
 
@@ -452,8 +453,7 @@ void bench(bm::State& state, workload_t const& workload, db_t& db, bool transact
     fence.sync();
     if (state.thread_index() == 0) {
         progress_t::print_db_close();
-        if (!db.close())
-            throw exception_t("Failed to close DB");
+        db.close();
     }
 }
 

@@ -43,8 +43,8 @@ class ukv_t : public ucsb::db_t {
                     fs::path const& main_dir_path,
                     std::vector<fs::path> const& storage_dir_paths,
                     db_hints_t const& hints) override;
-    bool open() override;
-    bool close() override;
+    bool open(std::string& error) override;
+    void close() override;
 
     std::string info() override;
 
@@ -90,21 +90,25 @@ void ukv_t::set_config(fs::path const& config_path,
     hints_ = hints;
 }
 
-bool ukv_t::open() {
+bool ukv_t::open(std::string& error) {
     if (db_)
         return true;
 
     // Read config from file
     std::ifstream stream(config_path_);
-    if (!stream)
+    if (!stream) {
+        error = strerror(errno);
         return false;
+    }
     std::string str_config((std::istreambuf_iterator<char>(stream)), std::istreambuf_iterator<char>());
 
     // Load and overwrite
     ukv::config_t config;
     auto status = ukv::config_loader_t::load_from_json_string(str_config, config, true);
-    if (!status)
+    if (!status) {
+        error = status.message();
         return false;
+    }
 
     // Resolve directory paths
     if (config.directory.empty())
@@ -122,15 +126,13 @@ bool ukv_t::open() {
 #endif
     }
 
-    // Resolve engine config path (Note: Inplace configs are ignored, used files)
-    if (!config.engine.config_url.empty())
-        return false;
-    if (!config.engine.config.empty())
-        return false;
+    // Resolve engine config path
     if (config.engine.config_file_path.empty()) {
         auto configs_root = config_path_.parent_path().parent_path();
-        if (configs_root.filename() != "configs")
+        if (configs_root.filename() != "configs") {
+            error = "Invalid config directory";
             return false;
+        }
 #if defined(UKV_ENGINE_IS_ROCKSDB)
         config.engine.config_file_path = configs_root / "rocksdb" / config_path_.filename();
 #elif defined(UKV_ENGINE_IS_LEVELDB)
@@ -145,8 +147,10 @@ bool ukv_t::open() {
 
     // Convert to json string
     status = ukv::config_loader_t::save_to_json_string(config, str_config);
-    if (!status)
+    if (!status) {
+        error = status.message();
         return false;
+    }
 
     ukv_database_init_t init {};
     init.config = str_config.c_str();
@@ -156,23 +160,24 @@ bool ukv_t::open() {
     init.db = &db_;
     init.error = status.member_ptr();
     ukv_database_init(&init);
-    if (!status)
+    if (!status) {
+        error = status.message();
         return status;
+    }
 
     arena = ukv::arena_t(db_);
     return true;
 }
 
-void ukv_t::free() {
-    ukv_database_free(db_);
-    db_ = nullptr;
-}
-
-bool ukv_t::close() {
+void ukv_t::close() {
 #if !defined(UKV_ENGINE_IS_UMEM)
     free();
 #endif
-    return true;
+}
+
+void ukv_t::free() {
+    ukv_database_free(db_);
+    db_ = nullptr;
 }
 
 operation_result_t ukv_t::upsert(key_t key, value_spanc_t value) {
