@@ -1,6 +1,7 @@
 # UKV:
 # https://github.com/unum-cloud/ukv/blob/main/CMakeLists.txt
 
+set(REPOSITORY_BRANCH "main-dev")
 set(ENGINE_NAME UMEM)
 list(APPEND UKV_BUILD_ARGS "-DUKV_BUILD_BUNDLES=1" "-DUKV_BUILD_TESTS=0" "-DUKV_BUILD_BENCHMARKS=0")
 
@@ -16,7 +17,8 @@ endif()
 string(TOLOWER ${ENGINE_NAME} LOWERCASE_ENGINE_NAME)
 set(UKV_PREFIX_DIR ${CMAKE_BINARY_DIR}/_deps)
 
-file(DOWNLOAD "https://raw.githubusercontent.com/unum-cloud/ukv/main/VERSION" "${UKV_PREFIX_DIR}/ukv-src/VERSION")
+set(VERSION_URL "https://raw.githubusercontent.com/unum-cloud/ukv/${REPOSITORY_BRANCH}/VERSION")
+file(DOWNLOAD "\"${VERSION_URL}\"" "${UKV_PREFIX_DIR}/ukv-src/VERSION")
 file(READ "${UKV_PREFIX_DIR}/ukv-src/VERSION" UKV_VERSION)
 
 include(ExternalProject)
@@ -25,7 +27,7 @@ ExternalProject_Add(
     ukv_external
 
     GIT_REPOSITORY "https://github.com/unum-cloud/ukv"
-    GIT_TAG main-dev
+    GIT_TAG "${REPOSITORY_BRANCH}"
     GIT_SHALLOW 1
     GIT_PROGRESS 0
     
