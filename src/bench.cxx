@@ -5,6 +5,7 @@
 
 #include <fmt/format.h>
 #include <fmt/chrono.h>
+#include <fmt/color.h>
 #include <benchmark/benchmark.h>
 
 #include <nlohmann/json.hpp>
@@ -23,7 +24,7 @@
 #include "src/core/operation.hpp"
 #include "src/core/exception.hpp"
 #include "src/core/printable.hpp"
-#include "src/core/results.hpp"
+#include "src/core/reporter.hpp"
 #include "src/core/threads_fence.hpp"
 
 namespace bm = benchmark;
@@ -76,32 +77,26 @@ void parse_and_validate_args(int argc, char* argv[], settings_t& settings) {
     }
 }
 
-inline void register_section(std::string const& name) {
-    bm::RegisterBenchmark(name.c_str(), [=](bm::State& s) {
-        for (auto _ : s)
-            ;
-    });
-}
-
-std::string section_name(settings_t const& settings, workloads_t const& workloads, std::string const& db_info) {
+std::string build_title(settings_t const& settings, workloads_t const& workloads, std::string const& db_info) {
 
     std::vector<std::string> infos;
     if (settings.transactional)
-        infos.push_back("transactional");
+        infos.push_back(fmt::format("Database: {} ({})", settings.db_name, "transactional"));
+    else
+        infos.push_back(fmt::format("Database: {}", settings.db_name));
 
     if (!workloads.empty()) {
         size_t db_size = workloads.front().db_records_count * workloads.front().value_length;
-        infos.push_back(fmt::format("size: {}", printable_bytes_t {db_size}));
+        infos.push_back(fmt::format("Workload size: {}", printable_byte_t {db_size}));
     }
 
-    infos.push_back(fmt::format("threads: {}", settings.threads_count));
-    infos.push_back(fmt::format("disks: {}", std::max(size_t(1), settings.db_storage_dir_paths.size())));
+    infos.push_back(fmt::format("Threads: {}", settings.threads_count));
+    infos.push_back(fmt::format("Disks: {}", std::max(size_t(1), settings.db_storage_dir_paths.size())));
 
     if (!db_info.empty())
-        infos.push_back(fmt::format("info: {}", db_info));
+        infos.push_back(fmt::format("Engine: {}", db_info));
 
-    std::string info = fmt::format("{}", fmt::join(infos, " | "));
-    return fmt::format("{} [{}]", settings.db_name, info);
+    return fmt::format("{}", fmt::join(infos, ", "));
 }
 
 template <typename func_at>
@@ -114,7 +109,7 @@ inline void register_benchmark(std::string const& name, size_t threads_count, fu
         ->Iterations(1);
 }
 
-void run_benchmarks(int argc, char* argv[], std::string const& results_file_path) {
+void run_benchmarks(int argc, char* argv[], std::string const& title, std::string const& results_file_path) {
     (void)argc;
 
     int bm_argc = 4;
@@ -137,7 +132,8 @@ void run_benchmarks(int argc, char* argv[], std::string const& results_file_path
         return;
     }
 
-    benchmark::RunSpecifiedBenchmarks();
+    console_reporter_t console(title);
+    bm::RunSpecifiedBenchmarks(&console);
 }
 
 void validate_workload(workload_t const& workload, [[maybe_unused]] size_t threads_count) {
@@ -274,31 +270,32 @@ struct progress_t {
 
     static void print_db_open() {
         fmt::print("\33[2K\r");
-        fmt::print("Opening DB...\r");
+        fmt::print(" [✱] Opening DB...\r");
         fflush(stdout);
     }
 
     static void print_db_close() {
         fmt::print("\33[2K\r");
-        fmt::print("Closing DB...\r");
+        fmt::print(" [✱] Closing DB...\r");
         fflush(stdout);
     }
 
     static void print_db_flush() {
         fmt::print("\33[2K\r");
-        fmt::print("Flushing DB...\r");
+        fmt::print(" [✱] Flushing DB...\r");
         fflush(stdout);
     }
 
-    void print_start(std::string const& bench_name) {
+    void print_start(std::string const& workload_name) {
         fmt::print("\33[2K\r");
-        fmt::print("{}: {:.2f}%\r", bench_name, 0.0);
+        auto name = fmt::format(fmt::fg(fmt::color::light_green), "{}", workload_name);
+        fmt::print(" [✱] {}: 0.00%\r", name, 0.0);
         fflush(stdout);
     }
 
     void print_end() {
         fmt::print("\33[2K\r");
-        fmt::print("Completed\r");
+        fmt::print(" [✱] Completed\r");
         fflush(stdout);
     }
 
@@ -308,23 +305,25 @@ struct progress_t {
         return done_its - atomic_load(last_printed_iterations) >= print_iterations_step || done_its == total_iterations;
     }
 
-    void print(std::string const& bench_name, elapsed_time_t operations_elapsed_time, elapsed_time_t elapsed_time) {
+    void print(std::string const& workload_name, elapsed_time_t operations_elapsed_time, elapsed_time_t elapsed_time) {
 
         atomic_store(last_printed_iterations, done_iterations);
 
         auto done_percent = 100.f * done_iterations / total_iterations;
-        auto fails_percent = failed_iterations * 100.0 / done_iterations;
-        auto ops_per_second = entries_touched / operations_elapsed_time.count();
-        auto remaining = (elapsed_time.count() / done_percent) * (100.f - done_percent);
+        auto fails = failed_iterations * 100.0 / done_iterations;
+        auto ops_per_second = entries_touched / std::chrono::duration<double>(operations_elapsed_time).count();
+        auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(elapsed_time).count();
+        auto remaining = std::chrono::milliseconds(size_t((elapsed / done_percent) * (100.f - done_percent))).count();
 
         fmt::print("\33[2K\r");
-        fmt::print("{}: {:.2f}% [{}/s, fails: {:.2f}%, elapsed: {:%Hh:%Mm:%Ss}, remaining: {:%Hh:%Mm:%Ss}]\r",
-                   bench_name,
-                   done_percent,
-                   printable_float_t {ops_per_second},
-                   fails_percent,
-                   std::chrono::seconds(size_t(elapsed_time.count())),
-                   std::chrono::seconds(size_t(remaining)));
+        auto name = fmt::format(fmt::fg(fmt::color::light_green), "{}", workload_name);
+        auto progress = fmt::format("{:.2f}% [{}/s, fails: {:.2f}%, elapsed: {}, remaining: {}]",
+                                    done_percent,
+                                    printable_float_t {ops_per_second},
+                                    fails,
+                                    printable_duration_t {size_t(elapsed)},
+                                    printable_duration_t {size_t(remaining)});
+        fmt::print(" [✱] {}: {}\r", name, progress);
         fflush(stdout);
     }
 
@@ -413,6 +412,7 @@ void bench(bm::State& state, workload_t const& workload, db_t& db, data_accessor
         cpu_prof.stop();
         mem_prof.stop();
 
+        // Note: This counters are hardcoded and also used in the reporter, so if you do any change here you should also change in the reporter
         state.SetBytesProcessed(progress.bytes_processed);
         state.counters["fails,%"] = bm::Counter(progress.failed_iterations * 100.0 / progress.done_iterations);
         state.counters["operations/s"] = bm::Counter(progress.entries_touched, bm::Counter::kIsRate);
@@ -544,22 +544,22 @@ int main(int argc, char** argv) {
         threads_fence_t fence(settings.threads_count);
 
         // Register benchmarks
-        register_section(section_name(settings, workloads, db->info()));
         for (auto const& splitted_workloads : threads_workloads) {
-            std::string bench_name = splitted_workloads.front().name;
-            register_benchmark(bench_name, settings.threads_count, [&](bm::State& state) {
+            std::string workload_name = splitted_workloads.front().name;
+            register_benchmark(workload_name, settings.threads_count, [&](bm::State& state) {
                 auto const& workload = splitted_workloads[state.thread_index()];
                 bench(state, workload, *db, settings.transactional, fence);
             });
         }
 
-        run_benchmarks(argc, argv, in_progress_results_file_path);
+        std::string title = build_title(settings, workloads, db->info());
+        run_benchmarks(argc, argv, title, in_progress_results_file_path);
 
-        merge_results(in_progress_results_file_path, final_results_file_path, settings.db_name);
+        file_reporter_t::merge_results(in_progress_results_file_path, final_results_file_path);
         fs::remove(in_progress_results_file_path);
     }
     catch (exception_t const& ex) {
-        fmt::print("ucsb exception: {}\n", ex.what());
+        fmt::print("UCSB exception: {}\n", ex.what());
     }
     catch (std::exception const& ex) {
         fmt::print("std exception: {}\n", ex.what());

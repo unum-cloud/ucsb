@@ -54,7 +54,6 @@ class UCSBConan(ConanFile):
         # https://docs.conan.io/en/latest/reference/conanfile/methods.html#requirements
 
         self.requires("fmt/8.1.1")
-        self.requires("benchmark/1.6.0")
         self.requires("nlohmann_json/3.10.4")
         # self.requires("rocksdb/6.20.3")
         # self.requires("leveldb/1.23")

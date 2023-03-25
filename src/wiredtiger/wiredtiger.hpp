@@ -419,7 +419,7 @@ bool wiredtiger_t::load_config(config_t& config) {
 inline std::string wiredtiger_t::create_str_config(config_t const& config) const {
 
     std::string str_config = "create";
-    std::string str_cache_size = fmt::format("cache_size={:.0M}", ucsb::printable_bytes_t {config.cache_size});
+    std::string str_cache_size = fmt::format("cache_size={:.0M}", ucsb::printable_byte_t {config.cache_size});
     return fmt::format("{},{}", str_config, str_cache_size);
 }
 

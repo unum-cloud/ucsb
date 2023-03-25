@@ -445,7 +445,7 @@ operation_result_t ukv_t::scan(key_t key, size_t length, value_span_t single_val
     return {scanned, scanned > 0 ? operation_status_t::ok_k : operation_status_t::not_found_k};
 }
 
-std::string ukv_t::info() { return fmt::format("v{}, {} engine", UKV_VERSION, UKV_ENGINE_NAME); }
+std::string ukv_t::info() { return fmt::format("v{}, {}", UKV_VERSION, UKV_ENGINE_NAME); }
 
 void ukv_t::flush() {
 
