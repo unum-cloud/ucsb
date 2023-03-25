@@ -106,7 +106,7 @@ bool ukv_t::open() {
     if (!status)
         return false;
 
-    // Overwrite if it's empty
+    // Resolve directory paths
     if (config.directory.empty())
         config.directory = main_dir_path_;
     if (config.data_directories.empty()) {
@@ -121,21 +121,22 @@ bool ukv_t::open() {
         }
 #endif
     }
-    // Resolve engine config path
-    if (config.engine_config_path.empty()) {
+
+    // Resolve engine config path (Note: Inplace configs are ignored, used files)
+    if (config.engine.config_file_path.empty()) {
         auto configs_root = config_path_.parent_path().parent_path();
         if (configs_root.filename() != "configs")
             return false;
 #if defined(UKV_ENGINE_IS_ROCKSDB)
-        config.engine_config_path = configs_root / "rocksdb" / config_path_.filename();
+        config.engine.config_file_path = configs_root / "rocksdb" / config_path_.filename();
 #elif defined(UKV_ENGINE_IS_LEVELDB)
-        config.engine_config_path = configs_root / "leveldb" / config_path_.filename();
+        config.engine.config_file_path = configs_root / "leveldb" / config_path_.filename();
 #elif defined(UKV_ENGINE_IS_UDISK)
-        config.engine_config_path = configs_root / "udisk" / config_path_.filename();
+        config.engine.config_file_path = configs_root / "udisk" / config_path_.filename();
 #endif
         // Select default config if the specified doesn't exist
-        if (!fs::exists(config.engine_config_path))
-            config.engine_config_path = fs::path(config.engine_config_path).parent_path() / "default.cfg";
+        if (!fs::exists(config.engine.config_file_path))
+            config.engine.config_file_path = fs::path(config.engine.config_file_path).parent_path() / "default.cfg";
     }
 
     // Convert to json string
