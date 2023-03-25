@@ -123,6 +123,10 @@ bool ukv_t::open() {
     }
 
     // Resolve engine config path (Note: Inplace configs are ignored, used files)
+    if (!config.engine.config_url.empty())
+        return false;
+    if (!config.engine.config.empty())
+        return false;
     if (config.engine.config_file_path.empty()) {
         auto configs_root = config_path_.parent_path().parent_path();
         if (configs_root.filename() != "configs")
