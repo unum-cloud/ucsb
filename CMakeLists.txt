@@ -74,8 +74,6 @@ set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -Wextra -Wno-unknown-pragmas")
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -frtti -fPIC")
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wattributes")
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wdeprecated-copy")
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-unused-parameter")
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-implicit-fallthrough")
 
 # Debugging flags.
 # https://code.visualstudio.com/docs/cpp/faq-cpp#_how-do-i-enable-debug-symbols
@@ -122,9 +120,10 @@ include("${CMAKE_MODULE_PATH}/tabulate.cmake")
 include("${CMAKE_MODULE_PATH}/rocksdb.cmake")
 include("${CMAKE_MODULE_PATH}/leveldb.cmake")
 include("${CMAKE_MODULE_PATH}/wiredtiger.cmake")
+include("${CMAKE_MODULE_PATH}/mongodb.cmake")
 include("${CMAKE_MODULE_PATH}/ukv.cmake")
 
-set(CXX_TARGET_LINK_LIBRARIES benchmark rocksdb leveldb wiredtiger ukv)
+set(CXX_TARGET_LINK_LIBRARIES benchmark rocksdb leveldb wiredtiger mongocxx_shared ukv)
 set(CXX_TARGET_LINK_LIBRARIES_WITH_FLAGS z uring)
 
 include(${CMAKE_MODULE_PATH}/conanbuildinfo.cmake)

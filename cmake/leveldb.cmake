@@ -17,6 +17,8 @@ if(NOT leveldb_POPULATED)
     set(LEVELDB_BUILD_BENCHMARKS OFF CACHE BOOL "Build LevelDB's benchmarks")
     set(HAVE_SNAPPY OFF CACHE BOOL "Build with snappy compression library")
 
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-unused-parameter")
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-implicit-fallthrough")
     # Enable RTTI (Note: LevelDB forcibly disables RTTI in CMakeList.txt:CMAKE_CXX_FLAGS)
     set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -frtti")
     set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -frtti")

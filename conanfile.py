@@ -55,10 +55,6 @@ class UCSBConan(ConanFile):
 
         self.requires("fmt/8.1.1")
         self.requires("nlohmann_json/3.10.4")
-        # self.requires("rocksdb/6.20.3")
-        # self.requires("leveldb/1.23")
-        self.requires("mongo-c-driver/1.22.0")
-        self.requires("mongo-cxx-driver/3.6.6")
         self.requires("redis-plus-plus/1.3.3")
         self.requires("lmdb/0.9.29")
         self.requires("snappy/1.1.9")
