@@ -17,6 +17,7 @@ using ordered_json = nlohmann::ordered_json;
 namespace ucsb {
 
 namespace bm = benchmark;
+namespace fs = ucsb::fs;
 
 class console_reporter_t : public bm::BenchmarkReporter {
 
@@ -76,7 +77,8 @@ bool console_reporter_t::ReportContext(Context const&) {
         .format()
         .width(columns_total_width_)
         .font_align(tabulate::FontAlign::center)
-        .font_color(tabulate::Color::blue);
+        .font_color(tabulate::Color::blue)
+        .locale("C");
     std::cout << table << std::endl;
     return true;
 }
@@ -99,7 +101,8 @@ void console_reporter_t::ReportRuns(std::vector<Run> const& reports) {
             .width(column_width_)
             .font_align(tabulate::FontAlign::center)
             .font_color(tabulate::Color::blue)
-            .hide_border_top();
+            .hide_border_top()
+            .locale("C");
         table.column(0).format().width(workload_column_width_);
         std::cout << table << std::endl;
     }
@@ -132,7 +135,7 @@ void console_reporter_t::ReportRuns(std::vector<Run> const& reports) {
                    fmt::format("{}", printable_byte_t {mem_max}),
                    fmt::format("{}", printable_float_t {fails}),
                    fmt::format("{}", printable_duration_t {size_t(duration)})});
-    table.row(0).format().width(column_width_).font_align(tabulate::FontAlign::right).hide_border_top();
+    table.row(0).format().width(column_width_).font_align(tabulate::FontAlign::right).hide_border_top().locale("C");
     table.column(0)
         .format()
         .width(workload_column_width_)
@@ -155,7 +158,8 @@ void console_reporter_t::Finalize() {
         .width(columns_total_width_)
         .font_align(tabulate::FontAlign::center)
         .font_color(tabulate::Color::blue)
-        .hide_border_top();
+        .hide_border_top()
+        .locale("C");
     std::cout << table << std::endl;
 }
 
@@ -183,7 +187,7 @@ double console_reporter_t::convert_duration(double duration, bm::TimeUnit from, 
 
 class file_reporter_t {
   public:
-    static void merge_results(ucsb::fs::path const& source_file_path, ucsb::fs::path const& destination_file_path);
+    static void merge_results(fs::path const& source_file_path, fs::path const& destination_file_path);
 
   private:
     static std::string parse_workload_name(std::string const& benchmark_name);
@@ -199,10 +203,9 @@ std::string file_reporter_t::parse_workload_name(std::string const& benchmark_na
     return name;
 }
 
-void file_reporter_t::merge_results(ucsb::fs::path const& source_file_path,
-                                    ucsb::fs::path const& destination_file_path) {
+void file_reporter_t::merge_results(fs::path const& source_file_path, fs::path const& destination_file_path) {
 
-    if (!ucsb::fs::exists(source_file_path))
+    if (!fs::exists(source_file_path))
         return;
 
     std::ifstream ifstream(source_file_path);
@@ -210,7 +213,7 @@ void file_reporter_t::merge_results(ucsb::fs::path const& source_file_path,
     ifstream >> j_source;
 
     ordered_json j_destination;
-    if (ucsb::fs::exists(destination_file_path)) {
+    if (fs::exists(destination_file_path)) {
         ifstream = std::ifstream(destination_file_path);
         ifstream >> j_destination;
     }
