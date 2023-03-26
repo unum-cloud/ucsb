@@ -19,6 +19,8 @@ cmake/*
 !cmake/leveldb.cmake
 !cmake/wiredtiger.cmake
 !cmake/mongodb.cmake
+!cmake/hiredis.cmake
+!cmake/redis.cmake
 !cmake/lmdb.cmake
 !cmake/ukv.cmake
 *.ninja

@@ -53,5 +53,4 @@ class UCSBConan(ConanFile):
         # Your library dependencies go here.
         # https://docs.conan.io/en/latest/reference/conanfile/methods.html#requirements
 
-        self.requires("redis-plus-plus/1.3.3")
         pass

@@ -1,7 +1,7 @@
 # WiredTiger:
 # https://github.com/wiredtiger/wiredtiger/blob/develop/CMakeLists.txt
 
-set(UKV_PREFIX_DIR ${CMAKE_BINARY_DIR}/_deps)
+set(PREFIX_DIR ${CMAKE_BINARY_DIR}/_deps)
 
 include(ExternalProject)
 
@@ -13,20 +13,20 @@ ExternalProject_Add(
     GIT_SHALLOW 1
     GIT_PROGRESS 0
     
-    PREFIX "${UKV_PREFIX_DIR}"
-    DOWNLOAD_DIR "${UKV_PREFIX_DIR}/wiredtiger-src"
-    LOG_DIR "${UKV_PREFIX_DIR}/wiredtiger-log"
-    STAMP_DIR "${UKV_PREFIX_DIR}/wiredtiger-stamp"
-    TMP_DIR "${UKV_PREFIX_DIR}/wiredtiger-tmp"
-    SOURCE_DIR "${UKV_PREFIX_DIR}/wiredtiger-src"
-    INSTALL_DIR "${UKV_PREFIX_DIR}/wiredtiger-install"
-    BINARY_DIR "${UKV_PREFIX_DIR}/wiredtiger-build"
+    PREFIX "${PREFIX_DIR}"
+    DOWNLOAD_DIR "${PREFIX_DIR}/wiredtiger-src"
+    LOG_DIR "${PREFIX_DIR}/wiredtiger-log"
+    STAMP_DIR "${PREFIX_DIR}/wiredtiger-stamp"
+    TMP_DIR "${PREFIX_DIR}/wiredtiger-tmp"
+    SOURCE_DIR "${PREFIX_DIR}/wiredtiger-src"
+    INSTALL_DIR "${PREFIX_DIR}/wiredtiger-install"
+    BINARY_DIR "${PREFIX_DIR}/wiredtiger-build"
 
     BUILD_ALWAYS 0
     UPDATE_COMMAND ""
 
     CMAKE_ARGS
-    -DCMAKE_INSTALL_PREFIX:PATH=${UKV_PREFIX_DIR}/wiredtiger-install
+    -DCMAKE_INSTALL_PREFIX:PATH=${PREFIX_DIR}/wiredtiger-install
     -DCMAKE_INSTALL_LIBDIR=lib
     -DCMAKE_INSTALL_RPATH:PATH=<INSTALL_DIR>/lib
     -DCMAKE_BUILD_TYPE:STRING=${CMAKE_BUILD_TYPE}
@@ -36,8 +36,8 @@ ExternalProject_Add(
     -DCMAKE_CXX_FLAGS=-Wno-unused-variable
 )
 
-set(wiredtiger_INCLUDE_DIR ${UKV_PREFIX_DIR}/wiredtiger-install/include)
-set(wiredtiger_LIBRARY_PATH ${UKV_PREFIX_DIR}/wiredtiger-install/lib/libwiredtiger.a)
+set(wiredtiger_INCLUDE_DIR ${PREFIX_DIR}/wiredtiger-install/include)
+set(wiredtiger_LIBRARY_PATH ${PREFIX_DIR}/wiredtiger-install/lib/libwiredtiger.a)
 
 file(MAKE_DIRECTORY ${wiredtiger_INCLUDE_DIR})
 add_library(wiredtiger STATIC IMPORTED)

@@ -27,7 +27,9 @@ if(NOT rocksdb_POPULATED)
     set(BUILD_SHARED OFF CACHE INTERNAL "")
     set(WITH_TESTS OFF CACHE INTERNAL "")
     set(WITH_TOOLS OFF CACHE INTERNAL "")
+    
     set(CMAKE_ENABLE_SHARED OFF CACHE INTERNAL "")
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-implicit-fallthrough")
 
     FetchContent_Populate(rocksdb)
     add_subdirectory(${rocksdb_SOURCE_DIR} ${rocksdb_BINARY_DIR} EXCLUDE_FROM_ALL)

@@ -1,7 +1,7 @@
 # lmdb:
 # https://github.com/LMDB/lmdb/blob/mdb.master/libraries/liblmdb/Makefile
 
-set(UKV_PREFIX_DIR ${CMAKE_BINARY_DIR}/_deps)
+set(PREFIX_DIR ${CMAKE_BINARY_DIR}/_deps)
 
 include(ExternalProject)
 
@@ -13,25 +13,25 @@ ExternalProject_Add(
     GIT_SHALLOW 1
     GIT_PROGRESS 0
     
-    PREFIX "${UKV_PREFIX_DIR}"
-    DOWNLOAD_DIR "${UKV_PREFIX_DIR}/lmdb-src"
-    LOG_DIR "${UKV_PREFIX_DIR}/lmdb-log"
-    STAMP_DIR "${UKV_PREFIX_DIR}/lmdb-stamp"
-    TMP_DIR "${UKV_PREFIX_DIR}/lmdb-tmp"
-    SOURCE_DIR "${UKV_PREFIX_DIR}/lmdb-src"
-    INSTALL_DIR "${UKV_PREFIX_DIR}/lmdb-install"
-    BINARY_DIR "${UKV_PREFIX_DIR}/lmdb-build"
+    PREFIX "${PREFIX_DIR}"
+    DOWNLOAD_DIR "${PREFIX_DIR}/lmdb-src"
+    LOG_DIR "${PREFIX_DIR}/lmdb-log"
+    STAMP_DIR "${PREFIX_DIR}/lmdb-stamp"
+    TMP_DIR "${PREFIX_DIR}/lmdb-tmp"
+    SOURCE_DIR "${PREFIX_DIR}/lmdb-src"
+    INSTALL_DIR "${PREFIX_DIR}/lmdb-install"
+    BINARY_DIR "${PREFIX_DIR}/lmdb-build"
 
     CONFIGURE_COMMAND ""
     UPDATE_COMMAND ""
     INSTALL_COMMAND ""
     BUILD_ALWAYS 0
 
-    BUILD_COMMAND make CXXFLAGS="-Wno-implicit-fallthrough" -C "${UKV_PREFIX_DIR}/lmdb-src/libraries/liblmdb"
+    BUILD_COMMAND make CXXFLAGS="-Wno-implicit-fallthrough" -C "${PREFIX_DIR}/lmdb-src/libraries/liblmdb"
 )
 
-set(lmdb_INCLUDE_DIR ${UKV_PREFIX_DIR}/lmdb-src/libraries/liblmdb)
-set(lmdb_LIBRARY_PATH ${UKV_PREFIX_DIR}/lmdb-src/libraries/liblmdb/liblmdb.a)
+set(lmdb_INCLUDE_DIR ${PREFIX_DIR}/lmdb-src/libraries/liblmdb)
+set(lmdb_LIBRARY_PATH ${PREFIX_DIR}/lmdb-src/libraries/liblmdb/liblmdb.a)
 
 file(MAKE_DIRECTORY ${lmdb_INCLUDE_DIR})
 add_library(lmdb STATIC IMPORTED)

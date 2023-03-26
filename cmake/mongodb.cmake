@@ -4,6 +4,7 @@
 
 include(FetchContent)
 
+# Build mongo-c-driver
 FetchContent_Declare(
     mongoc
     GIT_REPOSITORY https://github.com/mongodb/mongo-c-driver.git
@@ -11,15 +12,7 @@ FetchContent_Declare(
     GIT_SHALLOW TRUE
 )
 
-FetchContent_Declare(
-    mongocxx
-    GIT_REPOSITORY https://github.com/mongodb/mongo-cxx-driver.git
-    GIT_TAG r3.7.0
-    GIT_SHALLOW TRUE
-)
-
 FetchContent_GetProperties(mongoc)
-FetchContent_GetProperties(mongocxx)
 
 if(NOT mongoc_POPULATED)
     set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wno-implicit-function-declaration")
@@ -30,6 +23,17 @@ if(NOT mongoc_POPULATED)
     add_subdirectory(${mongoc_SOURCE_DIR} ${mongoc_BINARY_DIR} EXCLUDE_FROM_ALL)
 endif()
 
+
+# Build mongo-cxx-driver
+FetchContent_Declare(
+    mongocxx
+    GIT_REPOSITORY https://github.com/mongodb/mongo-cxx-driver.git
+    GIT_TAG r3.7.0
+    GIT_SHALLOW TRUE
+    )
+    
+    FetchContent_GetProperties(mongocxx)
+    
 if(NOT mongocxx_POPULATED)
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-deprecated")
 
@@ -38,5 +42,5 @@ if(NOT mongocxx_POPULATED)
     add_subdirectory(${mongocxx_SOURCE_DIR} ${mongocxx_BINARY_DIR} EXCLUDE_FROM_ALL)
 endif()
 
-include_directories(${mongocxx_BINARY_DIR}/src)
 include_directories(${mongocxx_SOURCE_DIR}/src)
+include_directories(${mongocxx_BINARY_DIR}/src)
