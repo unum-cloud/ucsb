@@ -19,6 +19,7 @@ cmake/*
 !cmake/leveldb.cmake
 !cmake/wiredtiger.cmake
 !cmake/mongodb.cmake
+!cmake/lmdb.cmake
 !cmake/ukv.cmake
 *.ninja
 .clang-format

@@ -124,9 +124,10 @@ include("${CMAKE_MODULE_PATH}/rocksdb.cmake")
 include("${CMAKE_MODULE_PATH}/leveldb.cmake")
 include("${CMAKE_MODULE_PATH}/wiredtiger.cmake")
 include("${CMAKE_MODULE_PATH}/mongodb.cmake")
+include("${CMAKE_MODULE_PATH}/lmdb.cmake")
 include("${CMAKE_MODULE_PATH}/ukv.cmake")
 
-set(CXX_TARGET_LINK_LIBRARIES benchmark fmt rocksdb leveldb wiredtiger mongocxx_shared ukv)
+set(CXX_TARGET_LINK_LIBRARIES benchmark fmt rocksdb leveldb wiredtiger mongocxx_shared lmdb ukv)
 set(CXX_TARGET_LINK_LIBRARIES_WITH_FLAGS z uring)
 
 include(${CMAKE_MODULE_PATH}/conanbuildinfo.cmake)

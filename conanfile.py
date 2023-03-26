@@ -54,5 +54,4 @@ class UCSBConan(ConanFile):
         # https://docs.conan.io/en/latest/reference/conanfile/methods.html#requirements
 
         self.requires("redis-plus-plus/1.3.3")
-        self.requires("lmdb/0.9.29")
         pass
