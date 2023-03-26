@@ -51,4 +51,5 @@ set_property(TARGET redis PROPERTY IMPORTED_LOCATION ${redis_LIBRARY_PATH})
 set_property(TARGET redis APPEND PROPERTY INTERFACE_INCLUDE_DIRECTORIES ${redis_INCLUDE_DIR})
 
 include_directories(${redis_INCLUDE_DIR})
+add_dependencies(redis_external hiredis)
 add_dependencies(redis redis_external)
