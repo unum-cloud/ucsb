@@ -45,7 +45,6 @@ message(STATUS "Python3_SITELIB: ${Python3_SITELIB}")
 set(CMAKE_EXPORT_COMPILE_COMMANDS OFF)
 
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
-set(CONAN_DISABLE_CHECK_COMPILER ON)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -131,9 +130,6 @@ include("${CMAKE_MODULE_PATH}/ukv.cmake")
 set(CXX_TARGET_LINK_LIBRARIES benchmark fmt rocksdb leveldb wiredtiger mongocxx_shared lmdb redis ukv)
 set(CXX_TARGET_LINK_LIBRARIES_WITH_FLAGS z uring)
 
-include(${CMAKE_MODULE_PATH}/conanbuildinfo.cmake)
-conan_basic_setup()
-
 set(CMAKE_THREAD_LIBS_INIT "-lpthread")
 set(CMAKE_HAVE_THREADS_LIBRARY 1)
 set(CMAKE_USE_WIN32_THREADS_INIT 0)
@@ -149,7 +145,6 @@ add_executable(ucsb_bench ./src/bench.cxx)
 target_link_libraries(ucsb_bench${ARTIFACT_SUFFIX} 
   ${CXX_TARGET_LINK_LIBRARIES}
   ${PKG_PACKAGES_LIBRARIES}
-  ${CONAN_LIBS}
   ${CMAKE_DL_LIBS}
   ${CXX_TARGET_LINK_LIBRARIES_WITH_FLAGS}
   -fsanitize=address # Temp solution, wating for Darvin
