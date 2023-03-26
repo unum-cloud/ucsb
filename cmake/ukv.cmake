@@ -50,6 +50,7 @@ ExternalProject_Add(
     -DCMAKE_BUILD_TYPE:STRING=${CMAKE_BUILD_TYPE}
     -DENABLE_STATIC:STRING=ON
     -DENABLE_CPPSUITE:BOOL=OFF
+    -DCMAKE_C_FLAGS=-Wno-maybe-uninitialized
     
     "${UKV_BUILD_ARGS}"
 )
