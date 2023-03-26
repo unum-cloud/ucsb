@@ -12,6 +12,9 @@ CMakeCache.txt
 cmake/*
 !cmake/benchmark.cmake
 !cmake/tabulate.cmake
+!cmake/fmt.cmake
+!cmake/argparse.cmake
+!cmake/nlohmannjson.cmake
 !cmake/rocksdb.cmake
 !cmake/leveldb.cmake
 !cmake/wiredtiger.cmake

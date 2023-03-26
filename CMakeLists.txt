@@ -116,6 +116,9 @@ endif()
 
 include("${CMAKE_MODULE_PATH}/benchmark.cmake")
 include("${CMAKE_MODULE_PATH}/tabulate.cmake")
+include("${CMAKE_MODULE_PATH}/fmt.cmake")
+include("${CMAKE_MODULE_PATH}/argparse.cmake")
+include("${CMAKE_MODULE_PATH}/nlohmannjson.cmake")
 
 include("${CMAKE_MODULE_PATH}/rocksdb.cmake")
 include("${CMAKE_MODULE_PATH}/leveldb.cmake")
@@ -123,7 +126,7 @@ include("${CMAKE_MODULE_PATH}/wiredtiger.cmake")
 include("${CMAKE_MODULE_PATH}/mongodb.cmake")
 include("${CMAKE_MODULE_PATH}/ukv.cmake")
 
-set(CXX_TARGET_LINK_LIBRARIES benchmark rocksdb leveldb wiredtiger mongocxx_shared ukv)
+set(CXX_TARGET_LINK_LIBRARIES benchmark fmt rocksdb leveldb wiredtiger mongocxx_shared ukv)
 set(CXX_TARGET_LINK_LIBRARIES_WITH_FLAGS z uring)
 
 include(${CMAKE_MODULE_PATH}/conanbuildinfo.cmake)

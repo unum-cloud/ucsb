@@ -38,5 +38,5 @@ if(NOT mongocxx_POPULATED)
     add_subdirectory(${mongocxx_SOURCE_DIR} ${mongocxx_BINARY_DIR} EXCLUDE_FROM_ALL)
 endif()
 
-include_directories(${mongocxx_BINARY_DIR}/src/)
-include_directories(${mongocxx_SOURCE_DIR}/src/)
+include_directories(${mongocxx_BINARY_DIR}/src)
+include_directories(${mongocxx_SOURCE_DIR}/src)
