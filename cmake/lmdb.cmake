@@ -27,7 +27,7 @@ ExternalProject_Add(
     INSTALL_COMMAND ""
     BUILD_ALWAYS 0
 
-    BUILD_COMMAND make CXXFLAGS="-Wno-implicit-fallthrough=" -C "${PREFIX_DIR}/lmdb-src/libraries/liblmdb"
+    BUILD_COMMAND make CXXFLAGS="-Wno-implicit-fallthrough" -C "${PREFIX_DIR}/lmdb-src/libraries/liblmdb"
 )
 
 set(lmdb_INCLUDE_DIR ${PREFIX_DIR}/lmdb-src/libraries/liblmdb)
