@@ -65,7 +65,7 @@ inline console_reporter_t::console_reporter_t(std::string const& title)
         "Duration",
     };
 
-    column_width_ = 12;
+    column_width_ = 13;
     workload_column_width_ = 18;
     columns_total_width_ = workload_column_width_ + (columns_.size() - 1) * column_width_ + columns_.size() - 1;
 }
