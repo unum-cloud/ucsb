@@ -268,6 +268,8 @@ struct progress_t {
     size_t last_printed_iterations = 0;
     size_t total_iterations = 0;
 
+    int64_t prev_ops_per_second = 0.0;
+
     static void print_db_open() {
         fmt::print("\33[2K\r");
         fmt::print(" [✱] Opening DB...\r");
@@ -307,24 +309,35 @@ struct progress_t {
 
     void print(std::string const& workload_name, elapsed_time_t operations_elapsed_time, elapsed_time_t elapsed_time) {
 
-        atomic_store(last_printed_iterations, done_iterations);
-
         auto done_percent = 100.f * done_iterations / total_iterations;
-        auto fails = failed_iterations * 100.0 / done_iterations;
+        auto fails_percent = failed_iterations * 100.0 / done_iterations;
         auto ops_per_second = entries_touched / std::chrono::duration<double>(operations_elapsed_time).count();
+        auto opps_delta = int64_t(ops_per_second) - prev_ops_per_second;
         auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(elapsed_time).count();
         auto remaining = std::chrono::milliseconds(size_t((elapsed / done_percent) * (100.f - done_percent))).count();
 
         fmt::print("\33[2K\r");
         auto name = fmt::format(fmt::fg(fmt::color::light_green), "{}", workload_name);
-        auto progress = fmt::format("{:.2f}% [{}/s, fails: {:.2f}%, elapsed time: {}, estimated time left: {}]",
-                                    done_percent,
-                                    printable_float_t {ops_per_second},
-                                    fails,
-                                    printable_duration_t {size_t(elapsed)},
-                                    printable_duration_t {size_t(remaining)});
-        fmt::print(" [✱] {}: {}\r", name, progress);
+        auto opps = fmt::format(fmt::fg(fmt::color::light_yellow), "{}/s", printable_float_t {ops_per_second});
+        std::string delta;
+        if (opps_delta < 0 && std::abs(opps_delta) > prev_ops_per_second * 0.0001)
+            delta = fmt::format(fmt::fg(fmt::color::red), "▼");
+        else if (opps_delta > 0 && std::abs(opps_delta) > prev_ops_per_second * 0.0001)
+            delta = fmt::format(fmt::fg(fmt::color::light_green), "▲");
+        auto fails = fails_percent == 0.0 ? fmt::format("{:.2f}%", fails_percent)
+                                          : fmt::format(fmt::fg(fmt::color::red), "{:.2f}%", fails_percent);
+        fmt::print(" [✱] {}: {:.2f}% [{} {}| fails: {} | elapsed: {} | left: {}]",
+                   name,
+                   done_percent,
+                   opps,
+                   delta,
+                   fails,
+                   printable_duration_t {size_t(elapsed)},
+                   printable_duration_t {size_t(remaining)});
         fflush(stdout);
+
+        atomic_store(last_printed_iterations, done_iterations);
+        atomic_store(prev_ops_per_second, int64_t(ops_per_second));
     }
 
     void clear() {
@@ -334,6 +347,7 @@ struct progress_t {
         done_iterations = 0;
         last_printed_iterations = 0;
         total_iterations = 0;
+        prev_ops_per_second = 0;
     }
 };
 

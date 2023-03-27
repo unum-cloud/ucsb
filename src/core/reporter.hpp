@@ -42,19 +42,19 @@ class console_reporter_t : public bm::BenchmarkReporter {
     bool print_header_;
 
     tabulate::Table::Row_t columns_;
+    size_t fails_column_idx_;
     size_t column_width_;
     size_t workload_column_width_;
     size_t columns_total_width_;
 };
 
 inline console_reporter_t::console_reporter_t(std::string const& title)
-    : base_t(), title_(title), print_header_(true), column_width_(0), workload_column_width_(0),
+    : base_t(), title_(title), print_header_(true), fails_column_idx_(0), column_width_(0), workload_column_width_(0),
       columns_total_width_(0) {
 
     columns_ = {
         "Workload",
         "Throughput",
-        "Data Rate",
         "Data Processed",
         "Disk Usage",
         "CPU (avg,%)",
@@ -64,6 +64,8 @@ inline console_reporter_t::console_reporter_t(std::string const& title)
         "Fails (%)",
         "Duration",
     };
+
+    fails_column_idx_ = 8;
 
     column_width_ = 13;
     workload_column_width_ = 18;
@@ -109,7 +111,6 @@ void console_reporter_t::ReportRuns(std::vector<Run> const& reports) {
 
     // Counters
     double throughput = report.counters.at("operations/s").value;
-    size_t data_rate = report.counters.at("bytes_per_second").value;
     //
     size_t data_processed = report.counters.at("processed,bytes").value;
     size_t disk_usage = report.counters.at("disk,bytes").value;
@@ -126,7 +127,6 @@ void console_reporter_t::ReportRuns(std::vector<Run> const& reports) {
     tabulate::Table table;
     table.add_row({report.run_name.function_name,
                    fmt::format("{}/s", printable_float_t {throughput}),
-                   fmt::format("{}/s", printable_byte_t {data_rate}),
                    fmt::format("{}", printable_byte_t {data_processed}),
                    fmt::format("{}", printable_byte_t {disk_usage}),
                    fmt::format("{}", printable_float_t {cpu_avg}),
@@ -144,7 +144,7 @@ void console_reporter_t::ReportRuns(std::vector<Run> const& reports) {
 
     // Highlight cells
     if (fails > 0)
-        table[0][2].format().font_color(tabulate::Color::red);
+        table[0][fails_column_idx_].format().font_color(tabulate::Color::red);
 
     // Print
     std::cout << table << std::endl;
