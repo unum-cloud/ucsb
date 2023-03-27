@@ -1,13 +1,13 @@
 # UKV:
 # https://github.com/unum-cloud/ukv/blob/main/CMakeLists.txt
 
-set(REPOSITORY_BRANCH "main-dev")
 set(ENGINE_NAME UMEM)
+set(REPOSITORY_BRANCH "main-dev")
 list(APPEND UKV_BUILD_ARGS "-DUKV_BUILD_BUNDLES=1" "-DUKV_BUILD_TESTS=0" "-DUKV_BUILD_BENCHMARKS=0")
 
-if(${ENGINE_NAME} STREQUAL "FLIGHT_CLIENT")
+if(ENGINE_NAME STREQUAL "FLIGHT_CLIENT")
     list(APPEND UKV_BUILD_ARGS "-DUKV_BUILD_API_FLIGHT=1")
-elseif(${ENGINE_NAME} STREQUAL "UDISK")
+elseif(ENGINE_NAME STREQUAL "UDISK")
     set(ENGINE_UDISK_PATH "${CMAKE_BINARY_DIR}/build/lib/libudisk.a")
     list(APPEND UKV_BUILD_ARGS "-DUKV_BUILD_ENGINE_${ENGINE_NAME}=1" "-DUKV_ENGINE_UDISK_PATH=${ENGINE_UDISK_PATH}")
 else()
@@ -60,7 +60,7 @@ set(ukv_LIBRARY_PATH ${UKV_PREFIX_DIR}/ukv-build/build/lib/libukv_${LOWERCASE_EN
 file(MAKE_DIRECTORY ${ukv_INCLUDE_DIRS})
 
 add_library(ukv STATIC IMPORTED)
-if(${ENGINE_NAME} STREQUAL "UDISK")
+if(ENGINE_NAME STREQUAL "UDISK")
     target_link_libraries(ukv INTERFACE dl pthread explain uring numa tbb)
 endif()
 
