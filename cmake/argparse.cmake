@@ -12,6 +12,8 @@ FetchContent_Declare(
 FetchContent_GetProperties(argparse)
 
 if(NOT argparse_POPULATED)
+    set(ARGPARSE_BUILD_TESTS OFF CACHE INTERNAL "")
+
     # Should not be set globally, but just for this target!
     FetchContent_Populate(argparse)
     add_subdirectory(${argparse_SOURCE_DIR} ${argparse_BINARY_DIR} EXCLUDE_FROM_ALL)

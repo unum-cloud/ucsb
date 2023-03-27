@@ -12,6 +12,8 @@ FetchContent_Declare(
 FetchContent_GetProperties(tabulate)
 
 if(NOT tabulate_POPULATED)
+    set(tabulate_BUILD_TESTS OFF CACHE INTERNAL "")
+
     # Should not be set globally, but just for this target!
     FetchContent_Populate(tabulate)
     add_subdirectory(${tabulate_SOURCE_DIR} ${tabulate_BINARY_DIR} EXCLUDE_FROM_ALL)

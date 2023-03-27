@@ -34,7 +34,10 @@ ExternalProject_Add(
     -DENABLE_CPPSUITE:BOOL=OFF
     -DCMAKE_C_FLAGS=-Wno-maybe-uninitialized
     -DCMAKE_CXX_FLAGS=-Wno-unused-variable
+    -DENABLE_SSL:BOOL=OFF
     -DDISABLE_TESTS:BOOL=ON
+    -DENABLE_SSL_TESTS:BOOL=OFF
+    -DENABLE_ASYNC_TESTS:BOOL=OFF
 )
 
 set(hiredis_INCLUDE_DIR ${PREFIX_DIR}/hiredis-install/include)

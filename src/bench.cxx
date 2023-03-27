@@ -317,7 +317,7 @@ struct progress_t {
 
         fmt::print("\33[2K\r");
         auto name = fmt::format(fmt::fg(fmt::color::light_green), "{}", workload_name);
-        auto progress = fmt::format("{:.2f}% [{}/s, fails: {:.2f}%, elapsed: {}, remaining: {}]",
+        auto progress = fmt::format("{:.2f}% [{}/s, fails: {:.2f}%, elapsed time: {}, estimated time left: {}]",
                                     done_percent,
                                     printable_float_t {ops_per_second},
                                     fails,

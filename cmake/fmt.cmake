@@ -12,6 +12,8 @@ FetchContent_Declare(
 FetchContent_GetProperties(fmt)
 
 if(NOT fmt_POPULATED)
+    set(FMT_MASTER_PROJECT OFF CACHE INTERNAL "")
+
     # Should not be set globally, but just for this target!
     FetchContent_Populate(fmt)
     add_subdirectory(${fmt_SOURCE_DIR} ${fmt_BINARY_DIR} EXCLUDE_FROM_ALL)

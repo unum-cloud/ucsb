@@ -35,6 +35,7 @@ FetchContent_Declare(
     FetchContent_GetProperties(mongocxx)
     
 if(NOT mongocxx_POPULATED)
+    set(ENABLE_TESTS OFF CACHE INTERNAL "")
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-deprecated")
 
     # Should not be set globally, but just for this target!

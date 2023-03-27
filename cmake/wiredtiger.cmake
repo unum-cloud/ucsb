@@ -34,6 +34,10 @@ ExternalProject_Add(
     -DENABLE_CPPSUITE:BOOL=OFF
     -DCMAKE_C_FLAGS=-Wno-maybe-uninitialized
     -DCMAKE_CXX_FLAGS=-Wno-unused-variable
+    -DENABLE_PYTHON:BOOL=OFF
+    -DENABLE_LLVM:BOOL=OFF
+    -DHAVE_UNITTEST:BOOL=OFF
+    -DENABLE_SHARED:BOOL=OFF
 )
 
 set(wiredtiger_INCLUDE_DIR ${PREFIX_DIR}/wiredtiger-install/include)
