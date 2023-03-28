@@ -146,10 +146,6 @@ class fmt::formatter<ucsb::printable_float_t> {
         else
             value /= std::pow(1'000, suffix_idx);
 
-        // Resolve precision
-        if (value == 0.0)
-            precision = 0;
-
         std::string format;
         if (suffix_idx == 0)
             format = fmt::format("{{:.{}f}}", precision);

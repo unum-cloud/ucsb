@@ -129,11 +129,11 @@ void console_reporter_t::ReportRuns(std::vector<Run> const& reports) {
                    fmt::format("{}/s", printable_float_t {throughput}),
                    fmt::format("{}", printable_byte_t {data_processed}),
                    fmt::format("{}", printable_byte_t {disk_usage}),
-                   fmt::format("{}", printable_float_t {cpu_avg}),
-                   fmt::format("{}", printable_float_t {cpu_max}),
+                   fmt::format("{:.1f}", cpu_avg),
+                   fmt::format("{:.1f}", cpu_max),
                    fmt::format("{}", printable_byte_t {mem_avg}),
                    fmt::format("{}", printable_byte_t {mem_max}),
-                   fmt::format("{}", printable_float_t {fails}),
+                   fmt::format("{}", fails),
                    fmt::format("{}", printable_duration_t {size_t(duration)})});
     table.row(0).format().width(column_width_).font_align(tabulate::FontAlign::right).hide_border_top().locale("C");
     table.column(0)

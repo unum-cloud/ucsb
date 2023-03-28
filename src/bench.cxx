@@ -96,7 +96,7 @@ std::string build_title(settings_t const& settings, workloads_t const& workloads
     if (!db_info.empty())
         infos.push_back(fmt::format("Engine: {}", db_info));
 
-    return fmt::format("{}", fmt::join(infos, ", "));
+    return fmt::format("{}", fmt::join(infos, " | "));
 }
 
 template <typename func_at>
