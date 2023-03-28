@@ -45,3 +45,5 @@ endif()
 
 include_directories(${mongocxx_SOURCE_DIR}/src)
 include_directories(${mongocxx_BINARY_DIR}/src)
+
+add_library(mongodb ALIAS mongocxx_shared)

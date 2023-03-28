@@ -19,13 +19,13 @@ See main() function.
 """
 
 supported_db_names = [
+    'ukv'
     'rocksdb',
     'leveldb',
     'wiredtiger',
-    'lmdb',
     'mongodb',
     'redis',
-    'ukv'
+    'lmdb',
 ]
 
 supported_sizes = [

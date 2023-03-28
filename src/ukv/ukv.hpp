@@ -114,15 +114,14 @@ bool ukv_t::open(std::string& error) {
     if (config.directory.empty())
         config.directory = main_dir_path_;
     if (config.data_directories.empty()) {
-#if defined(UKV_ENGINE_IS_ROCKSDB) || defined(UKV_ENGINE_IS_UDISK)
-        for (auto const& dir : storage_dir_paths_) {
 #if defined(UKV_ENGINE_IS_ROCKSDB)
+        for (auto const& dir : storage_dir_paths_) {
             size_t storage_size_on_disk = (hints_.records_count * hints_.value_length) / storage_dir_paths_.size();
             config.data_directories.push_back({dir, storage_size_on_disk});
-#else
-            config.data_directories.push_back({dir, ukv::disk_config_t::unlimited_space_k});
-#endif
         }
+#else
+        for (auto const& dir : storage_dir_paths_)
+            config.data_directories.push_back({dir, ukv::disk_config_t::unlimited_space_k});
 #endif
     }
 
@@ -130,16 +129,10 @@ bool ukv_t::open(std::string& error) {
     if (config.engine.config_file_path.empty()) {
         auto configs_root = config_path_.parent_path().parent_path();
         if (configs_root.filename() != "configs") {
-            error = "Invalid config directory";
+            error = "Invalid configs directory";
             return false;
         }
-#if defined(UKV_ENGINE_IS_ROCKSDB)
-        config.engine.config_file_path = configs_root / "rocksdb" / config_path_.filename();
-#elif defined(UKV_ENGINE_IS_LEVELDB)
-        config.engine.config_file_path = configs_root / "leveldb" / config_path_.filename();
-#elif defined(UKV_ENGINE_IS_UDISK)
-        config.engine.config_file_path = configs_root / "udisk" / config_path_.filename();
-#endif
+        config.engine.config_file_path = configs_root / UKV_ENGINE_NAME / config_path_.filename();
         // Select default config if the specified doesn't exist
         if (!fs::exists(config.engine.config_file_path))
             config.engine.config_file_path = fs::path(config.engine.config_file_path).parent_path() / "default.cfg";

@@ -544,10 +544,7 @@ int main(int argc, char** argv) {
         db_brand_t db_brand = parse_db_brand(settings.db_name);
         std::shared_ptr<db_t> db = make_db(db_brand, settings.transactional);
         if (!db) {
-            if (settings.transactional)
-                fmt::print("Failed to create transactional DB: {}\n", settings.db_name);
-            else
-                fmt::print("Failed to create DB: {}\n", settings.db_name);
+            fmt::print("Failed to create DB: {} (probably it's disabled in CMaleLists.txt)\n", settings.db_name);
             return 1;
         }
         db->set_config(settings.db_config_file_path,
