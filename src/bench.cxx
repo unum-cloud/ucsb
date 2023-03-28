@@ -272,32 +272,37 @@ struct progress_t {
 
     static void print_db_open() {
         fmt::print("\33[2K\r");
-        fmt::print(" [✱] Opening DB...\r");
+        fmt::print(" [✱] Opening DB...");
         fflush(stdout);
     }
 
     static void print_db_close() {
         fmt::print("\33[2K\r");
-        fmt::print(" [✱] Closing DB...\r");
+        fmt::print(" [✱] Closing DB...");
         fflush(stdout);
     }
 
     static void print_db_flush() {
         fmt::print("\33[2K\r");
-        fmt::print(" [✱] Flushing DB...\r");
+        fmt::print(" [✱] Flushing DB...");
+        fflush(stdout);
+    }
+
+    static void clear_last_print() {
+        fmt::print("\33[2K\r");
         fflush(stdout);
     }
 
     void print_start(std::string const& workload_name) {
         fmt::print("\33[2K\r");
         auto name = fmt::format(fmt::fg(fmt::color::light_green), "{}", workload_name);
-        fmt::print(" [✱] {}: 0.00%\r", name, 0.0);
+        fmt::print(" [✱] {}: 0.00%", name, 0.0);
         fflush(stdout);
     }
 
     void print_end() {
         fmt::print("\33[2K\r");
-        fmt::print(" [✱] Completed\r");
+        fmt::print(" [✱] Completed");
         fflush(stdout);
     }
 
@@ -318,18 +323,17 @@ struct progress_t {
 
         fmt::print("\33[2K\r");
         auto name = fmt::format(fmt::fg(fmt::color::light_green), "{}", workload_name);
-        auto opps = fmt::format(fmt::fg(fmt::color::light_yellow), "{}/s", printable_float_t {ops_per_second});
         std::string delta;
         if (opps_delta < 0 && std::abs(opps_delta) > prev_ops_per_second * 0.0001)
             delta = fmt::format(fmt::fg(fmt::color::red), "▼");
         else if (opps_delta > 0 && std::abs(opps_delta) > prev_ops_per_second * 0.0001)
-            delta = fmt::format(fmt::fg(fmt::color::light_green), "▲");
-        auto fails = fails_percent == 0.0 ? fmt::format("{:.2f}%", fails_percent)
-                                          : fmt::format(fmt::fg(fmt::color::red), "{:.2f}%", fails_percent);
+            delta = fmt::format(fmt::fg(fmt::color::green), "▲");
+        auto fails = fails_percent == 0.0 ? fmt::format("{}%", fails_percent)
+                                          : fmt::format(fmt::fg(fmt::color::red), "{}%", fails_percent);
         fmt::print(" [✱] {}: {:.2f}% [{} {}| fails: {} | elapsed: {} | left: {}]",
                    name,
                    done_percent,
-                   opps,
+                   printable_float_t {ops_per_second},
                    delta,
                    fails,
                    printable_duration_t {size_t(elapsed)},
@@ -468,6 +472,7 @@ void bench(bm::State& state, workload_t const& workload, db_t& db, bool transact
     if (state.thread_index() == 0) {
         progress_t::print_db_close();
         db.close();
+        progress_t::clear_last_print();
     }
 }
 
