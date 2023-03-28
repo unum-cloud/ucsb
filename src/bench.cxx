@@ -80,8 +80,13 @@ void parse_and_validate_args(int argc, char* argv[], settings_t& settings) {
 std::string build_title(settings_t const& settings, workloads_t const& workloads, std::string const& db_info) {
 
     std::vector<std::string> infos;
+    std::string db_details;
     if (settings.transactional)
-        infos.push_back(fmt::format("Database: {} ({})", settings.db_name, "transactional"));
+        db_details.append("transactional");
+    if (!db_info.empty())
+        db_details.append(db_details.empty() ? db_info : fmt::format(", {}", db_info));
+    if (!db_details.empty())
+        infos.push_back(fmt::format("Database: {} ({})", settings.db_name, db_details));
     else
         infos.push_back(fmt::format("Database: {}", settings.db_name));
 
@@ -92,9 +97,6 @@ std::string build_title(settings_t const& settings, workloads_t const& workloads
 
     infos.push_back(fmt::format("Threads: {}", settings.threads_count));
     infos.push_back(fmt::format("Disks: {}", std::max(size_t(1), settings.db_storage_dir_paths.size())));
-
-    if (!db_info.empty())
-        infos.push_back(fmt::format("Engine: {}", db_info));
 
     return fmt::format("{}", fmt::join(infos, " | "));
 }
