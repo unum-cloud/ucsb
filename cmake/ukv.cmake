@@ -15,11 +15,11 @@ else()
 endif()
 
 string(TOLOWER ${ENGINE_NAME} LOWERCASE_ENGINE_NAME)
-set(UKV_PREFIX_DIR ${CMAKE_BINARY_DIR}/_deps)
+set(PREFIX_DIR ${CMAKE_BINARY_DIR}/_deps)
 
 set(VERSION_URL "https://raw.githubusercontent.com/unum-cloud/ukv/${REPOSITORY_BRANCH}/VERSION")
-file(DOWNLOAD "\"${VERSION_URL}\"" "${UKV_PREFIX_DIR}/ukv-src/VERSION")
-file(READ "${UKV_PREFIX_DIR}/ukv-src/VERSION" UKV_VERSION)
+file(DOWNLOAD "${VERSION_URL}" "${PREFIX_DIR}/ukv-src/VERSION")
+file(STRINGS "${PREFIX_DIR}/ukv-src/VERSION" UKV_VERSION)
 
 include(ExternalProject)
 
@@ -31,20 +31,20 @@ ExternalProject_Add(
     GIT_SHALLOW 1
     GIT_PROGRESS 0
     
-    PREFIX "${UKV_PREFIX_DIR}"
-    DOWNLOAD_DIR "${UKV_PREFIX_DIR}/ukv-src"
-    LOG_DIR "${UKV_PREFIX_DIR}/ukv-log"
-    STAMP_DIR "${UKV_PREFIX_DIR}/ukv-stamp"
-    TMP_DIR "${UKV_PREFIX_DIR}/ukv-tmp"
-    SOURCE_DIR "${UKV_PREFIX_DIR}/ukv-src"
-    INSTALL_DIR "${UKV_PREFIX_DIR}/ukv-install"
-    BINARY_DIR "${UKV_PREFIX_DIR}/ukv-build"
+    PREFIX "${PREFIX_DIR}"
+    DOWNLOAD_DIR "${PREFIX_DIR}/ukv-src"
+    LOG_DIR "${PREFIX_DIR}/ukv-log"
+    STAMP_DIR "${PREFIX_DIR}/ukv-stamp"
+    TMP_DIR "${PREFIX_DIR}/ukv-tmp"
+    SOURCE_DIR "${PREFIX_DIR}/ukv-src"
+    INSTALL_DIR "${PREFIX_DIR}/ukv-install"
+    BINARY_DIR "${PREFIX_DIR}/ukv-build"
 
     BUILD_ALWAYS 0
     UPDATE_COMMAND ""
 
     CMAKE_ARGS
-    -DCMAKE_INSTALL_PREFIX:PATH=${UKV_PREFIX_DIR}/ukv-install
+    -DCMAKE_INSTALL_PREFIX:PATH=${PREFIX_DIR}/ukv-install
     -DCMAKE_INSTALL_LIBDIR=lib
     -DCMAKE_INSTALL_RPATH:PATH=<INSTALL_DIR>/lib
     -DCMAKE_BUILD_TYPE:STRING=${CMAKE_BUILD_TYPE}
@@ -55,8 +55,8 @@ ExternalProject_Add(
     "${UKV_BUILD_ARGS}"
 )
 
-list(APPEND ukv_INCLUDE_DIRS ${UKV_PREFIX_DIR}/ukv-src/include ${UKV_PREFIX_DIR}/ukv-src/src)
-set(ukv_LIBRARY_PATH ${UKV_PREFIX_DIR}/ukv-build/build/lib/libukv_${LOWERCASE_ENGINE_NAME}_bundle.a)
+list(APPEND ukv_INCLUDE_DIRS ${PREFIX_DIR}/ukv-src/include ${PREFIX_DIR}/ukv-src/src)
+set(ukv_LIBRARY_PATH ${PREFIX_DIR}/ukv-build/build/lib/libukv_${LOWERCASE_ENGINE_NAME}_bundle.a)
 file(MAKE_DIRECTORY ${ukv_INCLUDE_DIRS})
 
 add_library(ukv STATIC IMPORTED)
