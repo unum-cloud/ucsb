@@ -168,9 +168,7 @@ bool leveldb_t::open(std::string& error) {
     return status.ok();
 }
 
-void leveldb_t::close() {
-    db_.reset(nullptr);
-}
+void leveldb_t::close() { db_.reset(nullptr); }
 
 operation_result_t leveldb_t::upsert(key_t key, value_spanc_t value) {
     leveldb::Status status = db_->Put(write_options_, to_slice(key), to_slice(value));
