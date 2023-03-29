@@ -1,20 +1,20 @@
 # UKV:
 # https://github.com/unum-cloud/ukv/blob/main/CMakeLists.txt
 
-set(ENGINE_NAME UMEM)
+option(UKV_ENGINE_NAME "Choose engine" "UMEM")
 set(REPOSITORY_BRANCH "main-dev")
-list(APPEND UKV_BUILD_ARGS "-DUKV_BUILD_BUNDLES=1" "-DUKV_BUILD_TESTS=0" "-DUKV_BUILD_BENCHMARKS=0")
+list(APPEND BUILD_ARGS "-DUKV_BUILD_BUNDLES=1" "-DUKV_BUILD_TESTS=0" "-DUKV_BUILD_BENCHMARKS=0")
 
-if(ENGINE_NAME STREQUAL "FLIGHT_CLIENT")
-    list(APPEND UKV_BUILD_ARGS "-DUKV_BUILD_API_FLIGHT=1")
-elseif(ENGINE_NAME STREQUAL "UDISK")
+if(UKV_ENGINE_NAME STREQUAL "FLIGHT_CLIENT")
+    list(APPEND BUILD_ARGS "-DUKV_BUILD_API_FLIGHT=1")
+elseif(UKV_ENGINE_NAME STREQUAL "UDISK")
     set(ENGINE_UDISK_PATH "${CMAKE_BINARY_DIR}/build/lib/libudisk.a")
-    list(APPEND UKV_BUILD_ARGS "-DUKV_BUILD_ENGINE_${ENGINE_NAME}=1" "-DUKV_ENGINE_UDISK_PATH=${ENGINE_UDISK_PATH}")
+    list(APPEND BUILD_ARGS "-DUKV_BUILD_ENGINE_${UKV_ENGINE_NAME}=1" "-DUKV_ENGINE_NAME_UDISK_PATH=${ENGINE_UDISK_PATH}")
 else()
-    list(APPEND UKV_BUILD_ARGS "-DUKV_BUILD_ENGINE_${ENGINE_NAME}=1")
+    list(APPEND BUILD_ARGS "-DUKV_BUILD_ENGINE_${UKV_ENGINE_NAME}=1")
 endif()
 
-string(TOLOWER ${ENGINE_NAME} LOWERCASE_ENGINE_NAME)
+string(TOLOWER ${UKV_ENGINE_NAME} LOWERCASE_ENGINE_NAME)
 set(PREFIX_DIR ${CMAKE_BINARY_DIR}/_deps)
 
 set(VERSION_URL "https://raw.githubusercontent.com/unum-cloud/ukv/${REPOSITORY_BRANCH}/VERSION")
@@ -52,7 +52,7 @@ ExternalProject_Add(
     -DENABLE_CPPSUITE:BOOL=OFF
     -DCMAKE_C_FLAGS=-Wno-maybe-uninitialized -Wno-implicit-fallthrough
     
-    "${UKV_BUILD_ARGS}"
+    "${BUILD_ARGS}"
 )
 
 list(APPEND ukv_INCLUDE_DIRS ${PREFIX_DIR}/ukv-src/include ${PREFIX_DIR}/ukv-src/src)
@@ -60,12 +60,12 @@ set(ukv_LIBRARY_PATH ${PREFIX_DIR}/ukv-build/build/lib/libukv_${LOWERCASE_ENGINE
 file(MAKE_DIRECTORY ${ukv_INCLUDE_DIRS})
 
 add_library(ukv STATIC IMPORTED)
-if(ENGINE_NAME STREQUAL "UDISK")
+if(UKV_ENGINE_NAME STREQUAL "UDISK")
     target_link_libraries(ukv INTERFACE dl pthread explain uring numa tbb)
 endif()
 
 target_compile_definitions(ukv INTERFACE UKV_VERSION="${UKV_VERSION}") 
-target_compile_definitions(ukv INTERFACE UKV_ENGINE_IS_${ENGINE_NAME}=1) 
+target_compile_definitions(ukv INTERFACE UKV_ENGINE_NAME_IS_${UKV_ENGINE_NAME}=1) 
 target_compile_definitions(ukv INTERFACE UKV_ENGINE_NAME="${LOWERCASE_ENGINE_NAME}") 
 
 set_property(TARGET ukv PROPERTY IMPORTED_LOCATION ${ukv_LIBRARY_PATH})

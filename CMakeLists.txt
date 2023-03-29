@@ -129,6 +129,8 @@ set(UCSB_DB_LIBS)
 add_executable(ucsb_bench ./src/bench.cxx)
 
 if(${UCSB_BUILD_UKV})
+  set(UKV_ENGINE_NAME UMEM) # Choose engine
+
   include("${CMAKE_MODULE_PATH}/ukv.cmake")
   list(APPEND UCSB_DB_LIBS "ukv")
   target_compile_definitions(ucsb_bench PUBLIC UCSB_HAS_UKV=1) 
