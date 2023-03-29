@@ -19,13 +19,13 @@ See main() function.
 """
 
 supported_db_names = [
+    'ukv',
     'rocksdb',
     'leveldb',
     'wiredtiger',
-    'lmdb',
     'mongodb',
     'redis',
-    'ukv'
+    'lmdb',
 ]
 
 supported_sizes = [
@@ -77,8 +77,7 @@ def get_db_main_dir_path(db_name: str, size: str, main_dir_path: str) -> str:
 def get_db_storage_dir_paths(db_name: str, size: str, storage_disk_paths: str) -> list:
     db_storage_dir_paths = []
     for storage_disk_path in storage_disk_paths:
-        db_storage_dir_paths.append(os.path.join(
-            storage_disk_path, db_name, size, ''))
+        db_storage_dir_paths.append(os.path.join(storage_disk_path, db_name, size, ''))
     return db_storage_dir_paths
 
 
@@ -106,11 +105,10 @@ def drop_system_caches():
             stream.write('3\n')
         time.sleep(8)
     except KeyboardInterrupt:
-        print('\33[2K\r', end='')
-        print('Terminated')
+        print(termcolor.colored('Terminated by user', 'yellow'))
         exit(1)
     except:
-        print('Failed to drop system caches')
+        print(termcolor.colored('Failed to drop system caches', 'red'))
         exit(1)
 
 
@@ -118,10 +116,8 @@ def run(db_name: str, size: str, workload_names: list, main_dir_path: str, stora
     db_config_file_path = get_db_config_file_path(db_name, size)
     workloads_file_path = get_workloads_file_path(size)
     db_main_dir_path = get_db_main_dir_path(db_name, size, main_dir_path)
-    db_storage_dir_paths = get_db_storage_dir_paths(
-        db_name, size, storage_disk_paths)
-    results_file_path = get_results_file_path(
-        db_name, size, drop_caches, transactional, storage_disk_paths, threads_count)
+    db_storage_dir_paths = get_db_storage_dir_paths(db_name, size, storage_disk_paths)
+    results_file_path = get_results_file_path(db_name, size, drop_caches, transactional, storage_disk_paths, threads_count)
 
     transactional_flag = '-t' if transactional else ''
     filter = ','.join(workload_names)
@@ -131,7 +127,7 @@ def run(db_name: str, size: str, workload_names: list, main_dir_path: str, stora
     if run_docker_image:
         runner = f'docker run -v {os.getcwd()}/bench:/ucsb/bench -v {os.getcwd()}/tmp:/ucsb/tmp -it ucsb-image-dev'
     else:
-        runner = './build_release/bin/ucsb_bench'
+        runner = './build_release/build/bin/ucsb_bench'
     process = pexpect.spawn(f'{runner} \
                             -db {db_name} \
                             {transactional_flag} \
@@ -148,13 +144,11 @@ def run(db_name: str, size: str, workload_names: list, main_dir_path: str, stora
 
     # Handle signal
     if process.signalstatus:
-        print('\33[2K\r', end='')
         sig = signal.Signals(process.signalstatus)
         if sig == signal.SIGINT:
             print(termcolor.colored('Benchmark terminated by user', 'yellow'))
         else:
-            print(termcolor.colored(
-                f'Benchmark terminated (signal: {sig.name})', 'red'))
+            print(termcolor.colored(f'Benchmark terminated (signal: {sig.name})', 'red'))
         exit(process.signalstatus)
 
 
@@ -175,11 +169,12 @@ def main(db_names: Optional[list[str]] = supported_db_names,
          threads_count: Optional[int] = default_threads_count,
          transactional: Optional[bool] = False,
          cleanup_previous: Optional[bool] = True,
-         drop_caches: Optional[bool] = True,
+         drop_caches: Optional[bool] = False,
          run_docker_image: Optional[bool] = False) -> None:
 
     if os.geteuid() != 0:
-        sys.exit('Run as sudo!')
+        print(termcolor.colored(f'Run as sudo!', 'red'))
+        sys.exit(-1)
     check_args(db_names, sizes, workload_names)
 
     # Cleanup old DBs (Note: It actually cleanups if the first workload is `Init`)
@@ -188,13 +183,11 @@ def main(db_names: Optional[list[str]] = supported_db_names,
         for size in sizes:
             for db_name in db_names:
                 # Remove DB main directory
-                db_main_dir_path = get_db_main_dir_path(
-                    db_name, size, main_dir_path)
+                db_main_dir_path = get_db_main_dir_path(db_name, size, main_dir_path)
                 if pathlib.Path(db_main_dir_path).exists():
                     shutil.rmtree(db_main_dir_path)
                 # Remove DB storage directories
-                db_storage_dir_paths = get_db_storage_dir_paths(
-                    db_name, size, storage_disk_paths)
+                db_storage_dir_paths = get_db_storage_dir_paths(db_name, size, storage_disk_paths)
                 for db_storage_dir_path in db_storage_dir_paths:
                     if pathlib.Path(db_storage_dir_path).exists():
                         shutil.rmtree(db_storage_dir_path)
@@ -203,29 +196,25 @@ def main(db_names: Optional[list[str]] = supported_db_names,
     for size in sizes:
         for db_name in db_names:
             # Create DB main directory
-            db_main_dir_path = get_db_main_dir_path(
-                db_name, size, main_dir_path)
+            db_main_dir_path = get_db_main_dir_path(db_name, size, main_dir_path)
             pathlib.Path(db_main_dir_path).mkdir(parents=True, exist_ok=True)
             # Create DB storage directories
-            db_storage_dir_paths = get_db_storage_dir_paths(
-                db_name, size, storage_disk_paths)
+            db_storage_dir_paths = get_db_storage_dir_paths(db_name, size, storage_disk_paths)
             for db_storage_dir_path in db_storage_dir_paths:
                 pathlib.Path(db_storage_dir_path).mkdir(
                     parents=True, exist_ok=True)
             # Create results dir paths
-            pathlib.Path(get_results_file_path(db_name, size, drop_caches, transactional, storage_disk_paths, threads_count)
-                         ).parent.mkdir(parents=True, exist_ok=True)
+            results_file_path = get_results_file_path(db_name, size, drop_caches, transactional, storage_disk_paths, threads_count)
+            pathlib.Path(results_file_path).parent.mkdir(parents=True, exist_ok=True)
 
             # Run benchmark
             if drop_caches:
                 for workload_name in workload_names:
                     if not run_docker_image:
                         drop_system_caches()
-                    run(db_name, size, [workload_name], main_dir_path, storage_disk_paths,
-                        transactional, drop_caches, run_docker_image, threads_count)
+                    run(db_name, size, [workload_name], main_dir_path, storage_disk_paths, transactional, drop_caches, run_docker_image, threads_count)
             else:
-                run(db_name, size, workload_names, main_dir_path, storage_disk_paths,
-                    transactional, drop_caches, run_docker_image, threads_count)
+                run(db_name, size, workload_names, main_dir_path, storage_disk_paths, transactional, drop_caches, run_docker_image, threads_count)
 
 
 if __name__ == '__main__':

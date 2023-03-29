@@ -71,8 +71,8 @@ class rocksdb_t : public ucsb::db_t {
                     fs::path const& main_dir_path,
                     std::vector<fs::path> const& storage_dir_paths,
                     db_hints_t const& hints) override;
-    bool open() override;
-    bool close() override;
+    bool open(std::string& error) override;
+    void close() override;
 
     std::string info() override;
 
@@ -142,24 +142,24 @@ void rocksdb_t::set_config(fs::path const& config_path,
     hints_ = hints;
 }
 
-bool rocksdb_t::open() {
+bool rocksdb_t::open(std::string& error) {
     if (db_)
         return true;
 
     options_ = rocksdb::Options();
     rocksdb::Status status =
         rocksdb::LoadOptionsFromFile(config_path_.string(), rocksdb::Env::Default(), &options_, &cf_descs_);
-    if (!status.ok() || cf_descs_.empty())
+    if (!status.ok()) {
+        error = status.ToString();
         return false;
-    if (!load_additional_options())
+    }
+    if (cf_descs_.empty()) {
+        error = "Column family not found";
         return false;
-
-    // Create DB paths
-    for (auto const& db_path : options_.db_paths) {
-        if (fs::exists(db_path.path))
-            continue;
-        if (!fs::create_directories(db_path.path))
-            return false;
+    }
+    if (!load_additional_options()) {
+        error = "Failed to additional load config";
+        return false;
     }
 
     rocksdb::BlockBasedTableOptions table_options;
@@ -192,10 +192,11 @@ bool rocksdb_t::open() {
     db_.reset(db_raw);
     full_compaction_.store(false);
 
+    error = status.ok() ? std::string() : status.ToString();
     return status.ok();
 }
 
-bool rocksdb_t::close() {
+void rocksdb_t::close() {
     batch_keys.clear();
     key_slices.clear();
     value_slices.clear();
@@ -205,7 +206,6 @@ bool rocksdb_t::close() {
     cf_descs_.clear();
     cf_handles_.clear();
     transaction_db_ = nullptr;
-    return true;
 }
 
 operation_result_t rocksdb_t::upsert(key_t key, value_spanc_t value) {

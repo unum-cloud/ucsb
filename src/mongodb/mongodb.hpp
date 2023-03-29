@@ -56,8 +56,8 @@ class mongodb_t : public ucsb::db_t {
                     fs::path const& main_dir_path,
                     std::vector<fs::path> const& storage_dir_paths,
                     db_hints_t const& hints) override;
-    bool open() override;
-    bool close() override;
+    bool open(std::string& error) override;
+    void close() override;
 
     std::string info() override;
 
@@ -123,10 +123,12 @@ void mongodb_t::set_config(fs::path const& config_path,
     coll_name = main_dir_path.parent_path().filename();
 };
 
-bool mongodb_t::open() {
+bool mongodb_t::open(std::string& error) {
 
-    if (!storage_dir_paths_.empty())
+    if (!storage_dir_paths_.empty()) {
+        error = "Doesn't support multiple disks";
         return false;
+    }
 
     std::string start_cmd = "mongod --config ";
     start_cmd += config_path_;
@@ -135,14 +137,13 @@ bool mongodb_t::open() {
     return true;
 }
 
-bool mongodb_t::close() {
+void mongodb_t::close() {
     batch_keys_array.clear();
     batch_keys_map.clear();
     std::string stop_cmd = "sudo mongod -f ";
     stop_cmd += config_path_;
     stop_cmd += " --shutdown";
     exec_cmd(stop_cmd.c_str());
-    return true;
 }
 
 operation_result_t mongodb_t::upsert(key_t key, value_spanc_t value) {

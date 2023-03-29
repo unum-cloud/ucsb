@@ -5,6 +5,18 @@
 cmake_minimum_required(VERSION 3.20.1)
 
 #######################################################################################################################
+# Enable/Disable Databases
+#######################################################################################################################
+
+option(UCSB_BUILD_UKV "Build UKV for the benchmark" ON)
+option(UCSB_BUILD_ROCKSDB "Build RocksDB for the benchmark" ON)
+option(UCSB_BUILD_LEVELDB "Build LevelDB for the benchmark" ON)
+option(UCSB_BUILD_WIREDTIGER "Build WiredTiger for the benchmark" ON)
+option(UCSB_BUILD_MONGODB "Build MongoDB for the benchmark" OFF)
+option(UCSB_BUILD_REDIS "Build Redis for the benchmark" OFF)
+option(UCSB_BUILD_LMDB "Build LMDB for the benchmark" OFF)
+
+#######################################################################################################################
 # Set compiler
 #######################################################################################################################
 
@@ -45,7 +57,6 @@ message(STATUS "Python3_SITELIB: ${Python3_SITELIB}")
 set(CMAKE_EXPORT_COMPILE_COMMANDS OFF)
 
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
-set(CONAN_DISABLE_CHECK_COMPILER ON)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -72,7 +83,6 @@ set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fno-builtin-memcmp")
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wreorder -Wunused-parameter")
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -Wextra -Wno-unknown-pragmas")
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -frtti -fPIC")
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Winline")
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wattributes")
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wdeprecated-copy")
 
@@ -82,12 +92,6 @@ set(CMAKE_C_FLAGS_DEBUG "${CMAKE_C_FLAGS_DEBUG} -DDEBUG_SAFE_MODE -g")
 set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -DDEBUG_SAFE_MODE -g")
 set(CMAKE_C_FLAGS_RELEASE "${CMAKE_C_FLAGS_RELEASE} -DNDEBUG -O2")
 set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -DNDEBUG -O2")
-
-# Custom flags.
-set(CMAKE_C_FLAGS_DEBUG "${CMAKE_C_FLAGS_DEBUG} -DHAS_FMT -DHAS_GTEST -DHAS_BENCHMARK -DHAS_NLOHMANN_JSON -DHAS_ROCKSDB -DHAS_LEVELDB -DHAS_WIREDTIGER -DHAS_LMDB -DHAS_UKV")
-set(CMAKE_C_FLAGS_RELEASE "${CMAKE_C_FLAGS_RELEASE} -DHAS_FMT -DHAS_GTEST -DHAS_BENCHMARK -DHAS_NLOHMANN_JSON -DHAS_ROCKSDB -DHAS_LEVELDB -DHAS_WIREDTIGER -DHAS_LMDB -DHAS_UKV")
-set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -DHAS_FMT -DHAS_GTEST -DHAS_BENCHMARK -DHAS_NLOHMANN_JSON -DHAS_ROCKSDB -DHAS_LEVELDB -DHAS_WIREDTIGER -DHAS_LMDB -DHAS_UKV")
-set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -DHAS_FMT -DHAS_GTEST -DHAS_BENCHMARK -DHAS_NLOHMANN_JSON -DHAS_ROCKSDB -DHAS_LEVELDB -DHAS_WIREDTIGER -DHAS_LMDB -DHAS_UKV")
 
 if(${CMAKE_SYSTEM_PROCESSOR} MATCHES "aarch64")
   message("- Enabling SIMD for ARM")
@@ -115,16 +119,62 @@ else ()
   message(STATUS "Unknown CMAKE_CXX_COMPILER_ID: ${CMAKE_CXX_COMPILER_ID}")
 endif()
 
-include("${CMAKE_MODULE_PATH}/rocksdb.cmake")
-include("${CMAKE_MODULE_PATH}/leveldb.cmake")
-include("${CMAKE_MODULE_PATH}/wiredtiger.cmake")
-include("${CMAKE_MODULE_PATH}/ukv.cmake")
+include("${CMAKE_MODULE_PATH}/benchmark.cmake")
+include("${CMAKE_MODULE_PATH}/tabulate.cmake")
+include("${CMAKE_MODULE_PATH}/fmt.cmake")
+include("${CMAKE_MODULE_PATH}/argparse.cmake")
+include("${CMAKE_MODULE_PATH}/nlohmannjson.cmake")
 
-set(CXX_TARGET_LINK_LIBRARIES rocksdb leveldb wiredtiger ukv)
+set(UCSB_DB_LIBS)
+add_executable(ucsb_bench ./src/bench.cxx)
+
+if(${UCSB_BUILD_UKV})
+  # Choose engine. Available engines: UMEM, ROCKSDB, LEVELDB, UDISK
+  set(UKV_ENGINE_NAME UMEM) 
+
+  include("${CMAKE_MODULE_PATH}/ukv.cmake")
+  list(APPEND UCSB_DB_LIBS "ukv")
+  target_compile_definitions(ucsb_bench PUBLIC UCSB_HAS_UKV=1) 
+endif()
+
+if(${UCSB_BUILD_ROCKSDB})
+  include("${CMAKE_MODULE_PATH}/rocksdb.cmake")
+  list(APPEND UCSB_DB_LIBS "rocksdb")
+  target_compile_definitions(ucsb_bench PUBLIC UCSB_HAS_ROCKSDB=1) 
+endif()
+
+if(${UCSB_BUILD_LEVELDB})
+  include("${CMAKE_MODULE_PATH}/leveldb.cmake")
+  list(APPEND UCSB_DB_LIBS "leveldb")
+  target_compile_definitions(ucsb_bench PUBLIC UCSB_HAS_LEVELDB=1) 
+endif()
+
+if(${UCSB_BUILD_WIREDTIGER})
+  include("${CMAKE_MODULE_PATH}/wiredtiger.cmake")
+  list(APPEND UCSB_DB_LIBS "wiredtiger")
+  target_compile_definitions(ucsb_bench PUBLIC UCSB_HAS_WIREDTIGER=1) 
+endif()
+
+if(${UCSB_BUILD_MONGODB})
+  include("${CMAKE_MODULE_PATH}/mongodb.cmake")
+  list(APPEND UCSB_DB_LIBS "mongodb")
+  target_compile_definitions(ucsb_bench PUBLIC UCSB_HAS_MONGODB=1) 
+endif()
+
+if(${UCSB_BUILD_REDIS})
+  include("${CMAKE_MODULE_PATH}/redis.cmake")
+  list(APPEND UCSB_DB_LIBS "redis")
+  target_compile_definitions(ucsb_bench PUBLIC UCSB_HAS_REDIS=1) 
+endif()
+
+if(${UCSB_BUILD_LMDB})
+  include("${CMAKE_MODULE_PATH}/lmdb.cmake")
+  list(APPEND UCSB_DB_LIBS "lmdb")
+  target_compile_definitions(ucsb_bench PUBLIC UCSB_HAS_LMDB=1) 
+endif()
+
+set(CXX_TARGET_LINK_LIBRARIES benchmark fmt ${UCSB_DB_LIBS})
 set(CXX_TARGET_LINK_LIBRARIES_WITH_FLAGS z uring)
-
-include(${CMAKE_MODULE_PATH}/conanbuildinfo.cmake)
-conan_basic_setup()
 
 set(CMAKE_THREAD_LIBS_INIT "-lpthread")
 set(CMAKE_HAVE_THREADS_LIBRARY 1)
@@ -134,14 +184,12 @@ set(THREADS_PREFER_PTHREAD_FLAG ON)
 find_package(Threads REQUIRED)
 
 #######################################################################################################################
-# Build tests benchmarks
+# Build UCSB
 #######################################################################################################################
 
-add_executable(ucsb_bench ./src/bench.cxx)
 target_link_libraries(ucsb_bench${ARTIFACT_SUFFIX} 
   ${CXX_TARGET_LINK_LIBRARIES}
   ${PKG_PACKAGES_LIBRARIES}
-  ${CONAN_LIBS}
   ${CMAKE_DL_LIBS}
   ${CXX_TARGET_LINK_LIBRARIES_WITH_FLAGS}
   -fsanitize=address # Temp solution, wating for Darvin
