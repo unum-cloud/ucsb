@@ -1,7 +1,9 @@
 # UKV:
 # https://github.com/unum-cloud/ukv/blob/main/CMakeLists.txt
 
-option(UKV_ENGINE_NAME "Choose engine" "UMEM")
+# Note: This is set in top CMakeLists.txt
+option(UKV_ENGINE_NAME "Choose engine")
+
 set(REPOSITORY_BRANCH "main-dev")
 list(APPEND BUILD_ARGS "-DUKV_BUILD_BUNDLES=1" "-DUKV_BUILD_TESTS=0" "-DUKV_BUILD_BENCHMARKS=0")
 
