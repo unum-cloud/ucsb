@@ -7,7 +7,7 @@ namespace ucsb {
 /**
  * @brief Formatting sugar for "fmt" library.
  */
-struct printable_byte_t {
+struct printable_bytes_t {
     size_t bytes = 0;
 };
 
@@ -22,7 +22,7 @@ struct printable_duration_t {
 } // namespace ucsb
 
 template <>
-class fmt::formatter<ucsb::printable_byte_t> {
+class fmt::formatter<ucsb::printable_bytes_t> {
   public:
     size_t suffix_idx = 0;
     unsigned char precision = 2;
@@ -64,7 +64,7 @@ class fmt::formatter<ucsb::printable_byte_t> {
     }
 
     template <typename ctx_at>
-    inline auto format(ucsb::printable_byte_t const& v, ctx_at& ctx) {
+    inline auto format(ucsb::printable_bytes_t const& v, ctx_at& ctx) {
 
         char const* suffix_k[] = {"", "B", "KB", "MB", "GB", "TB"};
 

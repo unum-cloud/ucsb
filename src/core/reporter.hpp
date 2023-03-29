@@ -127,12 +127,12 @@ void console_reporter_t::ReportRuns(std::vector<Run> const& reports) {
     tabulate::Table table;
     table.add_row({report.run_name.function_name,
                    fmt::format("{}/s", printable_float_t {throughput}),
-                   fmt::format("{}", printable_byte_t {data_processed}),
-                   fmt::format("{}", printable_byte_t {disk_usage}),
+                   fmt::format("{}", printable_bytes_t {data_processed}),
+                   fmt::format("{}", printable_bytes_t {disk_usage}),
                    fmt::format("{:.1f}", cpu_avg),
                    fmt::format("{:.1f}", cpu_max),
-                   fmt::format("{}", printable_byte_t {mem_avg}),
-                   fmt::format("{}", printable_byte_t {mem_max}),
+                   fmt::format("{}", printable_bytes_t {mem_avg}),
+                   fmt::format("{}", printable_bytes_t {mem_max}),
                    fmt::format("{}", fails),
                    fmt::format("{}", printable_duration_t {size_t(duration)})});
     table.row(0).format().width(column_width_).font_align(tabulate::FontAlign::right).hide_border_top().locale("C");
