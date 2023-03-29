@@ -92,7 +92,7 @@ std::string build_title(settings_t const& settings, workloads_t const& workloads
 
     if (!workloads.empty()) {
         size_t db_size = workloads.front().db_records_count * workloads.front().value_length;
-        infos.push_back(fmt::format("Workload size: {}", printable_byte_t {db_size}));
+        infos.push_back(fmt::format("Workload size: {}", printable_bytes_t {db_size}));
     }
 
     infos.push_back(fmt::format("Threads: {}", settings.threads_count));
