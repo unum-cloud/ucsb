@@ -61,17 +61,23 @@ list(APPEND ukv_INCLUDE_DIRS ${PREFIX_DIR}/ukv-src/include ${PREFIX_DIR}/ukv-src
 set(ukv_LIBRARY_PATH ${PREFIX_DIR}/ukv-build/build/lib/libukv_${LOWERCASE_ENGINE_NAME}_bundle.a)
 file(MAKE_DIRECTORY ${ukv_INCLUDE_DIRS})
 
-add_library(ukv STATIC IMPORTED)
+add_library(ukv_intermediate STATIC IMPORTED)
 if(UKV_ENGINE_NAME STREQUAL "UDISK")
-    target_link_libraries(ukv INTERFACE dl pthread explain uring numa tbb)
+    target_link_libraries(ukv_intermediate INTERFACE dl pthread explain uring numa tbb)
 endif()
 
-target_compile_definitions(ukv INTERFACE UKV_VERSION="${UKV_VERSION}") 
-target_compile_definitions(ukv INTERFACE UKV_ENGINE_NAME_IS_${UKV_ENGINE_NAME}=1) 
-target_compile_definitions(ukv INTERFACE UKV_ENGINE_NAME="${LOWERCASE_ENGINE_NAME}") 
+target_compile_definitions(ukv_intermediate INTERFACE UKV_VERSION="${UKV_VERSION}") 
+target_compile_definitions(ukv_intermediate INTERFACE UKV_ENGINE_NAME_IS_${UKV_ENGINE_NAME}=1) 
+target_compile_definitions(ukv_intermediate INTERFACE UKV_ENGINE_NAME="${LOWERCASE_ENGINE_NAME}") 
 
-set_property(TARGET ukv PROPERTY IMPORTED_LOCATION ${ukv_LIBRARY_PATH})
-set_property(TARGET ukv APPEND PROPERTY INTERFACE_INCLUDE_DIRECTORIES ${ukv_INCLUDE_DIRS})
+set_property(TARGET ukv_intermediate PROPERTY IMPORTED_LOCATION ${ukv_LIBRARY_PATH})
+set_property(TARGET ukv_intermediate APPEND PROPERTY INTERFACE_INCLUDE_DIRECTORIES ${ukv_INCLUDE_DIRS})
 
 include_directories(${ukv_INCLUDE_DIRS})
-add_dependencies(ukv ukv_external)
+add_dependencies(ukv_intermediate ukv_external)
+
+# Create intermidiat library to hide dependences
+add_library(ukv INTERFACE)
+target_compile_definitions(ukv INTERFACE ${ukv_DEFINITIONS})
+target_include_directories(ukv INTERFACE ${ukv_INCLUDE_DIRS})
+target_link_libraries(ukv INTERFACE ukv_intermediate)
