@@ -1,4 +1,5 @@
 #pragma once
+
 #include <cassert>
 
 #include "src/core/generators/counter_generator.hpp"

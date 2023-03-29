@@ -43,8 +43,8 @@ class ukv_t : public ucsb::db_t {
                     fs::path const& main_dir_path,
                     std::vector<fs::path> const& storage_dir_paths,
                     db_hints_t const& hints) override;
-    bool open() override;
-    bool close() override;
+    bool open(std::string& error) override;
+    void close() override;
 
     std::string info() override;
 
@@ -90,50 +90,49 @@ void ukv_t::set_config(fs::path const& config_path,
     hints_ = hints;
 }
 
-bool ukv_t::open() {
+bool ukv_t::open(std::string& error) {
     if (db_)
         return true;
 
     // Read config from file
     std::ifstream stream(config_path_);
-    if (!stream)
+    if (!stream) {
+        error = strerror(errno);
         return false;
+    }
     std::string str_config((std::istreambuf_iterator<char>(stream)), std::istreambuf_iterator<char>());
 
     // Load and overwrite
     ukv::config_t config;
     auto status = ukv::config_loader_t::load_from_json_string(str_config, config, true);
-    if (!status)
+    if (!status) {
+        error = status.message();
         return false;
+    }
 
     // Resolve directory paths
     if (config.directory.empty())
         config.directory = main_dir_path_;
     if (config.data_directories.empty()) {
-#if defined(UKV_ENGINE_IS_ROCKSDB) || defined(UKV_ENGINE_IS_UDISK)
-        for (auto const& dir : storage_dir_paths_) {
 #if defined(UKV_ENGINE_IS_ROCKSDB)
+        for (auto const& dir : storage_dir_paths_) {
             size_t storage_size_on_disk = (hints_.records_count * hints_.value_length) / storage_dir_paths_.size();
             config.data_directories.push_back({dir, storage_size_on_disk});
-#else
-            config.data_directories.push_back({dir, ukv::disk_config_t::unlimited_space_k});
-#endif
         }
+#else
+        for (auto const& dir : storage_dir_paths_)
+            config.data_directories.push_back({dir, ukv::disk_config_t::unlimited_space_k});
 #endif
     }
 
-    // Resolve engine config path (Note: Inplace configs are ignored, used files)
+    // Resolve engine config path
     if (config.engine.config_file_path.empty()) {
         auto configs_root = config_path_.parent_path().parent_path();
-        if (configs_root.filename() != "configs")
+        if (configs_root.filename() != "configs") {
+            error = "Invalid configs directory";
             return false;
-#if defined(UKV_ENGINE_IS_ROCKSDB)
-        config.engine.config_file_path = configs_root / "rocksdb" / config_path_.filename();
-#elif defined(UKV_ENGINE_IS_LEVELDB)
-        config.engine.config_file_path = configs_root / "leveldb" / config_path_.filename();
-#elif defined(UKV_ENGINE_IS_UDISK)
-        config.engine.config_file_path = configs_root / "udisk" / config_path_.filename();
-#endif
+        }
+        config.engine.config_file_path = configs_root / UKV_ENGINE_NAME / config_path_.filename();
         // Select default config if the specified doesn't exist
         if (!fs::exists(config.engine.config_file_path))
             config.engine.config_file_path = fs::path(config.engine.config_file_path).parent_path() / "default.cfg";
@@ -141,8 +140,10 @@ bool ukv_t::open() {
 
     // Convert to json string
     status = ukv::config_loader_t::save_to_json_string(config, str_config);
-    if (!status)
+    if (!status) {
+        error = status.message();
         return false;
+    }
 
     ukv_database_init_t init {};
     init.config = str_config.c_str();
@@ -152,23 +153,24 @@ bool ukv_t::open() {
     init.db = &db_;
     init.error = status.member_ptr();
     ukv_database_init(&init);
-    if (!status)
+    if (!status) {
+        error = status.message();
         return status;
+    }
 
     arena = ukv::arena_t(db_);
     return true;
 }
 
-void ukv_t::free() {
-    ukv_database_free(db_);
-    db_ = nullptr;
-}
-
-bool ukv_t::close() {
+void ukv_t::close() {
 #if !defined(UKV_ENGINE_IS_UMEM)
     free();
 #endif
-    return true;
+}
+
+void ukv_t::free() {
+    ukv_database_free(db_);
+    db_ = nullptr;
 }
 
 operation_result_t ukv_t::upsert(key_t key, value_spanc_t value) {
@@ -445,7 +447,7 @@ operation_result_t ukv_t::scan(key_t key, size_t length, value_span_t single_val
     return {scanned, scanned > 0 ? operation_status_t::ok_k : operation_status_t::not_found_k};
 }
 
-std::string ukv_t::info() { return fmt::format("v{}, {} engine", UKV_VERSION, UKV_ENGINE_NAME); }
+std::string ukv_t::info() { return fmt::format("v{}, {}", UKV_VERSION, UKV_ENGINE_NAME); }
 
 void ukv_t::flush() {
 
