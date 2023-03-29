@@ -92,6 +92,10 @@ set(CMAKE_C_FLAGS_DEBUG "${CMAKE_C_FLAGS_DEBUG} -DDEBUG_SAFE_MODE -g")
 set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -DDEBUG_SAFE_MODE -g")
 set(CMAKE_C_FLAGS_RELEASE "${CMAKE_C_FLAGS_RELEASE} -DNDEBUG -O2")
 set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -DNDEBUG -O2")
+# Sanitizer
+set(CMAKE_C_FLAGS_DEBUG "${CMAKE_C_FLAGS_DEBUG} -fsanitize=address -fsanitize-address-use-after-scope")
+set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -fsanitize=address -fsanitize-address-use-after-scope")
+set(CMAKE_LINKER_FLAGS_DEBUG "${CMAKE_LINKER_FLAGS_DEBUG} -fsanitize=address -fsanitize-address-use-after-scope")
 
 if(${CMAKE_SYSTEM_PROCESSOR} MATCHES "aarch64")
   message("- Enabling SIMD for ARM")
@@ -173,8 +177,7 @@ if(${UCSB_BUILD_LMDB})
   target_compile_definitions(ucsb_bench PUBLIC UCSB_HAS_LMDB=1) 
 endif()
 
-set(CXX_TARGET_LINK_LIBRARIES benchmark fmt ${UCSB_DB_LIBS})
-set(CXX_TARGET_LINK_LIBRARIES_WITH_FLAGS z uring)
+set(CXX_TARGET_LINK_LIBRARIES z uring benchmark fmt ${UCSB_DB_LIBS})
 
 set(CMAKE_THREAD_LIBS_INIT "-lpthread")
 set(CMAKE_HAVE_THREADS_LIBRARY 1)
@@ -191,6 +194,4 @@ target_link_libraries(ucsb_bench${ARTIFACT_SUFFIX}
   ${CXX_TARGET_LINK_LIBRARIES}
   ${PKG_PACKAGES_LIBRARIES}
   ${CMAKE_DL_LIBS}
-  ${CXX_TARGET_LINK_LIBRARIES_WITH_FLAGS}
-  -fsanitize=address # Temp solution, wating for Darvin
 )
