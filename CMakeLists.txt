@@ -173,8 +173,7 @@ if(${UCSB_BUILD_LMDB})
   target_compile_definitions(ucsb_bench PUBLIC UCSB_HAS_LMDB=1) 
 endif()
 
-set(CXX_TARGET_LINK_LIBRARIES benchmark fmt ${UCSB_DB_LIBS})
-set(CXX_TARGET_LINK_LIBRARIES_WITH_FLAGS z uring)
+set(CXX_TARGET_LINK_LIBRARIES z uring benchmark fmt ${UCSB_DB_LIBS})
 
 set(CMAKE_THREAD_LIBS_INIT "-lpthread")
 set(CMAKE_HAVE_THREADS_LIBRARY 1)
@@ -191,6 +190,4 @@ target_link_libraries(ucsb_bench${ARTIFACT_SUFFIX}
   ${CXX_TARGET_LINK_LIBRARIES}
   ${PKG_PACKAGES_LIBRARIES}
   ${CMAKE_DL_LIBS}
-  ${CXX_TARGET_LINK_LIBRARIES_WITH_FLAGS}
-  -fsanitize=address # Temp solution, wating for Darvin
 )
