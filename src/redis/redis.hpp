@@ -45,8 +45,8 @@ struct redis_t : public ucsb::db_t {
                     fs::path const& main_dir_path,
                     std::vector<fs::path> const& storage_dir_paths,
                     db_hints_t const& hints) override;
-    bool open() override;
-    bool close() override;
+    bool open(std::string& error) override;
+    void close() override;
 
     std::string info() override;
 
@@ -132,12 +132,14 @@ void redis_t::set_config(fs::path const& config_path,
     storage_dir_paths_ = storage_dir_paths;
 }
 
-bool redis_t::open() {
+bool redis_t::open(std::string& error) {
     if (is_opened_)
         return true;
 
-    if (!storage_dir_paths_.empty())
+    if (!storage_dir_paths_.empty()) {
+        error = "Doesn't support multiple disks";
         return false;
+    }
 
     std::string start_cmd("redis-server ");
     start_cmd += config_path_;
@@ -150,7 +152,7 @@ bool redis_t::open() {
     return true;
 }
 
-bool redis_t::close() { return true; }
+void redis_t::close() {}
 
 operation_result_t redis_t::upsert(key_t key, value_spanc_t value) {
     auto status = (*redis_).hset("hash", to_string_view(key), to_string_view(value.data(), value.size()));

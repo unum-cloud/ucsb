@@ -30,9 +30,7 @@ constexpr size_t roundup_to_multiple(size_t number) noexcept {
     return (number + one_less) & negative_mask;
 }
 
-inline bool start_with(const char* str, const char* prefix) {
-    return strncmp(str, prefix, strlen(prefix)) == 0;
-}
+inline bool start_with(const char* str, const char* prefix) { return strncmp(str, prefix, strlen(prefix)) == 0; }
 
 std::vector<std::string> split(std::string const& str, char delimiter) {
     size_t start = 0;

@@ -9,7 +9,7 @@ namespace ucsb {
 
 using high_resolution_clock_t = std::chrono::high_resolution_clock;
 using time_point_t = std::chrono::time_point<high_resolution_clock_t>;
-using elapsed_time_t = std::chrono::duration<double>;
+using elapsed_time_t = std::chrono::nanoseconds;
 
 /**
  * @brief Trivial Google Benchmark wrapper.
@@ -70,12 +70,12 @@ class timer_t {
   private:
     void recalculate_operations_elapsed_time() {
         auto now = high_resolution_clock_t::now();
-        operations_elapsed_time_ += elapsed_time_t(now - operations_start_time_);
+        operations_elapsed_time_ += std::chrono::duration_cast<elapsed_time_t>(now - operations_start_time_);
         operations_start_time_ = now;
     }
     void recalculate_elapsed_time() {
         auto now = high_resolution_clock_t::now();
-        elapsed_time_ += elapsed_time_t(now - start_time_);
+        elapsed_time_ += std::chrono::duration_cast<elapsed_time_t>(now - start_time_);
         start_time_ = now;
     }
 
