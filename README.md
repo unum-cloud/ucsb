@@ -140,7 +140,7 @@ It's a design that essentially bans in-place file overwrites.
 Instead, it builds layers of immutable files arranged in a Tree-like order.
 The problem is that until you have enough content to populate an entire top-level file, you keep data in RAM - in structures often called `MemTable`s.
 
-![LSM Tree](https://unum.cloud/assets/post/2022-03-22-ucsb/lsm-tree.png)
+![LSM Tree](assets/lsm-tree.png)
 
 If the lights go off, volatile memory will be discarded.
 So a copy of every incoming write is generally appended to a Write-Ahead-Log (WAL).
@@ -210,12 +210,12 @@ Large capacity SSDs store multiple bits per cell.
 If you are buying a Quad Level Cell SSD, you expect each of them to store 4 bits of relevant information.
 That may be a false expectation.
 
-![SLC MLC vs TLC](https://unum.cloud/assets/post/2022-03-22-ucsb/slc-mlc-tlc-shape.jpg)
+![SLC MLC vs TLC](assets/slc-mlc-tlc-shape.jpg)
 
 The SSD can switch to SLC mode during intensive writes, where IO is faster, especially if a lot of space is available.
 In the case of an 8 TB SSD, before we reach 2 TB used space, all [NAND](https://en.wikipedia.org/wiki/Flash_memory) arrays can, in theory, be populated with just one relevant bit.
 
-![SLC vs eMLC vs MLC vs TLC](https://unum.cloud/assets/post/2022-03-22-ucsb/slc-mlc-tlc-specs.png)
+![SLC vs eMLC vs MLC vs TLC](assets/slc-mlc-tlc-specs.png)
 
 If you are benchmarking the DBMS, not the SSD, ensure that you did all benchmarks within the same mode.
 In our case for a 1 TB workload on 8 TB drives, it's either:
@@ -225,7 +225,7 @@ In our case for a 1 TB workload on 8 TB drives, it's either:
 
 ### Slow Benchmarks for Fast Code
 
-Returning to the topic of definciencies in the original implementation, let's linger on the fact that is implemented in Java, while all performant Key-Value Stores are implemented in C and C++.
+Returning to the topic of deficiencies in the original implementation, let's linger on the fact that is implemented in Java, while all performant Key-Value Stores are implemented in C and C++.
 This means, that you would need some form of a “Foreign Function Interface” to interact with the KVS.
 This immediately adds unnecessary work for our CPU, but it’s a minor problem compared to rest.
 
