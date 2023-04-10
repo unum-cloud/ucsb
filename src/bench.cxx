@@ -274,19 +274,19 @@ struct progress_t {
 
     static void print_db_open() {
         fmt::print("\33[2K\r");
-        fmt::print(" [✱] Opening DB...");
+        fmt::print(" [✱] Opening DB...\r");
         fflush(stdout);
     }
 
     static void print_db_close() {
         fmt::print("\33[2K\r");
-        fmt::print(" [✱] Closing DB...");
+        fmt::print(" [✱] Closing DB...\r");
         fflush(stdout);
     }
 
     static void print_db_flush() {
         fmt::print("\33[2K\r");
-        fmt::print(" [✱] Flushing DB...");
+        fmt::print(" [✱] Flushing DB...\r");
         fflush(stdout);
     }
 
@@ -298,13 +298,13 @@ struct progress_t {
     void print_start(std::string const& workload_name) {
         fmt::print("\33[2K\r");
         auto name = fmt::format(fmt::fg(fmt::color::light_green), "{}", workload_name);
-        fmt::print(" [✱] {}: 0.00%", name, 0.0);
+        fmt::print(" [✱] {}: 0.00%\r", name, 0.0);
         fflush(stdout);
     }
 
     void print_end() {
         fmt::print("\33[2K\r");
-        fmt::print(" [✱] Completed");
+        fmt::print(" [✱] Completed\r");
         fflush(stdout);
     }
 
@@ -332,7 +332,7 @@ struct progress_t {
             delta = fmt::format(fmt::fg(fmt::color::green), "▲");
         auto fails = fails_percent == 0.0 ? fmt::format("{}%", fails_percent)
                                           : fmt::format(fmt::fg(fmt::color::red), "{}%", fails_percent);
-        fmt::print(" [✱] {}: {:.2f}% [{} {}| fails: {} | elapsed: {} | left: {}]",
+        fmt::print(" [✱] {}: {:.2f}% [{} {}| fails: {} | elapsed: {} | left: {}]\r",
                    name,
                    done_percent,
                    printable_float_t {ops_per_second},
