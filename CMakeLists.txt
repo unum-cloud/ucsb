@@ -124,6 +124,7 @@ include("${CMAKE_MODULE_PATH}/tabulate.cmake")
 include("${CMAKE_MODULE_PATH}/fmt.cmake")
 include("${CMAKE_MODULE_PATH}/argparse.cmake")
 include("${CMAKE_MODULE_PATH}/nlohmannjson.cmake")
+include("${CMAKE_MODULE_PATH}/uring.cmake")
 
 set(UCSB_DB_LIBS)
 add_executable(ucsb_bench ./src/bench.cxx)
