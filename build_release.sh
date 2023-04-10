@@ -1,4 +1,4 @@
-#!/usr/bin/env bash
+#!/bin/bash
 # Visualizing the dependencies graph.
 # https://cmake.org/cmake/help/latest/module/CMakeGraphVizOptions.html#module:CMakeGraphVizOptions
 # Debug vs Release:
