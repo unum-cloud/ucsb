@@ -42,8 +42,8 @@ class lmdb_t : public ucsb::db_t {
                     fs::path const& main_dir_path,
                     std::vector<fs::path> const& storage_dir_paths,
                     db_hints_t const& hints) override;
-    bool open() override;
-    bool close() override;
+    bool open(std::string& error) override;
+    void close() override;
 
     std::string info() override;
 
@@ -100,16 +100,20 @@ void lmdb_t::set_config(fs::path const& config_path,
     storage_dir_paths_ = storage_dir_paths;
 }
 
-bool lmdb_t::open() {
+bool lmdb_t::open(std::string& error) {
     if (env_)
         return true;
 
-    if (!storage_dir_paths_.empty())
+    if (!storage_dir_paths_.empty()) {
+        error = "Doesn't support multiple disks";
         return false;
+    }
 
     config_t config;
-    if (!load_config(config))
+    if (!load_config(config)) {
+        error = "Failed to load config";
         return false;
+    }
 
     int env_opt = 0;
     if (config.no_sync)
@@ -122,12 +126,15 @@ bool lmdb_t::open() {
         env_opt |= MDB_WRITEMAP;
 
     int res = mdb_env_create(&env_);
-    if (res)
+    if (res) {
+        error = "Failed to create environment";
         return false;
+    }
     if (config.map_size > 0) {
         res = mdb_env_set_mapsize(env_, config.map_size);
         if (res) {
             close();
+            error = "Failed to apply config";
             return false;
         }
     }
@@ -135,6 +142,7 @@ bool lmdb_t::open() {
     res = mdb_env_open(env_, main_dir_path_.c_str(), env_opt, 0664);
     if (res) {
         close();
+        error = "Failed to open environment";
         return false;
     }
 
@@ -142,32 +150,34 @@ bool lmdb_t::open() {
     res = mdb_txn_begin(env_, nullptr, 0, &txn);
     if (res) {
         close();
+        error = "Failed to begin transaction";
         return false;
     }
     res = mdb_open(txn, nullptr, 0, &dbi_);
     if (res) {
         close();
+        error = "Failed to open DB";
         return false;
     }
     res = mdb_txn_commit(txn);
     if (res) {
         close();
+        error = "Failed to commit transaction";
         return false;
     }
 
     return true;
 }
 
-bool lmdb_t::close() {
+void lmdb_t::close() {
     if (!env_)
-        return true;
+        return;
 
     if (dbi_)
         mdb_close(env_, dbi_);
     mdb_env_close(env_);
     dbi_ = 0;
     env_ = nullptr;
-    return true;
 }
 
 operation_result_t lmdb_t::upsert(key_t key, value_spanc_t value) {

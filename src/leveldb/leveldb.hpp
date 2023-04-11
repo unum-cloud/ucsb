@@ -55,8 +55,8 @@ class leveldb_t : public ucsb::db_t {
                     fs::path const& main_dir_path,
                     std::vector<fs::path> const& storage_dir_paths,
                     db_hints_t const& hints) override;
-    bool open() override;
-    bool close() override;
+    bool open(std::string& error) override;
+    void close() override;
 
     std::string info() override;
 
@@ -127,16 +127,20 @@ void leveldb_t::set_config(fs::path const& config_path,
     storage_dir_paths_ = storage_dir_paths;
 }
 
-bool leveldb_t::open() {
+bool leveldb_t::open(std::string& error) {
     if (db_)
         return true;
 
-    if (!storage_dir_paths_.empty())
+    if (!storage_dir_paths_.empty()) {
+        error = "Doesn't support multiple disks";
         return false;
+    }
 
     config_t config;
-    if (!load_config(config))
+    if (!load_config(config)) {
+        error = "Failed to load config";
         return false;
+    }
 
     options_ = leveldb::Options();
     options_.create_if_missing = true;
@@ -160,13 +164,11 @@ bool leveldb_t::open() {
     leveldb::Status status = leveldb::DB::Open(options_, main_dir_path_.string(), &db_raw);
     db_.reset(db_raw);
 
+    error = status.ok() ? std::string() : status.ToString();
     return status.ok();
 }
 
-bool leveldb_t::close() {
-    db_.reset(nullptr);
-    return true;
-}
+void leveldb_t::close() { db_.reset(nullptr); }
 
 operation_result_t leveldb_t::upsert(key_t key, value_spanc_t value) {
     leveldb::Status status = db_->Put(write_options_, to_slice(key), to_slice(value));
@@ -290,11 +292,11 @@ bool leveldb_t::load_config(config_t& config) {
     nlohmann::json j_config;
     i_config >> j_config;
 
-    config.write_buffer_size = j_config.value<size_t>("write_buffer_size", size_t(67108864));
-    config.max_file_size = j_config.value<size_t>("max_file_size", size_t(67108864));
-    config.max_open_files = j_config.value<size_t>("max_open_files", size_t(1000));
+    config.write_buffer_size = j_config.value<size_t>("write_buffer_size", size_t(67'108'864));
+    config.max_file_size = j_config.value<size_t>("max_file_size", size_t(67'108'864));
+    config.max_open_files = j_config.value<size_t>("max_open_files", size_t(1'000));
     config.compression = j_config.value<std::string>("compression", "none");
-    config.cache_size = j_config.value<size_t>("cache_size", size_t(134217728));
+    config.cache_size = j_config.value<size_t>("cache_size", size_t(134'217'728));
     config.filter_bits = j_config.value<size_t>("filter_bits", size_t(10));
 
     return true;

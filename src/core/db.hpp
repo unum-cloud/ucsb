@@ -27,8 +27,8 @@ class db_t : public data_accessor_t {
   public:
     virtual ~db_t() {}
 
-    virtual bool open() = 0;
-    virtual bool close() = 0;
+    virtual bool open(std::string& error) = 0;
+    virtual void close() = 0;
 
     /**
      * @brief Returns high level description about the DB

@@ -55,8 +55,8 @@ class wiredtiger_t : public ucsb::db_t {
                     fs::path const& main_dir_path,
                     std::vector<fs::path> const& storage_dir_paths,
                     db_hints_t const& hints) override;
-    bool open() override;
-    bool close() override;
+    bool open(std::string& error) override;
+    void close() override;
 
     std::string info() override;
 
@@ -148,36 +148,38 @@ cursor_uptr_t wiredtiger_t::get_cursor(WT_SESSION* session, const char* config) 
     return cursor_uptr_t(cursor, cursor_deleter_t {});
 }
 
-bool wiredtiger_t::open() {
+bool wiredtiger_t::open(std::string& error) {
 
     if (conn_)
         return true;
 
-    if (!storage_dir_paths_.empty())
+    if (!storage_dir_paths_.empty()) {
+        error = "Doesn't support multiple disks";
         return false;
+    }
 
     config_t config;
-    if (!load_config(config))
+    if (!load_config(config)) {
+        error = "Failed to load config";
         return false;
+    }
 
     std::string str_config = create_str_config(config);
     int res = wiredtiger_open(main_dir_path_.c_str(), NULL, str_config.c_str(), &conn_);
-    if (res)
+    if (res) {
+        error = "Failed to open DB";
         return false;
+    }
 
     return true;
 }
 
-bool wiredtiger_t::close() {
+void wiredtiger_t::close() {
     if (!conn_)
-        return true;
+        return;
 
-    int res = conn_->close(conn_, NULL);
-    if (res)
-        return false;
-
+    conn_->close(conn_, NULL);
     conn_ = nullptr;
-    return true;
 }
 
 operation_result_t wiredtiger_t::upsert(key_t key, value_spanc_t value) {

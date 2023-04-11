@@ -177,9 +177,9 @@ class mem_profiler_t {
         std::string pid, comm, state, ppid, pgrp, session, tty_nr;
         std::string tpgid, flags, minflt, cminflt, majflt, cmajflt;
         std::string utime, stime, cutime, cstime, priority, nice;
-        std::string O, itrealvalue, starttime;
+        std::string num_threads, itrealvalue, starttime;
         stat >> pid >> comm >> state >> ppid >> pgrp >> session >> tty_nr >> tpgid >> flags >> minflt >> cminflt >>
-            majflt >> cmajflt >> utime >> stime >> cutime >> cstime >> priority >> nice >> O >> itrealvalue >>
+            majflt >> cmajflt >> utime >> stime >> cutime >> cstime >> priority >> nice >> num_threads >> itrealvalue >>
             starttime >> vm >> rss;
         stat.close();
 
