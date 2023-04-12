@@ -99,11 +99,12 @@ def get_results_file_path(db_name: str, size: str, drop_caches: bool, transactio
 
 
 def drop_system_caches():
-    print('Dropping caches...')
+    print(end='\x1b[1K\r')
+    print(' [✱] Dropping system caches...', end='\r')
     try:
         with open('/proc/sys/vm/drop_caches', 'w') as stream:
             stream.write('3\n')
-        time.sleep(8)
+        time.sleep(8) # Wait for other apps to reload its caches
     except KeyboardInterrupt:
         print(termcolor.colored('Terminated by user', 'yellow'))
         exit(1)
@@ -112,7 +113,7 @@ def drop_system_caches():
         exit(1)
 
 
-def run(db_name: str, size: str, workload_names: list, main_dir_path: str, storage_disk_paths: str, transactional: bool, drop_caches: bool, run_docker_image: bool, threads_count: bool) -> None:
+def run(db_name: str, size: str, workload_names: list, main_dir_path: str, storage_disk_paths: str, transactional: bool, drop_caches: bool, run_docker_image: bool, threads_count: bool, run_index: int, runs_count: int) -> None:
     db_config_file_path = get_db_config_file_path(db_name, size)
     workloads_file_path = get_workloads_file_path(size)
     db_main_dir_path = get_db_main_dir_path(db_name, size, main_dir_path)
@@ -137,7 +138,9 @@ def run(db_name: str, size: str, workload_names: list, main_dir_path: str, stora
                             -sd "{db_storage_dir_paths}"\
                             -res "{results_file_path}" \
                             -th {threads_count} \
-                            -fl {filter}'
+                            -fl {filter} \
+                            -ri {run_index} \
+                            -rc {runs_count}'
                             )
     process.interact()
     process.close()
@@ -169,7 +172,7 @@ def main(db_names: Optional[list[str]] = supported_db_names,
          threads_count: Optional[int] = default_threads_count,
          transactional: Optional[bool] = False,
          cleanup_previous: Optional[bool] = True,
-         drop_caches: Optional[bool] = False,
+         drop_caches: Optional[bool] = True,
          run_docker_image: Optional[bool] = False) -> None:
 
     if os.geteuid() != 0:
@@ -179,7 +182,8 @@ def main(db_names: Optional[list[str]] = supported_db_names,
 
     # Cleanup old DBs (Note: It actually cleanups if the first workload is `Init`)
     if cleanup_previous and workload_names[0] == 'Init':
-        print('Cleanup...')
+        print(end='\x1b[1K\r')
+        print(' [✱] Cleanup...', end='\r')
         for size in sizes:
             for db_name in db_names:
                 # Remove DB main directory
@@ -209,12 +213,12 @@ def main(db_names: Optional[list[str]] = supported_db_names,
 
             # Run benchmark
             if drop_caches:
-                for workload_name in workload_names:
+                for i, workload_name in enumerate(workload_names):
                     if not run_docker_image:
                         drop_system_caches()
-                    run(db_name, size, [workload_name], main_dir_path, storage_disk_paths, transactional, drop_caches, run_docker_image, threads_count)
+                    run(db_name, size, [workload_name], main_dir_path, storage_disk_paths, transactional, drop_caches, run_docker_image, threads_count, i, len(workload_names))
             else:
-                run(db_name, size, workload_names, main_dir_path, storage_disk_paths, transactional, drop_caches, run_docker_image, threads_count)
+                run(db_name, size, workload_names, main_dir_path, storage_disk_paths, transactional, drop_caches, run_docker_image, threads_count, 0, 1)
 
 
 if __name__ == '__main__':
