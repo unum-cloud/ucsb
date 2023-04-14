@@ -23,9 +23,9 @@ supported_db_names = [
     'rocksdb',
     'leveldb',
     'wiredtiger',
-    'mongodb',
-    'redis',
-    'lmdb',
+    # 'mongodb',
+    # 'redis',
+    # 'lmdb',
 ]
 
 supported_sizes = [
