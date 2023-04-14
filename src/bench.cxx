@@ -356,7 +356,7 @@ struct progress_t {
             delta = fmt::format(fmt::fg(fmt::color::green), "▲");
         auto fails = fails_percent == 0.0 ? fmt::format("{}%", fails_percent)
                                           : fmt::format(fmt::fg(fmt::color::red), "{}%", fails_percent);
-        fmt::print(" [✱] {}: {:.2f}% [{} {}| fails: {} | elapsed: {} | left: {}]\r",
+        fmt::print(" [✱] {}: {:.2f}% [{}/s {}| fails: {} | elapsed: {} | left: {}]\r",
                    name,
                    done_percent,
                    printable_float_t {ops_per_second},
