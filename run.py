@@ -19,7 +19,7 @@ See main() function.
 """
 
 supported_db_names = [
-    'ukv',
+    'ustore',
     'rocksdb',
     'leveldb',
     'wiredtiger',
