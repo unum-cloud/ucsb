@@ -30,13 +30,13 @@ namespace ucsb {
 enum class db_brand_t {
     unknown_k,
 
+    ustore_k,
     rocksdb_k,
     leveldb_k,
     wiredtiger_k,
-    lmdb_k,
     mongodb_k,
     redis_k,
-    ustore_k,
+    lmdb_k,
 };
 
 std::shared_ptr<db_t> make_db(db_brand_t db_brand, bool transactional) {
