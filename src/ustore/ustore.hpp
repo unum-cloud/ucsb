@@ -132,10 +132,15 @@ bool ustore_t::open(std::string& error) {
             error = "Invalid configs directory";
             return false;
         }
-        config.engine.config_file_path = configs_root / USTORE_ENGINE_NAME / config_path_.filename();
-        // Select default config if the specified doesn't exist
-        if (!fs::exists(config.engine.config_file_path))
-            config.engine.config_file_path = fs::path(config.engine.config_file_path).parent_path() / "default.cfg";
+        auto config_file_path = configs_root / USTORE_ENGINE_NAME / config_path_.filename();
+        if (fs::exists(config_file_path))
+            config.engine.config_file_path = config_file_path;
+        else {
+            // Select default config if the specified doesn't exist
+            config_file_path = fs::path(config_file_path).parent_path() / "default.cfg";
+            if (fs::exists(config_file_path))
+                config.engine.config_file_path = config_file_path;
+        }
     }
 
     // Convert to json string
