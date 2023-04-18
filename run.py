@@ -172,7 +172,7 @@ def parse_args():
 
     parser = argparse.ArgumentParser()
     parser.add_argument('-db', '--db-names', type=list, required=False, help="Database name(s)", default=db_names, dest="db_names")
-    parser.add_argument('-sz', '--sizes', type=list, required=False, help="Benchmark size(s)", default=[sizes[0]], dest="sizes")
+    parser.add_argument('-sz', '--sizes', type=list, required=False, help="Benchmark size(s)", default=sizes, dest="sizes")
     parser.add_argument('-wl', '--workload-names', type=list, required=False, help="Workload name(s)", default=workload_names, dest="workload_names")
     parser.add_argument('-md', '--main-dir', type=str, required=False, help="Main directory", default=main_dir_path, dest="main_dir_path")
     parser.add_argument('-sd', '--storage-dirs', type=list, required=False, help="Storage directories", default=storage_disk_paths, dest="storage_disk_paths")
