@@ -3,8 +3,8 @@
 #include "src/core/types.hpp"
 #include "src/core/db.hpp"
 
-#if defined(UCSB_HAS_UKV)
-#include "src/ukv/ukv.hpp"
+#if defined(UCSB_HAS_USTORE)
+#include "src/ustore/ustore.hpp"
 #endif
 #if defined(UCSB_HAS_ROCKSDB)
 #include "src/rocksdb/rocksdb.hpp"
@@ -30,20 +30,20 @@ namespace ucsb {
 enum class db_brand_t {
     unknown_k,
 
+    ustore_k,
     rocksdb_k,
     leveldb_k,
     wiredtiger_k,
-    lmdb_k,
     mongodb_k,
     redis_k,
-    ukv_k,
+    lmdb_k,
 };
 
 std::shared_ptr<db_t> make_db(db_brand_t db_brand, bool transactional) {
     if (transactional) {
         switch (db_brand) {
-#if defined(UCSB_HAS_UKV)
-        case db_brand_t::ukv_k: return std::make_shared<ukv::ukv_t>();
+#if defined(UCSB_HAS_USTORE)
+        case db_brand_t::ustore_k: return std::make_shared<ustore::ustore_t>();
 #endif
 #if defined(UCSB_HAS_ROCKSDB)
         case db_brand_t::rocksdb_k: return std::make_shared<facebook::rocksdb_t>(facebook::db_mode_t::transactional_k);
@@ -53,8 +53,8 @@ std::shared_ptr<db_t> make_db(db_brand_t db_brand, bool transactional) {
     }
     else {
         switch (db_brand) {
-#if defined(UCSB_HAS_UKV)
-        case db_brand_t::ukv_k: return std::make_shared<ukv::ukv_t>();
+#if defined(UCSB_HAS_USTORE)
+        case db_brand_t::ustore_k: return std::make_shared<ustore::ustore_t>();
 #endif
 #if defined(UCSB_HAS_ROCKSDB)
         case db_brand_t::rocksdb_k: return std::make_shared<facebook::rocksdb_t>(facebook::db_mode_t::regular_k);
@@ -81,8 +81,8 @@ std::shared_ptr<db_t> make_db(db_brand_t db_brand, bool transactional) {
 }
 
 inline db_brand_t parse_db_brand(std::string const& name) {
-    if (name == "ukv")
-        return db_brand_t::ukv_k;
+    if (name == "ustore")
+        return db_brand_t::ustore_k;
     if (name == "rocksdb")
         return db_brand_t::rocksdb_k;
     if (name == "leveldb")
