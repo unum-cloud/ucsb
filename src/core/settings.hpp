@@ -19,7 +19,7 @@ struct settings_t {
 
     fs::path results_file_path;
     size_t run_idx = 0;
-    size_t runs_cnt = 0;
+    size_t runs_count = 0;
 };
 
 } // namespace ucsb

@@ -59,7 +59,7 @@ void parse_and_validate_args(int argc, char* argv[], settings_t& settings) {
     settings.threads_count = std::stoi(program.get("threads"));
     settings.workload_filter = program.get("filter");
     settings.run_idx = std::stoi(program.get("run-index"));
-    settings.runs_cnt = std::stoi(program.get("runs-count"));
+    settings.runs_count = std::stoi(program.get("runs-count"));
 
     // Resolve paths
     auto path = program.get("main-dir");
@@ -81,11 +81,11 @@ void parse_and_validate_args(int argc, char* argv[], settings_t& settings) {
         fmt::print("Zero threads count specified\n");
         exit(1);
     }
-    if (settings.runs_cnt == 0) {
+    if (settings.runs_count == 0) {
         fmt::print("Zero total runs count specified\n");
         exit(1);
     }
-    if (settings.run_idx >= settings.runs_cnt) {
+    if (settings.run_idx >= settings.runs_count) {
         fmt::print("Invalid run index specified\n");
         exit(1);
     }
@@ -125,7 +125,7 @@ inline void register_benchmark(std::string const& name, size_t threads_count, fu
         ->Iterations(1);
 }
 
-void run(int argc, char* argv[], std::string const& title, size_t idx, size_t cnt, std::string const& results_path) {
+void run(int argc, char* argv[], std::string const& title, size_t idx, size_t count, std::string const& results_path) {
     (void)argc;
 
     int bm_argc = 4;
@@ -150,12 +150,12 @@ void run(int argc, char* argv[], std::string const& title, size_t idx, size_t cn
 
     // Prepare reporter and run benchmarks
     console_reporter_t::sections_t sections = console_reporter_t::all_k;
-    if (cnt > 1) {
+    if (count > 1) {
         if (idx == 0)
             sections = console_reporter_t::sections_t(console_reporter_t::header_k | console_reporter_t::result_k);
-        else if (idx == cnt - 1)
+        else if (idx == count - 1)
             sections = console_reporter_t::sections_t(console_reporter_t::logo_k | console_reporter_t::result_k);
-        else if (idx < cnt)
+        else if (idx < count)
             sections = console_reporter_t::sections_t(console_reporter_t::result_k);
     }
     console_reporter_t console(title, sections);
@@ -261,8 +261,8 @@ std::vector<workload_t> split_workload_into_threads(workload_t const& workload, 
     return workloads;
 }
 
-db_hints_t make_hints(workloads_t const& workloads) {
-    db_hints_t hints {0, 0};
+db_hints_t make_hints(settings_t const& settings, workloads_t const& workloads) {
+    db_hints_t hints {settings.threads_count, 0, 0};
     if (!workloads.empty()) {
         hints.records_count = workloads.front().db_records_count;
         hints.value_length = workloads.front().value_length;
@@ -578,10 +578,8 @@ int main(int argc, char** argv) {
             fmt::print("Failed to create DB: {} (probably it's disabled in CMaleLists.txt)\n", settings.db_name);
             return 1;
         }
-        db->set_config(settings.db_config_file_path,
-                       settings.db_main_dir_path,
-                       settings.db_storage_dir_paths,
-                       make_hints(workloads));
+        auto hints = make_hints(settings, workloads);
+        db->set_config(settings.db_config_file_path, settings.db_main_dir_path, settings.db_storage_dir_paths, hints);
 
         threads_fence_t fence(settings.threads_count);
 
@@ -595,7 +593,7 @@ int main(int argc, char** argv) {
         }
 
         std::string title = build_title(settings, workloads, db->info());
-        run(argc, argv, title, settings.run_idx, settings.runs_cnt, in_progress_results_file_path);
+        run(argc, argv, title, settings.run_idx, settings.runs_count, in_progress_results_file_path);
 
         file_reporter_t::merge_results(in_progress_results_file_path, final_results_file_path);
         fs::remove(in_progress_results_file_path);
