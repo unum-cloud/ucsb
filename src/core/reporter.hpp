@@ -67,10 +67,10 @@ inline console_reporter_t::console_reporter_t(std::string const& title, sections
         "Throughput",
         "Data Processed",
         "Disk Usage",
-        "CPU (avg,%)",
-        "CPU (max,%)",
         "Memory (avg)",
         "Memory (max)",
+        "CPU (avg,%)",
+        "CPU (max,%)",
         "Fails (%)",
         "Duration",
     };
@@ -130,10 +130,10 @@ void console_reporter_t::ReportRuns(std::vector<Run> const& reports) {
         size_t data_processed = report.counters.at("processed,bytes").value;
         size_t disk_usage = report.counters.at("disk,bytes").value;
         //
-        double cpu_avg = report.counters.at("cpu_avg,%").value;
-        double cpu_max = report.counters.at("cpu_max,%").value;
         size_t mem_avg = report.counters.at("mem_avg(rss),bytes").value;
         size_t mem_max = report.counters.at("mem_max(rss),bytes").value;
+        double cpu_avg = report.counters.at("cpu_avg,%").value;
+        double cpu_max = report.counters.at("cpu_max,%").value;
         //
         double fails = report.counters.at("fails,%").value;
         double duration =
@@ -145,10 +145,10 @@ void console_reporter_t::ReportRuns(std::vector<Run> const& reports) {
                        fmt::format("{}/s", printable_float_t {throughput}),
                        fmt::format("{}", printable_bytes_t {data_processed}),
                        fmt::format("{}", printable_bytes_t {disk_usage}),
-                       fmt::format("{:.1f}", cpu_avg),
-                       fmt::format("{:.1f}", cpu_max),
                        fmt::format("{}", printable_bytes_t {mem_avg}),
                        fmt::format("{}", printable_bytes_t {mem_max}),
+                       fmt::format("{:.1f}", cpu_avg),
+                       fmt::format("{:.1f}", cpu_max),
                        fmt::format("{}", fails),
                        fmt::format("{}", printable_duration_t {size_t(duration)})});
         table.row(0).format().width(column_width_).font_align(tabulate::FontAlign::right).hide_border_top().locale("C");
