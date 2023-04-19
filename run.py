@@ -17,7 +17,7 @@ See main() function.
 """
 
 db_names = [
-    'ukv',
+    'ustore',
     'rocksdb',
     'leveldb',
     'wiredtiger',
