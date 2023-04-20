@@ -35,10 +35,9 @@ using transaction_t = ucsb::transaction_t;
 
 class ustore_t : public ucsb::db_t {
   public:
-    inline ustore_t() : db_index_(0) {}
+    inline ustore_t() {}
     ~ustore_t() { free(); }
 
-    void initialize_db() const;
     void set_config(fs::path const& config_path,
                     fs::path const& main_dir_path,
                     std::vector<fs::path> const& storage_dir_paths,
@@ -67,11 +66,9 @@ class ustore_t : public ucsb::db_t {
 
     std::unique_ptr<transaction_t> create_transaction() override;
 
-    static thread_local ustore_database_t db_;
-    static thread_local ustore_arena_t arena_;
-
   private:
     void free();
+    inline void initialize_db() const;
 
     fs::path config_path_;
     fs::path main_dir_path_;
@@ -79,13 +76,16 @@ class ustore_t : public ucsb::db_t {
     db_hints_t hints_;
 
     std::vector<ustore_database_t> dbs_;
-    std::atomic_uint8_t mutable db_index_;
+    static thread_local ustore_database_t db_;
+    static thread_local ustore_arena_t arena_;
+    static std::atomic_uint8_t db_index_;
     ustore_collection_t collection_ = ustore_collection_main_k;
     ustore_options_t options_ = ustore_options_default_k;
 };
 
 thread_local ustore_database_t ustore_t::db_ = nullptr;
 thread_local ustore_arena_t ustore_t::arena_ = nullptr;
+std::atomic_uint8_t ustore_t::db_index_ = 0;
 
 void ustore_t::set_config(fs::path const& config_path,
                           fs::path const& main_dir_path,
