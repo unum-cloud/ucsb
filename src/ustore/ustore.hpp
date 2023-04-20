@@ -193,12 +193,12 @@ void ustore_t::free() {
 
 inline void ustore_t::initialize_db() const {
     uint8_t index = 0;
+    if (!db_) [[unlikely]] {
 #if defined(USTORE_ENGINE_IS_FLIGHT_CLIENT)
-    if (!db_) [[unlikely]]
         index = db_index_++;
-#else
-    db_ = dbs_[index];
 #endif
+        db_ = dbs_[index];
+    }
 }
 
 operation_result_t ustore_t::upsert(key_t key, value_spanc_t value) {
