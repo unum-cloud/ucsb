@@ -192,8 +192,8 @@ void ustore_t::close() {
 
 void ustore_t::free() {
     for (std::size_t i = 0; i < clients_.size(); ++i) {
-        ustore_database_free(clients_[i].db);
         ustore_arena_free(clients_[i].memory);
+        ustore_database_free(clients_[i].db);
     }
     clients_.clear();
     client_.db = nullptr;
