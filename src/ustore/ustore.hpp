@@ -33,12 +33,18 @@ using operation_result_t = ucsb::operation_result_t;
 using db_hints_t = ucsb::db_hints_t;
 using transaction_t = ucsb::transaction_t;
 
-thread_local ustore::arena_t arena(nullptr);
+struct client_t {
+    ustore_database_t db = nullptr;
+    ustore_arena_t memory = nullptr;
+
+    operator bool() const noexcept { return db != nullptr; }
+};
 
 class ustore_t : public ucsb::db_t {
   public:
-    inline ustore_t() : db_(nullptr) {}
+    inline ustore_t() = default;
     ~ustore_t() { free(); }
+
     void set_config(fs::path const& config_path,
                     fs::path const& main_dir_path,
                     std::vector<fs::path> const& storage_dir_paths,
@@ -69,16 +75,22 @@ class ustore_t : public ucsb::db_t {
 
   private:
     void free();
+    inline void map_client() const;
 
     fs::path config_path_;
     fs::path main_dir_path_;
     std::vector<fs::path> storage_dir_paths_;
     db_hints_t hints_;
 
-    ustore_database_t db_;
+    std::vector<client_t> clients_;
+    static thread_local client_t client_;
+    static std::atomic_size_t client_index_;
     ustore_collection_t collection_ = ustore_collection_main_k;
     ustore_options_t options_ = ustore_options_default_k;
 };
+
+thread_local client_t ustore_t::client_;
+std::atomic_size_t ustore_t::client_index_ = 0;
 
 void ustore_t::set_config(fs::path const& config_path,
                           fs::path const& main_dir_path,
@@ -91,7 +103,7 @@ void ustore_t::set_config(fs::path const& config_path,
 }
 
 bool ustore_t::open(std::string& error) {
-    if (db_)
+    if (client_)
         return true;
 
     // Read config from file
@@ -152,42 +164,64 @@ bool ustore_t::open(std::string& error) {
 
     ustore_database_init_t init {};
     init.config = str_config.c_str();
+    init.error = status.member_ptr();
+    std::size_t clients_count = 1;
+
 #if defined(USTORE_ENGINE_IS_FLIGHT_CLIENT)
     init.config = "grpc://0.0.0.0:38709";
+    clients_count = hints_.threads_count;
 #endif
-    init.db = &db_;
-    init.error = status.member_ptr();
-    ustore_database_init(&init);
-    if (!status) {
-        error = status.message();
-        return status;
+    clients_.resize(clients_count);
+    for (std::size_t i = 0; i < clients_count; ++i) {
+        init.db = &clients_[i].db;
+        ustore_database_init(&init);
+        if (!status) {
+            error = status.message();
+            return status;
+        }
     }
-
-    arena = ustore::arena_t(db_);
     return true;
 }
 
 void ustore_t::close() {
+    client_index_.store(0);
 #if !defined(USTORE_ENGINE_IS_UCSET)
     free();
 #endif
 }
 
 void ustore_t::free() {
-    ustore_database_free(db_);
-    db_ = nullptr;
+    for (std::size_t i = 0; i < clients_.size(); ++i) {
+        ustore_arena_free(clients_[i].memory);
+        ustore_database_free(clients_[i].db);
+    }
+    clients_.clear();
+    client_.db = nullptr;
+    client_.memory = nullptr;
+}
+
+inline void ustore_t::map_client() const {
+    if (!client_) [[unlikely]] {
+        std::size_t index = 0;
+#if defined(USTORE_ENGINE_IS_FLIGHT_CLIENT)
+        index = client_index_.fetch_add(1);
+#endif
+        client_ = clients_[index];
+    }
 }
 
 operation_result_t ustore_t::upsert(key_t key, value_spanc_t value) {
+    map_client();
+
     ustore::status_t status;
     ustore_key_t key_ = key;
     ustore_length_t length = value.size();
     auto value_ = make_value(value.data(), value.size());
 
     ustore_write_t write {};
-    write.db = db_;
+    write.db = client_.db;
     write.error = status.member_ptr();
-    write.arena = arena.member_ptr();
+    write.arena = &client_.memory;
     write.options = options_;
     write.tasks_count = 1;
     write.collections = &collection_;
@@ -200,14 +234,16 @@ operation_result_t ustore_t::upsert(key_t key, value_spanc_t value) {
 }
 
 operation_result_t ustore_t::update(key_t key, value_spanc_t value) {
+    map_client();
+
     ustore::status_t status;
     ustore_key_t key_ = key;
     ustore_byte_t* value_ = nullptr;
 
     ustore_read_t read {};
-    read.db = db_;
+    read.db = client_.db;
     read.error = status.member_ptr();
-    read.arena = arena.member_ptr();
+    read.arena = &client_.memory;
     read.options = options_;
     read.tasks_count = 1;
     read.collections = &collection_;
@@ -221,13 +257,15 @@ operation_result_t ustore_t::update(key_t key, value_spanc_t value) {
 }
 
 operation_result_t ustore_t::remove(key_t key) {
+    map_client();
+
     ustore::status_t status;
     ustore_key_t key_ = key;
 
     ustore_write_t write {};
-    write.db = db_;
+    write.db = client_.db;
     write.error = status.member_ptr();
-    write.arena = arena.member_ptr();
+    write.arena = &client_.memory;
     write.options = options_;
     write.tasks_count = 1;
     write.collections = &collection_;
@@ -238,15 +276,17 @@ operation_result_t ustore_t::remove(key_t key) {
 }
 
 operation_result_t ustore_t::read(key_t key, value_span_t value) const {
+    map_client();
+
     ustore::status_t status;
     ustore_key_t key_ = key;
     ustore_byte_t* value_ = nullptr;
     ustore_length_t* lengths = nullptr;
 
     ustore_read_t read {};
-    read.db = db_;
+    read.db = client_.db;
     read.error = status.member_ptr();
-    read.arena = arena.member_ptr();
+    read.arena = &client_.memory;
     read.options = options_;
     read.tasks_count = 1;
     read.collections = &collection_;
@@ -264,6 +304,8 @@ operation_result_t ustore_t::read(key_t key, value_span_t value) const {
 }
 
 operation_result_t ustore_t::batch_upsert(keys_spanc_t keys, values_spanc_t values, value_lengths_spanc_t sizes) {
+    map_client();
+
     ustore::status_t status;
     std::vector<ustore_length_t> offsets;
     offsets.reserve(sizes.size() + 1);
@@ -273,9 +315,9 @@ operation_result_t ustore_t::batch_upsert(keys_spanc_t keys, values_spanc_t valu
 
     auto values_ = make_value(values.data(), values.size());
     ustore_write_t write {};
-    write.db = db_;
+    write.db = client_.db;
     write.error = status.member_ptr();
-    write.arena = arena.member_ptr();
+    write.arena = &client_.memory;
     write.options = options_;
     write.tasks_count = keys.size();
     write.collections = &collection_;
@@ -292,6 +334,8 @@ operation_result_t ustore_t::batch_upsert(keys_spanc_t keys, values_spanc_t valu
 }
 
 operation_result_t ustore_t::batch_read(keys_spanc_t keys, values_span_t values) const {
+    map_client();
+
     ustore::status_t status;
     ustore_octet_t* presences = nullptr;
     ustore_length_t* offsets = nullptr;
@@ -299,9 +343,9 @@ operation_result_t ustore_t::batch_read(keys_spanc_t keys, values_span_t values)
     ustore_byte_t* values_ = nullptr;
 
     ustore_read_t read {};
-    read.db = db_;
+    read.db = client_.db;
     read.error = status.member_ptr();
-    read.arena = arena.member_ptr();
+    read.arena = &client_.memory;
     read.options = options_;
     read.tasks_count = keys.size();
     read.collections = &collection_;
@@ -333,6 +377,8 @@ operation_result_t ustore_t::bulk_load(keys_spanc_t keys, values_spanc_t values,
 }
 
 operation_result_t ustore_t::range_select(key_t key, size_t length, values_span_t values) const {
+    map_client();
+
     ustore::status_t status;
     ustore_key_t key_ = key;
     ustore_length_t len = length;
@@ -341,9 +387,9 @@ operation_result_t ustore_t::range_select(key_t key, size_t length, values_span_
 
     // First scan keys
     ustore_scan_t scan {};
-    scan.db = db_;
+    scan.db = client_.db;
     scan.error = status.member_ptr();
-    scan.arena = arena.member_ptr();
+    scan.arena = &client_.memory;
     scan.options = options_;
     scan.tasks_count = 1;
     scan.collections = &collection_;
@@ -361,9 +407,9 @@ operation_result_t ustore_t::range_select(key_t key, size_t length, values_span_
 
     // Then do batch read
     ustore_read_t read {};
-    read.db = db_;
+    read.db = client_.db;
     read.error = status.member_ptr();
-    read.arena = arena.member_ptr();
+    read.arena = &client_.memory;
     read.options = ustore_options_t(options_ | ustore_option_dont_discard_memory_k);
     read.tasks_count = *found_counts;
     read.collections = &collection_;
@@ -388,6 +434,8 @@ operation_result_t ustore_t::range_select(key_t key, size_t length, values_span_
 }
 
 operation_result_t ustore_t::scan(key_t key, size_t length, value_span_t single_value) const {
+    map_client();
+
     ustore::status_t status;
     ustore_key_t key_ = key;
     ustore_length_t len =
@@ -401,9 +449,9 @@ operation_result_t ustore_t::scan(key_t key, size_t length, value_span_t single_
 
     // Init scan
     ustore_scan_t scan {};
-    scan.db = db_;
+    scan.db = client_.db;
     scan.error = status.member_ptr();
-    scan.arena = arena.member_ptr();
+    scan.arena = &client_.memory;
     scan.options = options_;
     scan.tasks_count = 1;
     scan.collections = &collection_;
@@ -414,9 +462,9 @@ operation_result_t ustore_t::scan(key_t key, size_t length, value_span_t single_
 
     // Init batch read
     ustore_read_t read {};
-    read.db = db_;
+    read.db = client_.db;
     read.error = status.member_ptr();
-    read.arena = arena.member_ptr();
+    read.arena = &client_.memory;
     read.options = ustore_options_t(options_ | ustore_option_dont_discard_memory_k);
     read.collections = &collection_;
     read.keys_stride = sizeof(ustore_key_t);
@@ -455,13 +503,14 @@ operation_result_t ustore_t::scan(key_t key, size_t length, value_span_t single_
 std::string ustore_t::info() { return fmt::format("v{}, {}", USTORE_VERSION, USTORE_ENGINE_NAME); }
 
 void ustore_t::flush() {
+    map_client();
 
     // Note: Workaround for flush
     ustore::status_t status;
     ustore_write_t write {};
-    write.db = db_;
+    write.db = client_.db;
     write.error = status.member_ptr();
-    write.arena = arena.member_ptr();
+    write.arena = &client_.memory;
     write.options = ustore_options_t(options_ | ustore_option_write_flush_k);
     write.tasks_count = 0;
     write.collections = &collection_;
@@ -481,16 +530,18 @@ size_t ustore_t::size_on_disk() const {
 }
 
 std::unique_ptr<transaction_t> ustore_t::create_transaction() {
+    map_client();
+
     ustore::status_t status;
     ustore_transaction_t transaction {};
 
     ustore_transaction_init_t txn_init {};
-    txn_init.db = db_;
+    txn_init.db = client_.db;
     txn_init.error = status.member_ptr();
     txn_init.transaction = &transaction;
     ustore_transaction_init(&txn_init);
     if (status)
-        return std::make_unique<ustore_transact_t>(db_, transaction);
+        return std::make_unique<ustore_transact_t>(client_.db, transaction);
 
     return {};
 }
