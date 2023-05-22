@@ -131,11 +131,11 @@ add_executable(ucsb_bench ./src/bench.cxx)
 
 if(${UCSB_BUILD_USTORE})
   # Choose engine. Available engines: UCSET, ROCKSDB, LEVELDB, UDISK
-  set(USTORE_ENGINE_NAME UCSET) 
+  set(USTORE_ENGINE_NAME UCSET)
 
   include("${CMAKE_MODULE_PATH}/ustore.cmake")
   list(APPEND UCSB_DB_LIBS "ustore")
-  target_compile_definitions(ucsb_bench PUBLIC UCSB_HAS_USTORE=1) 
+  target_compile_definitions(ucsb_bench PUBLIC UCSB_HAS_USTORE=1)
 endif()
 
 if(${UCSB_BUILD_ROCKSDB})

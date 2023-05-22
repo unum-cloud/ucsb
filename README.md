@@ -41,6 +41,12 @@ The outputs will be placed in the `bench/results/` folder.
 git clone https://github.com/unum-cloud/ucsb.git && cd ucsb && ./run.py
 ```
 
+### eBPF
+
+There is an optional eBPF-based profiling, which can be enabled with `--with-ebpf` and `--with-ebpf-memory` flags,
+before execution make sure you have `bcc` [installed](https://github.com/iovisor/bcc/blob/master/INSTALL.md) at least version 0.21.0.
+
+
 ## Supported Databases
 
 Key-Value Stores and NoSQL databases differ in supported operations.

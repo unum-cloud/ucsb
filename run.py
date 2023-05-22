@@ -1,13 +1,16 @@
 #!/usr/bin/env python3
 
+import argparse
 import os
-import sys
-import time
+import pathlib
 import shutil
 import signal
+import sys
+import time
+from threading import Thread
+from typing import List
+
 import pexpect
-import pathlib
-import argparse
 import termcolor
 
 """
@@ -53,6 +56,8 @@ transactional = True
 drop_caches = False
 cleanup_previous = False
 run_in_docker_container = False
+with_ebpf = False
+with_ebpf_memory = False
 
 main_dir_path = "./db_main/"
 storage_disk_paths = [
@@ -76,21 +81,20 @@ def get_db_main_dir_path(db_name: str, size: str, main_dir_path: str) -> str:
     return os.path.join(main_dir_path, db_name, size, "")
 
 
-def get_db_storage_dir_paths(db_name: str, size: str, storage_disk_paths: str) -> list:
+def get_db_storage_dir_paths(db_name: str, size: str, storage_disk_paths: List[str]) -> list:
     db_storage_dir_paths = []
     for storage_disk_path in storage_disk_paths:
         db_storage_dir_paths.append(os.path.join(storage_disk_path, db_name, size, ""))
     return db_storage_dir_paths
 
 
-def get_results_file_path(
-    db_name: str,
-    size: str,
-    drop_caches: bool,
-    transactional: bool,
-    storage_disk_paths: str,
-    threads_count: int,
-) -> str:
+def get_results_file_path(db_name: str,
+                          size: str,
+                          drop_caches: bool,
+                          transactional: bool,
+                          storage_disk_paths: List[str],
+                          threads_count: int,
+                          ) -> str:
     root_dir_path = ""
     if drop_caches:
         if transactional:
@@ -128,17 +132,19 @@ def drop_system_caches():
 
 
 def run(
-    db_name: str,
-    size: str,
-    workload_names: list,
-    main_dir_path: str,
-    storage_disk_paths: str,
-    transactional: bool,
-    drop_caches: bool,
-    run_in_docker_container: bool,
-    threads_count: bool,
-    run_index: int,
-    runs_count: int,
+        db_name: str,
+        size: str,
+        workload_names: list,
+        main_dir_path: str,
+        storage_disk_paths: List[str],
+        transactional: bool,
+        drop_caches: bool,
+        run_in_docker_container: bool,
+        threads_count: int,
+        run_index: int,
+        runs_count: int,
+        with_ebpf: bool,
+        with_ebpf_memory: bool
 ) -> None:
     db_config_file_path = get_db_config_file_path(db_name, size)
     workloads_file_path = get_workloads_file_path(size)
@@ -149,6 +155,7 @@ def run(
     )
 
     transactional_flag = "-t" if transactional else ""
+    lazy_flag = '-l' if with_ebpf else ''
     filter = ",".join(workload_names)
     db_storage_dir_paths = ",".join(db_storage_dir_paths)
 
@@ -161,8 +168,30 @@ def run(
             raise Exception("First, please build the runner: `build_release.sh`")
 
     process = pexpect.spawn(
-        f'{runner} -db {db_name} {transactional_flag} -cfg "{db_config_file_path}" -wl "{workloads_file_path}" -md "{db_main_dir_path}" -sd "{db_storage_dir_paths}" -res "{results_file_path}" -th {threads_count} -fl {filter} -ri {run_index} -rc {runs_count}'
+        f'{runner} -db {db_name} {transactional_flag} {lazy_flag} -cfg "{db_config_file_path}" -wl "{workloads_file_path}" -md "{db_main_dir_path}" -sd "{db_storage_dir_paths}" -res "{results_file_path}" -th {threads_count} -fl {filter} -ri {run_index} -rc {runs_count}'
     )
+    thread = None
+    if with_ebpf:
+        from ebpf.ebpf import attach_probes, harvest_ebpf
+        bpf, pid, process = attach_probes(
+            process=process,
+            with_memory=with_ebpf_memory,
+            communicate_with_signals=True,
+        )
+        # Send SIGUSR1 to the process to notify it that the probes are attached
+        os.kill(process.pid, signal.SIGUSR1)
+        thread = Thread(target=harvest_ebpf, args=(bpf,), kwargs={
+            'process': process,
+            'interval': 5,
+            'with_memory': with_ebpf_memory,
+            'snapshot_prefix': "-".join(workload_names),
+            'save_snapshots': f'./bench/ebpf/snapshots/{db_name}_{size}',
+            'communicate_with_signals': True,
+        })
+        thread.start()
+    if with_ebpf:
+        thread.join()
+
     process.interact()
     process.close()
 
@@ -189,6 +218,8 @@ def parse_args():
     global cleanup_previous
     global drop_caches
     global run_in_docker_container
+    global with_ebpf
+    global with_ebpf_memory
 
     parser = argparse.ArgumentParser()
 
@@ -268,6 +299,22 @@ def parse_args():
         action=argparse.BooleanOptionalAction,
         default=run_in_docker_container,
     )
+    parser.add_argument(
+        "-eb",
+        "--with-ebpf",
+        help="Runs ebpf benchmarks",
+        default=with_ebpf,
+        dest="with_ebpf",
+        action=argparse.BooleanOptionalAction
+    )
+    parser.add_argument(
+        "-em",
+        "--with-ebpf-memory",
+        help="Enable memory related ebpf benchmarks",
+        default=with_ebpf_memory,
+        dest="with_ebpf_memory",
+        action=argparse.BooleanOptionalAction
+    )
 
     args = parser.parse_args()
     db_names = args.db_names
@@ -280,6 +327,8 @@ def parse_args():
     cleanup_previous = args.cleanup_previous
     drop_caches = args.drop_caches
     run_in_docker_container = args.run_docker
+    with_ebpf = args.with_ebpf
+    with_ebpf_memory = args.with_ebpf_memory
 
 
 def check_args():
@@ -293,6 +342,10 @@ def check_args():
         sys.exit("Database size(s) not specified")
     if not workload_names:
         sys.exit("Workload name(s) not specified")
+    if run_in_docker_container and with_ebpf:
+        sys.exit('Running ebpf benchmarks in docker container is not supported')
+    if with_ebpf_memory and not with_ebpf:
+        sys.exit('Memory related ebpf benchmarks require ebpf benchmarks to be enabled, run with --with-ebpf flag')
 
 
 def main() -> None:
@@ -364,6 +417,8 @@ def main() -> None:
                         threads_count,
                         i,
                         len(workload_names),
+                        with_ebpf,
+                        with_ebpf_memory
                     )
             else:
                 run(
@@ -378,6 +433,8 @@ def main() -> None:
                     threads_count,
                     0,
                     1,
+                    with_ebpf,
+                    with_ebpf_memory
                 )
 
 
