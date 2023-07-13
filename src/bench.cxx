@@ -36,32 +36,37 @@ void parse_and_validate_args(int argc, char* argv[], settings_t& settings) {
 
     argparse::ArgumentParser program(argv[0]);
     program.add_argument("-db", "--db-name").required().help("Database name");
+    program.add_argument("-t", "--transaction").default_value(false).implicit_value(true).help("Transactional");
     program.add_argument("-cfg", "--config-path").required().help("Database configuration file path");
     program.add_argument("-wl", "--workload-path").required().help("Workloads file path");
-    program.add_argument("-t", "--transaction").default_value(false).implicit_value(true).help("Transactional");
     program.add_argument("-res", "--results-path").required().help("Results file path");
     program.add_argument("-md", "--main-dir").required().help("Database main directory path");
     program.add_argument("-sd", "--storage-dirs")
         .default_value(std::string(""))
         .help("Database storage directory paths");
-    program.add_argument("-fl", "--filter").default_value(std::string("")).help("Workloads filter");
     program.add_argument("-th", "--threads").default_value(std::string("1")).help("Threads count");
+    program.add_argument("-fl", "--filter").default_value(std::string("")).help("Workloads filter");
+    program.add_argument("-ri", "--run-index").default_value(std::string("0")).help("Run index in sequence");
+    program.add_argument("-rc", "--runs-count").default_value(std::string("1")).help("Total runs count");
 
     program.parse_known_args(argc, argv);
 
     settings.db_name = program.get("db-name");
+    settings.transactional = program.get<bool>("transaction");
     settings.db_config_file_path = program.get("config-path");
     settings.workloads_file_path = program.get("workload-path");
-    settings.transactional = program.get<bool>("transaction");
     settings.results_file_path = program.get("results-path");
     settings.threads_count = std::stoi(program.get("threads"));
     settings.workload_filter = program.get("filter");
+    settings.run_idx = std::stoi(program.get("run-index"));
+    settings.runs_count = std::stoi(program.get("runs-count"));
 
+    // Resolve paths
     auto path = program.get("main-dir");
     if (!path.empty() && path.back() != '/')
         path.push_back('/');
     settings.db_main_dir_path = path;
-
+    //
     settings.db_storage_dir_paths.clear();
     std::string str_dir_paths = program.get("storage-dirs");
     auto dir_paths = split(str_dir_paths, ',');
@@ -71,8 +76,17 @@ void parse_and_validate_args(int argc, char* argv[], settings_t& settings) {
         settings.db_storage_dir_paths.push_back(dir_path);
     }
 
+    // Check arguments
     if (settings.threads_count == 0) {
         fmt::print("Zero threads count specified\n");
+        exit(1);
+    }
+    if (settings.runs_count == 0) {
+        fmt::print("Zero total runs count specified\n");
+        exit(1);
+    }
+    if (settings.run_idx >= settings.runs_count) {
+        fmt::print("Invalid run index specified\n");
         exit(1);
     }
 }
@@ -111,7 +125,7 @@ inline void register_benchmark(std::string const& name, size_t threads_count, fu
         ->Iterations(1);
 }
 
-void run_benchmarks(int argc, char* argv[], std::string const& title, std::string const& results_file_path) {
+void run(int argc, char* argv[], std::string const& title, size_t idx, size_t count, std::string const& results_path) {
     (void)argc;
 
     int bm_argc = 4;
@@ -122,7 +136,7 @@ void run_benchmarks(int argc, char* argv[], std::string const& title, std::strin
     std::string arg1("--benchmark_format=console");
     bm_argv[1] = const_cast<char*>(arg1.c_str());
 
-    std::string arg2(fmt::format("--benchmark_out={}", results_file_path.c_str()));
+    std::string arg2(fmt::format("--benchmark_out={}", results_path.c_str()));
     bm_argv[2] = const_cast<char*>(arg2.c_str());
 
     std::string arg3("--benchmark_out_format=json");
@@ -134,7 +148,17 @@ void run_benchmarks(int argc, char* argv[], std::string const& title, std::strin
         return;
     }
 
-    console_reporter_t console(title);
+    // Prepare reporter and run benchmarks
+    console_reporter_t::sections_t sections = console_reporter_t::all_k;
+    if (count > 1) {
+        if (idx == 0)
+            sections = console_reporter_t::sections_t(console_reporter_t::header_k | console_reporter_t::result_k);
+        else if (idx == count - 1)
+            sections = console_reporter_t::sections_t(console_reporter_t::logo_k | console_reporter_t::result_k);
+        else if (idx < count)
+            sections = console_reporter_t::sections_t(console_reporter_t::result_k);
+    }
+    console_reporter_t console(title, sections);
     bm::RunSpecifiedBenchmarks(&console);
 }
 
@@ -237,8 +261,8 @@ std::vector<workload_t> split_workload_into_threads(workload_t const& workload, 
     return workloads;
 }
 
-db_hints_t make_hints(workloads_t const& workloads) {
-    db_hints_t hints {0, 0};
+db_hints_t make_hints(settings_t const& settings, workloads_t const& workloads) {
+    db_hints_t hints {settings.threads_count, 0, 0};
     if (!workloads.empty()) {
         hints.records_count = workloads.front().db_records_count;
         hints.value_length = workloads.front().value_length;
@@ -274,19 +298,19 @@ struct progress_t {
 
     static void print_db_open() {
         fmt::print("\33[2K\r");
-        fmt::print(" [✱] Opening DB...");
+        fmt::print(" [✱] Opening DB...\r");
         fflush(stdout);
     }
 
     static void print_db_close() {
         fmt::print("\33[2K\r");
-        fmt::print(" [✱] Closing DB...");
+        fmt::print(" [✱] Closing DB...\r");
         fflush(stdout);
     }
 
     static void print_db_flush() {
         fmt::print("\33[2K\r");
-        fmt::print(" [✱] Flushing DB...");
+        fmt::print(" [✱] Flushing DB...\r");
         fflush(stdout);
     }
 
@@ -298,13 +322,13 @@ struct progress_t {
     void print_start(std::string const& workload_name) {
         fmt::print("\33[2K\r");
         auto name = fmt::format(fmt::fg(fmt::color::light_green), "{}", workload_name);
-        fmt::print(" [✱] {}: 0.00%", name, 0.0);
+        fmt::print(" [✱] {}: 0.00%\r", name, 0.0);
         fflush(stdout);
     }
 
     void print_end() {
         fmt::print("\33[2K\r");
-        fmt::print(" [✱] Completed");
+        fmt::print(" [✱] Completed\r");
         fflush(stdout);
     }
 
@@ -332,7 +356,7 @@ struct progress_t {
             delta = fmt::format(fmt::fg(fmt::color::green), "▲");
         auto fails = fails_percent == 0.0 ? fmt::format("{}%", fails_percent)
                                           : fmt::format(fmt::fg(fmt::color::red), "{}%", fails_percent);
-        fmt::print(" [✱] {}: {:.2f}% [{} {}| fails: {} | elapsed: {} | left: {}]",
+        fmt::print(" [✱] {}: {:.2f}% [{}/s {}| fails: {} | elapsed: {} | left: {}]\r",
                    name,
                    done_percent,
                    printable_float_t {ops_per_second},
@@ -554,10 +578,8 @@ int main(int argc, char** argv) {
             fmt::print("Failed to create DB: {} (probably it's disabled in CMaleLists.txt)\n", settings.db_name);
             return 1;
         }
-        db->set_config(settings.db_config_file_path,
-                       settings.db_main_dir_path,
-                       settings.db_storage_dir_paths,
-                       make_hints(workloads));
+        auto hints = make_hints(settings, workloads);
+        db->set_config(settings.db_config_file_path, settings.db_main_dir_path, settings.db_storage_dir_paths, hints);
 
         threads_fence_t fence(settings.threads_count);
 
@@ -571,7 +593,7 @@ int main(int argc, char** argv) {
         }
 
         std::string title = build_title(settings, workloads, db->info());
-        run_benchmarks(argc, argv, title, in_progress_results_file_path);
+        run(argc, argv, title, settings.run_idx, settings.runs_count, in_progress_results_file_path);
 
         file_reporter_t::merge_results(in_progress_results_file_path, final_results_file_path);
         fs::remove(in_progress_results_file_path);

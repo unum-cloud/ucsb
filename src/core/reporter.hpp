@@ -24,7 +24,16 @@ class console_reporter_t : public bm::BenchmarkReporter {
     using base_t = bm::BenchmarkReporter;
 
   public:
-    inline console_reporter_t(std::string const& title);
+    enum sections_t {
+        header_k = 0x01,
+        result_k = 0x02,
+        logo_k = 0x04,
+
+        all_k = header_k | result_k | logo_k,
+    };
+
+  public:
+    inline console_reporter_t(std::string const& title, sections_t sections);
 
   public:
     // Prints environment information
@@ -39,7 +48,8 @@ class console_reporter_t : public bm::BenchmarkReporter {
 
   private:
     std::string title_;
-    bool print_header_;
+    sections_t sections_;
+    bool has_header_printed_;
 
     tabulate::Table::Row_t columns_;
     size_t fails_column_idx_;
@@ -48,19 +58,19 @@ class console_reporter_t : public bm::BenchmarkReporter {
     size_t columns_total_width_;
 };
 
-inline console_reporter_t::console_reporter_t(std::string const& title)
-    : base_t(), title_(title), print_header_(true), fails_column_idx_(0), column_width_(0), workload_column_width_(0),
-      columns_total_width_(0) {
+inline console_reporter_t::console_reporter_t(std::string const& title, sections_t sections)
+    : base_t(), title_(title), sections_(sections), has_header_printed_(true), fails_column_idx_(0), column_width_(0),
+      workload_column_width_(0), columns_total_width_(0) {
 
     columns_ = {
         "Workload",
         "Throughput",
         "Data Processed",
         "Disk Usage",
-        "CPU (avg,%)",
-        "CPU (max,%)",
         "Memory (avg)",
         "Memory (max)",
+        "CPU (avg,%)",
+        "CPU (max,%)",
         "Fails (%)",
         "Duration",
     };
@@ -73,29 +83,27 @@ inline console_reporter_t::console_reporter_t(std::string const& title)
 }
 
 bool console_reporter_t::ReportContext(Context const&) {
-    tabulate::Table table;
-    table.add_row({title_});
-    table.column(0)
-        .format()
-        .width(columns_total_width_)
-        .font_align(tabulate::FontAlign::center)
-        .font_color(tabulate::Color::blue)
-        .locale("C");
-    std::cout << table << std::endl;
+
+    if (sections_ & sections_t::header_k) {
+        tabulate::Table table;
+        table.add_row({title_});
+        table.column(0)
+            .format()
+            .width(columns_total_width_)
+            .font_align(tabulate::FontAlign::center)
+            .font_color(tabulate::Color::blue)
+            .locale("C");
+        std::cout << table << std::endl;
+    }
+
     return true;
 }
 
 void console_reporter_t::ReportRuns(std::vector<Run> const& reports) {
 
-    if (reports.size() != 1) {
-        fmt::print("Each benchmark should be in separate group");
-        return;
-    }
-    auto const& report = reports.front();
-
     // Print header
-    if (print_header_) {
-        print_header_ = false;
+    if ((sections_ & sections_t::header_k) && has_header_printed_) {
+        has_header_printed_ = false;
         tabulate::Table table;
         table.add_row({columns_});
         table.row(0)
@@ -109,58 +117,70 @@ void console_reporter_t::ReportRuns(std::vector<Run> const& reports) {
         std::cout << table << std::endl;
     }
 
-    // Counters
-    double throughput = report.counters.at("operations/s").value;
-    //
-    size_t data_processed = report.counters.at("processed,bytes").value;
-    size_t disk_usage = report.counters.at("disk,bytes").value;
-    //
-    double cpu_avg = report.counters.at("cpu_avg,%").value;
-    double cpu_max = report.counters.at("cpu_max,%").value;
-    size_t mem_avg = report.counters.at("mem_avg(rss),bytes").value;
-    size_t mem_max = report.counters.at("mem_max(rss),bytes").value;
-    //
-    double fails = report.counters.at("fails,%").value;
-    double duration = convert_duration(report.real_accumulated_time, bm::TimeUnit::kSecond, bm::TimeUnit::kMillisecond);
+    if (sections_ & sections_t::result_k) {
+        if (reports.size() != 1) {
+            fmt::print("Each benchmark should be in separate group");
+            return;
+        }
+        auto const& report = reports.front();
 
-    // Build table
-    tabulate::Table table;
-    table.add_row({report.run_name.function_name,
-                   fmt::format("{}/s", printable_float_t {throughput}),
-                   fmt::format("{}", printable_bytes_t {data_processed}),
-                   fmt::format("{}", printable_bytes_t {disk_usage}),
-                   fmt::format("{:.1f}", cpu_avg),
-                   fmt::format("{:.1f}", cpu_max),
-                   fmt::format("{}", printable_bytes_t {mem_avg}),
-                   fmt::format("{}", printable_bytes_t {mem_max}),
-                   fmt::format("{}", fails),
-                   fmt::format("{}", printable_duration_t {size_t(duration)})});
-    table.row(0).format().width(column_width_).font_align(tabulate::FontAlign::right).hide_border_top().locale("C");
-    table.column(0)
-        .format()
-        .width(workload_column_width_)
-        .font_align(tabulate::FontAlign::left)
-        .font_color(tabulate::Color::green);
+        // Counters
+        double throughput = report.counters.at("operations/s").value;
+        //
+        size_t data_processed = report.counters.at("processed,bytes").value;
+        size_t disk_usage = report.counters.at("disk,bytes").value;
+        //
+        size_t mem_avg = report.counters.at("mem_avg(rss),bytes").value;
+        size_t mem_max = report.counters.at("mem_max(rss),bytes").value;
+        double cpu_avg = report.counters.at("cpu_avg,%").value;
+        double cpu_max = report.counters.at("cpu_max,%").value;
+        //
+        double fails = report.counters.at("fails,%").value;
+        double duration =
+            convert_duration(report.real_accumulated_time, bm::TimeUnit::kSecond, bm::TimeUnit::kMillisecond);
 
-    // Highlight cells
-    if (fails > 0)
-        table[0][fails_column_idx_].format().font_color(tabulate::Color::red);
+        // Build table
+        tabulate::Table table;
+        table.add_row({report.run_name.function_name,
+                       fmt::format("{}/s", printable_float_t {throughput}),
+                       fmt::format("{}", printable_bytes_t {data_processed}),
+                       fmt::format("{}", printable_bytes_t {disk_usage}),
+                       fmt::format("{}", printable_bytes_t {mem_avg}),
+                       fmt::format("{}", printable_bytes_t {mem_max}),
+                       fmt::format("{:.1f}", cpu_avg),
+                       fmt::format("{:.1f}", cpu_max),
+                       fmt::format("{}", fails),
+                       fmt::format("{}", printable_duration_t {size_t(duration)})});
+        table.row(0).format().width(column_width_).font_align(tabulate::FontAlign::right).hide_border_top().locale("C");
+        table.column(0)
+            .format()
+            .width(workload_column_width_)
+            .font_align(tabulate::FontAlign::left)
+            .font_color(tabulate::Color::green);
 
-    // Print
-    std::cout << table << std::endl;
+        // Highlight cells
+        if (fails > 0)
+            table[0][fails_column_idx_].format().font_color(tabulate::Color::red);
+
+        // Print
+        std::cout << table << std::endl;
+    }
 }
 
 void console_reporter_t::Finalize() {
-    tabulate::Table table;
-    table.add_row({"C 2015-2023 UCSB, Unum Cloud"});
-    table.row(0)
-        .format()
-        .width(columns_total_width_)
-        .font_align(tabulate::FontAlign::center)
-        .font_color(tabulate::Color::blue)
-        .hide_border_top()
-        .locale("C");
-    std::cout << table << std::endl;
+
+    if (sections_ & sections_t::logo_k) {
+        tabulate::Table table;
+        table.add_row({"C 2015-2023 UCSB, Unum Cloud"});
+        table.row(0)
+            .format()
+            .width(columns_total_width_)
+            .font_align(tabulate::FontAlign::center)
+            .font_color(tabulate::Color::blue)
+            .hide_border_top()
+            .locale("C");
+        std::cout << table << std::endl;
+    }
 }
 
 double console_reporter_t::convert_duration(double duration, bm::TimeUnit from, bm::TimeUnit to) {

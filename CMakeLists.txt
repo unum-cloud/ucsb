@@ -8,7 +8,7 @@ cmake_minimum_required(VERSION 3.20.1)
 # Enable/Disable Databases
 #######################################################################################################################
 
-option(UCSB_BUILD_UKV "Build UKV for the benchmark" ON)
+option(UCSB_BUILD_USTORE "Build USTORE for the benchmark" ON)
 option(UCSB_BUILD_ROCKSDB "Build RocksDB for the benchmark" ON)
 option(UCSB_BUILD_LEVELDB "Build LevelDB for the benchmark" ON)
 option(UCSB_BUILD_WIREDTIGER "Build WiredTiger for the benchmark" ON)
@@ -124,17 +124,18 @@ include("${CMAKE_MODULE_PATH}/tabulate.cmake")
 include("${CMAKE_MODULE_PATH}/fmt.cmake")
 include("${CMAKE_MODULE_PATH}/argparse.cmake")
 include("${CMAKE_MODULE_PATH}/nlohmannjson.cmake")
+include("${CMAKE_MODULE_PATH}/uring.cmake")
 
 set(UCSB_DB_LIBS)
 add_executable(ucsb_bench ./src/bench.cxx)
 
-if(${UCSB_BUILD_UKV})
-  # Choose engine. Available engines: UMEM, ROCKSDB, LEVELDB, UDISK
-  set(UKV_ENGINE_NAME UMEM) 
+if(${UCSB_BUILD_USTORE})
+  # Choose engine. Available engines: UCSET, ROCKSDB, LEVELDB, UDISK
+  set(USTORE_ENGINE_NAME UCSET) 
 
-  include("${CMAKE_MODULE_PATH}/ukv.cmake")
-  list(APPEND UCSB_DB_LIBS "ukv")
-  target_compile_definitions(ucsb_bench PUBLIC UCSB_HAS_UKV=1) 
+  include("${CMAKE_MODULE_PATH}/ustore.cmake")
+  list(APPEND UCSB_DB_LIBS "ustore")
+  target_compile_definitions(ucsb_bench PUBLIC UCSB_HAS_USTORE=1) 
 endif()
 
 if(${UCSB_BUILD_ROCKSDB})
@@ -173,8 +174,7 @@ if(${UCSB_BUILD_LMDB})
   target_compile_definitions(ucsb_bench PUBLIC UCSB_HAS_LMDB=1) 
 endif()
 
-set(CXX_TARGET_LINK_LIBRARIES benchmark fmt ${UCSB_DB_LIBS})
-set(CXX_TARGET_LINK_LIBRARIES_WITH_FLAGS z uring)
+set(CXX_TARGET_LINK_LIBRARIES z uring benchmark fmt ${UCSB_DB_LIBS})
 
 set(CMAKE_THREAD_LIBS_INIT "-lpthread")
 set(CMAKE_HAVE_THREADS_LIBRARY 1)
@@ -191,6 +191,4 @@ target_link_libraries(ucsb_bench${ARTIFACT_SUFFIX}
   ${CXX_TARGET_LINK_LIBRARIES}
   ${PKG_PACKAGES_LIBRARIES}
   ${CMAKE_DL_LIBS}
-  ${CXX_TARGET_LINK_LIBRARIES_WITH_FLAGS}
-  -fsanitize=address # Temp solution, wating for Darvin
 )

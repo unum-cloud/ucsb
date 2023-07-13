@@ -3,23 +3,21 @@
 import os
 import sys
 import time
-import fire
 import shutil
 import signal
 import pexpect
 import pathlib
+import argparse
 import termcolor
 
-from typing import Optional
-
 """
-Run the script by passing arguments to the script or changing the settings below.
+Run the script by passing arguments or selecting the settings below.
 All the settings are also treated as defaults, so passed arguments will overwrite them.
 See main() function.
 """
 
-supported_db_names = [
-    'ukv',
+db_names = [
+    'ustore',
     'rocksdb',
     'leveldb',
     'wiredtiger',
@@ -28,7 +26,7 @@ supported_db_names = [
     'lmdb',
 ]
 
-supported_sizes = [
+sizes = [
     '100MB',
     # '1GB',
     # '10GB',
@@ -37,7 +35,7 @@ supported_sizes = [
     # '10TB',
 ]
 
-supported_workload_names = [
+workload_names = [
     'Init',
     'Read',
     'BatchRead',
@@ -48,14 +46,18 @@ supported_workload_names = [
     'BatchUpsert',
     'Remove',
 ]
- 
-default_threads_count = 1
-default_main_dir_path = './db_main/'
-default_storage_disk_paths = [
-    # '/mnt/disk1/db_storage/',
-    # '/mnt/disk2/db_storage/',
-    # '/mnt/disk3/db_storage/',
-    # '/mnt/disk4/db_storage/',
+
+threads_count = 1
+transactional = False
+
+drop_caches = True
+cleanup_previous = True
+run_in_docker_container = False
+
+main_dir_path = './db_main/'
+storage_disk_paths = [
+    # '/disk1/db_storage/',
+    # '/disk2/db_storage/',
 ]
 
 
@@ -99,11 +101,12 @@ def get_results_file_path(db_name: str, size: str, drop_caches: bool, transactio
 
 
 def drop_system_caches():
-    print('Dropping caches...')
+    print(end='\x1b[1K\r')
+    print(' [✱] Dropping system caches...', end='\r')
     try:
         with open('/proc/sys/vm/drop_caches', 'w') as stream:
             stream.write('3\n')
-        time.sleep(8)
+        time.sleep(8) # Wait for other apps to reload its caches
     except KeyboardInterrupt:
         print(termcolor.colored('Terminated by user', 'yellow'))
         exit(1)
@@ -112,7 +115,7 @@ def drop_system_caches():
         exit(1)
 
 
-def run(db_name: str, size: str, workload_names: list, main_dir_path: str, storage_disk_paths: str, transactional: bool, drop_caches: bool, run_docker_image: bool, threads_count: bool) -> None:
+def run(db_name: str, size: str, workload_names: list, main_dir_path: str, storage_disk_paths: str, transactional: bool, drop_caches: bool, run_in_docker_container: bool, threads_count: bool, run_index: int, runs_count: int) -> None:
     db_config_file_path = get_db_config_file_path(db_name, size)
     workloads_file_path = get_workloads_file_path(size)
     db_main_dir_path = get_db_main_dir_path(db_name, size, main_dir_path)
@@ -124,7 +127,7 @@ def run(db_name: str, size: str, workload_names: list, main_dir_path: str, stora
     db_storage_dir_paths = ','.join(db_storage_dir_paths)
 
     runner: str
-    if run_docker_image:
+    if run_in_docker_container:
         runner = f'docker run -v {os.getcwd()}/bench:/ucsb/bench -v {os.getcwd()}/tmp:/ucsb/tmp -it ucsb-image-dev'
     else:
         runner = './build_release/build/bin/ucsb_bench'
@@ -137,7 +140,9 @@ def run(db_name: str, size: str, workload_names: list, main_dir_path: str, stora
                             -sd "{db_storage_dir_paths}"\
                             -res "{results_file_path}" \
                             -th {threads_count} \
-                            -fl {filter}'
+                            -fl {filter} \
+                            -ri {run_index} \
+                            -rc {runs_count}'
                             )
     process.interact()
     process.close()
@@ -152,7 +157,49 @@ def run(db_name: str, size: str, workload_names: list, main_dir_path: str, stora
         exit(process.signalstatus)
 
 
-def check_args(db_names, sizes, workload_names):
+def parse_args():
+
+    global db_names
+    global sizes
+    global workload_names
+    global main_dir_path
+    global storage_disk_paths
+    global threads_count
+    global transactional
+    global cleanup_previous
+    global drop_caches
+    global run_in_docker_container
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument('-db', '--db-names', type=list, required=False, help="Database name(s)", default=db_names, dest="db_names")
+    parser.add_argument('-sz', '--sizes', type=list, required=False, help="Benchmark size(s)", default=sizes, dest="sizes")
+    parser.add_argument('-wl', '--workload-names', type=list, required=False, help="Workload name(s)", default=workload_names, dest="workload_names")
+    parser.add_argument('-md', '--main-dir', type=str, required=False, help="Main directory", default=main_dir_path, dest="main_dir_path")
+    parser.add_argument('-sd', '--storage-dirs', type=list, required=False, help="Storage directories", default=storage_disk_paths, dest="storage_disk_paths")
+    parser.add_argument('-th', '--threads', type=int, required=False, help="Threads count", default=threads_count, dest="threads_count")
+    parser.add_argument('-tx', '--transactional', help="Transactional benchmark", default=transactional, dest="transactional", action=argparse.BooleanOptionalAction)
+    parser.add_argument('-cl', '--cleanup-previous', help="Drops existing database before start the new benchmark", default=cleanup_previous, dest="cleanup_previous", action=argparse.BooleanOptionalAction)
+    parser.add_argument('-dp', '--drop-caches', help="Drops system cashes before each benchmark", default=drop_caches, dest="drop_caches", action=argparse.BooleanOptionalAction)
+    parser.add_argument('-rd', '--run-docker', help="Runs the benchmark in a docker container", default=run_in_docker_container, dest="run_in_docker_container", action=argparse.BooleanOptionalAction)
+
+    args = parser.parse_args()
+    db_names = args.db_names
+    sizes = args.sizes
+    workload_names = args.workload_names
+    main_dir_path = args.main_dir_path
+    storage_disk_paths = args.storage_disk_paths
+    threads_count = args.threads_count
+    transactional = args.transactional
+    cleanup_previous = args.cleanup_previous
+    drop_caches = args.drop_caches
+    run_in_docker_container = args.run_in_docker_container
+
+
+def check_args():
+    global db_names
+    global sizes
+    global workload_names
+
     if not db_names:
         sys.exit('Database(s) not specified')
     if not sizes:
@@ -161,25 +208,19 @@ def check_args(db_names, sizes, workload_names):
         sys.exit('Workload name(s) not specified')
 
 
-def main(db_names: Optional[list[str]] = supported_db_names,
-         sizes: Optional[list[str]] = supported_sizes,
-         workload_names: Optional[list[str]] = supported_workload_names,
-         main_dir_path: Optional[str] = default_main_dir_path,
-         storage_disk_paths: Optional[list[str]] = default_storage_disk_paths,
-         threads_count: Optional[int] = default_threads_count,
-         transactional: Optional[bool] = False,
-         cleanup_previous: Optional[bool] = True,
-         drop_caches: Optional[bool] = False,
-         run_docker_image: Optional[bool] = False) -> None:
+def main() -> None:
 
     if os.geteuid() != 0:
         print(termcolor.colored(f'Run as sudo!', 'red'))
         sys.exit(-1)
-    check_args(db_names, sizes, workload_names)
+
+    parse_args()
+    check_args()
 
     # Cleanup old DBs (Note: It actually cleanups if the first workload is `Init`)
     if cleanup_previous and workload_names[0] == 'Init':
-        print('Cleanup...')
+        print(end='\x1b[1K\r')
+        print(' [✱] Cleanup...', end='\r')
         for size in sizes:
             for db_name in db_names:
                 # Remove DB main directory
@@ -209,13 +250,13 @@ def main(db_names: Optional[list[str]] = supported_db_names,
 
             # Run benchmark
             if drop_caches:
-                for workload_name in workload_names:
-                    if not run_docker_image:
+                for i, workload_name in enumerate(workload_names):
+                    if not run_in_docker_container:
                         drop_system_caches()
-                    run(db_name, size, [workload_name], main_dir_path, storage_disk_paths, transactional, drop_caches, run_docker_image, threads_count)
+                    run(db_name, size, [workload_name], main_dir_path, storage_disk_paths, transactional, drop_caches, run_in_docker_container, threads_count, i, len(workload_names))
             else:
-                run(db_name, size, workload_names, main_dir_path, storage_disk_paths, transactional, drop_caches, run_docker_image, threads_count)
+                run(db_name, size, workload_names, main_dir_path, storage_disk_paths, transactional, drop_caches, run_in_docker_container, threads_count, 0, 1)
 
 
 if __name__ == '__main__':
-    fire.Fire(main)
+    main()
