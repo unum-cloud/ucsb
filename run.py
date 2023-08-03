@@ -191,104 +191,95 @@ def parse_args():
     global run_in_docker_container
 
     parser = argparse.ArgumentParser()
+
     parser.add_argument(
         "-db",
         "--db-names",
-        type=list,
-        required=False,
         help="Database name(s)",
+        nargs="+",
+        required=False,
         default=db_names,
-        dest="db_names",
     )
     parser.add_argument(
         "-sz",
         "--sizes",
-        type=list,
-        required=False,
         help="Benchmark size(s)",
+        nargs="+",
+        required=False,
         default=sizes,
-        dest="sizes",
     )
     parser.add_argument(
         "-wl",
         "--workload-names",
-        type=list,
-        required=False,
         help="Workload name(s)",
+        nargs="+",
+        required=False,
         default=workload_names,
-        dest="workload_names",
     )
     parser.add_argument(
         "-md",
         "--main-dir",
+        help="Main directory",
         type=str,
         required=False,
-        help="Main directory",
         default=main_dir_path,
-        dest="main_dir_path",
     )
     parser.add_argument(
         "-sd",
         "--storage-dirs",
-        type=list,
-        required=False,
         help="Storage directories",
+        nargs="+",
+        required=False,
         default=storage_disk_paths,
-        dest="storage_disk_paths",
     )
     parser.add_argument(
         "-th",
         "--threads",
+        help="Threads count",
         type=int,
         required=False,
-        help="Threads count",
         default=threads_count,
-        dest="threads_count",
     )
     parser.add_argument(
         "-tx",
         "--transactional",
         help="Transactional benchmark",
-        default=transactional,
-        dest="transactional",
         action=argparse.BooleanOptionalAction,
+        default=transactional,
     )
     parser.add_argument(
         "-cl",
         "--cleanup-previous",
         help="Drops existing database before start the new benchmark",
-        default=cleanup_previous,
-        dest="cleanup_previous",
         action=argparse.BooleanOptionalAction,
+        default=cleanup_previous,
     )
     parser.add_argument(
         "-dp",
         "--drop-caches",
         help="Drops system cashes before each benchmark",
-        default=drop_caches,
-        dest="drop_caches",
         action=argparse.BooleanOptionalAction,
+        default=drop_caches,
     )
     parser.add_argument(
         "-rd",
         "--run-docker",
         help="Runs the benchmark in a docker container",
-        default=run_in_docker_container,
-        dest="run_in_docker_container",
         action=argparse.BooleanOptionalAction,
+        default=run_in_docker_container,
     )
 
     args = parser.parse_args()
     db_names = args.db_names
     sizes = args.sizes
     workload_names = args.workload_names
-    main_dir_path = args.main_dir_path
-    storage_disk_paths = args.storage_disk_paths
-    threads_count = args.threads_count
+    main_dir_path = args.main_dir
+    storage_disk_paths = args.storage_dirs
+    threads_count = args.threads
     transactional = args.transactional
     cleanup_previous = args.cleanup_previous
     drop_caches = args.drop_caches
-    run_in_docker_container = args.run_in_docker_container
+    run_in_docker_container = args.run_docker
 
 
 def check_args():
