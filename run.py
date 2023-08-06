@@ -58,7 +58,7 @@ cleanup_previous = False
 run_in_docker_container = False
 with_ebpf = False
 with_ebpf_memory = False
-with_syscall_stacks = False
+with_syscall_details = False
 
 main_dir_path = "./db_main/"
 storage_disk_paths = [
@@ -145,9 +145,8 @@ def run(
         run_index: int,
         runs_count: int,
         with_ebpf: bool,
-        with_ebpf_memory: bool
-,
-        with_syscall_stacks: bool) -> None:
+        with_ebpf_memory: bool,
+        with_syscall_details: bool) -> None:
     db_config_file_path = get_db_config_file_path(db_name, size)
     workloads_file_path = get_workloads_file_path(size)
     db_main_dir_path = get_db_main_dir_path(db_name, size, main_dir_path)
@@ -157,7 +156,7 @@ def run(
     )
 
     transactional_flag = "-t" if transactional else ""
-    lazy_flag = '-l' if with_ebpf else ''
+    lazy_flag = "-l" if with_ebpf else ""
     filter = ",".join(workload_names)
     db_storage_dir_paths = ",".join(db_storage_dir_paths)
 
@@ -177,19 +176,20 @@ def run(
         from ebpf.ebpf import attach_probes, harvest_ebpf
         bpf, pid, process = attach_probes(
             process=process,
+            syscall_details=with_syscall_details,
             with_memory=with_ebpf_memory,
             communicate_with_signals=True,
         )
         # Send SIGUSR1 to the process to notify it that the probes are attached
         os.kill(process.pid, signal.SIGUSR1)
         thread = Thread(target=harvest_ebpf, args=(bpf,), kwargs={
-            'process': process,
-            'interval': 5,
-            'with_memory': with_ebpf_memory,
-            'with_syscall_stacks': with_syscall_stacks,
-            'snapshot_prefix': "-".join(workload_names),
-            'save_snapshots': f'./bench/ebpf/snapshots/{db_name}_{size}',
-            'communicate_with_signals': True,
+            process: process,
+            "interval": 5,
+            "with_memory": with_ebpf_memory,
+            "with_syscall_details": with_syscall_details,
+            "snapshot_prefix": "-".join(workload_names),
+            "save_snapshots": f"./bench/ebpf/snapshots/{db_name}_{size}",
+            "communicate_with_signals": True,
         })
         thread.start()
     if with_ebpf:
@@ -223,7 +223,7 @@ def parse_args():
     global run_in_docker_container
     global with_ebpf
     global with_ebpf_memory
-    global with_syscall_stacks
+    global with_syscall_details
 
     parser = argparse.ArgumentParser()
 
@@ -321,10 +321,10 @@ def parse_args():
     )
     parser.add_argument(
         "-es",
-        "--with-ebpf-syscall-stacks",
+        "--with-ebpf-syscall-details",
         help="Collect eBPF syscall stack traces",
-        default=with_syscall_stacks,
-        dest="with_syscall_stacks",
+        default=with_syscall_details,
+        dest="with_syscall_details",
         action=argparse.BooleanOptionalAction
     )
 
@@ -341,7 +341,7 @@ def parse_args():
     run_in_docker_container = args.run_docker
     with_ebpf = args.with_ebpf
     with_ebpf_memory = args.with_ebpf_memory
-    with_syscall_stacks = args.with_syscall_stacks
+    with_syscall_details = args.with_syscall_details
 
 
 def check_args():
@@ -356,9 +356,9 @@ def check_args():
     if not workload_names:
         sys.exit("Workload name(s) not specified")
     if run_in_docker_container and with_ebpf:
-        sys.exit('Running ebpf benchmarks in docker container is not supported')
+        sys.exit("Running ebpf benchmarks in docker container is not supported")
     if with_ebpf_memory and not with_ebpf:
-        sys.exit('Memory related ebpf benchmarks require ebpf benchmarks to be enabled, run with --with-ebpf flag')
+        sys.exit("Memory related ebpf benchmarks require ebpf benchmarks to be enabled, run with --with-ebpf flag")
 
 
 def main() -> None:
@@ -432,7 +432,7 @@ def main() -> None:
                         len(workload_names),
                         with_ebpf,
                         with_ebpf_memory,
-                        with_syscall_stacks
+                        with_syscall_details
                     )
             else:
                 run(
@@ -449,7 +449,7 @@ def main() -> None:
                     1,
                     with_ebpf,
                     with_ebpf_memory,
-                    with_syscall_stacks
+                    with_syscall_details
                 )
 
 
