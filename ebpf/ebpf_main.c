@@ -5,7 +5,16 @@
 #include <linux/pid_namespace.h>
 #include <linux/sched.h>
 
+/**
+ * bpf_get_current_pid_tgid may be confusing so here is a short explanation:
+ * it returns
+ * tgid << 32 | pid
+ * here pid is the thread id, and tgid (thread group id) is the process id
+ * so we need to shift by 32 bits to get the process id
+ */
 #define FILTER_BY_PID u32 __pid = bpf_get_current_pid_tgid() >> 32;if (__pid != PROCESS_ID) {return 0;}
+
+BPF_STACK_TRACE(stack_traces, 10000);
 
 #ifdef WITH_MEMORY
 
@@ -23,13 +32,11 @@ struct combined_alloc_info_t {
 };
 
 // count of allocations per stack trace
-BPF_HASH(combined_allocs, u64, struct combined_alloc_info_t, 10240);
+BPF_HASH(combined_allocs, u64, struct combined_alloc_info_t, 10000);
 
 BPF_HASH(sizes, u64);
-BPF_HASH(allocs, u64, struct alloc_info_t, 1000000);
+BPF_HASH(allocs, u64, struct alloc_info_t, 10000);
 BPF_HASH(memptrs, u64, u64);
-
-BPF_STACK_TRACE(stack_traces, 10240);
 
 static inline void update_statistics_add(u64 stack_id, u64 sz) {
     struct combined_alloc_info_t *existing_cinfo;
@@ -380,7 +387,7 @@ int trace_cache_free(struct pt_regs *ctx, struct kmem_cache *cachep) {
     return 0;
 }
 
-#endif
+#endif // WITH_MEMORY
 
 
 /** System Calls */
@@ -390,13 +397,34 @@ struct sys_call_data_t {
     u64 total_ns;
 };
 BPF_HASH(syscall_start, u64, u64);
-BPF_HASH(syscall_counts, u32, struct sys_call_data_t);
+BPF_HASH(syscall_counts, u64, struct sys_call_data_t);
+
+#ifdef COLLECT_SYSCALL_STACK_INFO
+
+struct sys_call_stack_t {
+    u32 id;
+    int stack_id;
+    u64 pid_tgid;
+};
+
+BPF_HASH(syscall_counts_stacks, u64, struct sys_call_stack_t, 10000);
+
+#endif // COLLECT_SYSCALL_STACK_INFO
 
 int tracepoint__raw_syscalls__sys_enter(struct tracepoint__raw_syscalls__sys_enter *args) {
     FILTER_BY_PID
     u64 pid_tgid = bpf_get_current_pid_tgid();
     u64 t = bpf_ktime_get_ns();
     syscall_start.update(&pid_tgid, &t);
+#ifdef COLLECT_SYSCALL_STACK_INFO
+    struct sys_call_stack_t zero = {};
+    struct sys_call_stack_t* data = syscall_counts_stacks.lookup_or_try_init(&t, &zero);
+    if (data) {
+        data->id = args->id;
+        data->stack_id = stack_traces.get_stackid(args, BPF_F_USER_STACK);
+        data->pid_tgid = pid_tgid;
+    }
+#endif // COLLECT_SYSCALL_STACK_INFO
     return 0;
 }
 
@@ -409,7 +437,9 @@ int tracepoint__raw_syscalls__sys_exit(struct tracepoint__raw_syscalls__sys_exit
     u64 *start_ns = syscall_start.lookup(&pid_tgid);
     if (!start_ns)
         return 0;
-    u32 key = args->id;
+    u64 syscall_id = args->id;
+    u32 thread_id = pid_tgid;
+    u64 key = (syscall_id << 32) | thread_id;
     val = syscall_counts.lookup_or_try_init(&key, &zero);
     if (val) {
         lock_xadd(&val->count, 1);

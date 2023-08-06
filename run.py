@@ -58,6 +58,7 @@ cleanup_previous = False
 run_in_docker_container = False
 with_ebpf = False
 with_ebpf_memory = False
+with_syscall_stacks = False
 
 main_dir_path = "./db_main/"
 storage_disk_paths = [
@@ -145,7 +146,8 @@ def run(
         runs_count: int,
         with_ebpf: bool,
         with_ebpf_memory: bool
-) -> None:
+,
+        with_syscall_stacks: bool) -> None:
     db_config_file_path = get_db_config_file_path(db_name, size)
     workloads_file_path = get_workloads_file_path(size)
     db_main_dir_path = get_db_main_dir_path(db_name, size, main_dir_path)
@@ -184,6 +186,7 @@ def run(
             'process': process,
             'interval': 5,
             'with_memory': with_ebpf_memory,
+            'with_syscall_stacks': with_syscall_stacks,
             'snapshot_prefix': "-".join(workload_names),
             'save_snapshots': f'./bench/ebpf/snapshots/{db_name}_{size}',
             'communicate_with_signals': True,
@@ -220,6 +223,7 @@ def parse_args():
     global run_in_docker_container
     global with_ebpf
     global with_ebpf_memory
+    global with_syscall_stacks
 
     parser = argparse.ArgumentParser()
 
@@ -315,6 +319,14 @@ def parse_args():
         dest="with_ebpf_memory",
         action=argparse.BooleanOptionalAction
     )
+    parser.add_argument(
+        "-es",
+        "--with-ebpf-syscall-stacks",
+        help="Collect eBPF syscall stack traces",
+        default=with_syscall_stacks,
+        dest="with_syscall_stacks",
+        action=argparse.BooleanOptionalAction
+    )
 
     args = parser.parse_args()
     db_names = args.db_names
@@ -329,6 +341,7 @@ def parse_args():
     run_in_docker_container = args.run_docker
     with_ebpf = args.with_ebpf
     with_ebpf_memory = args.with_ebpf_memory
+    with_syscall_stacks = args.with_syscall_stacks
 
 
 def check_args():
@@ -418,7 +431,8 @@ def main() -> None:
                         i,
                         len(workload_names),
                         with_ebpf,
-                        with_ebpf_memory
+                        with_ebpf_memory,
+                        with_syscall_stacks
                     )
             else:
                 run(
@@ -434,7 +448,8 @@ def main() -> None:
                     0,
                     1,
                     with_ebpf,
-                    with_ebpf_memory
+                    with_ebpf_memory,
+                    with_syscall_stacks
                 )
 
 

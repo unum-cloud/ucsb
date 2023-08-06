@@ -18,6 +18,13 @@ from pexpect import spawn
 logging.basicConfig(filename='/tmp/ebpf.log', encoding='utf-8', level=logging.DEBUG)
 
 
+class SetEncoder(json.JSONEncoder):
+    def default(self, obj):
+        if isinstance(obj, set):
+            return list(obj)
+        return json.JSONEncoder.default(self, obj)
+
+
 def get_size_filter(min_size, max_size):
     if min_size is not None and max_size is not None:
         return "if (size < %d || size > %d) return 0;" % (min_size, max_size)
@@ -139,7 +146,7 @@ def print_memory_statistics(bpf, pid, top):
     print('\n'.join(reversed(entries)))
 
 
-def get_statistics(bpf, pid):
+def get_statistics(bpf, pid, min_age_ns, top):
     stack_traces = bpf["stack_traces"]
     combined_alloc = list(
         sorted(
@@ -160,7 +167,8 @@ def get_statistics(bpf, pid):
     return {
         "memory": memory,
         "combined_allocs": list(reversed(entries)),
-        "stack_traces": len(list(stack_traces.items()))
+        "stack_traces": len(list(stack_traces.items())),
+        "outstanding": get_outstanding(bpf, pid, min_age_ns, top)
     }
 
 
@@ -233,16 +241,20 @@ def print_syscalls(bpf, top):
     syscall_counts = bpf["syscall_counts"]
     print("SYSCALL                   COUNT             TIME")
     for k, v in sorted(syscall_counts.items(), key=lambda kv: -kv[1].total_ns)[:top]:
-        print("%-22s %8d %16.3f" % (system_call_name(k), v.count, v.total_ns / 1e3))
+        print("%-22s %8d %16.3f" % (system_call_name(k.value), v.count, v.total_ns / 1e3))
     syscall_counts.clear()
 
 
-def get_syscalls(bpf, top):
+def get_syscalls(bpf):
     syscall_counts = bpf["syscall_counts"]
-    syscalls = []
-    for k, v in sorted(syscall_counts.items(), key=lambda kv: -kv[1].total_ns)[:top]:
-        syscalls.append({
-            'name': system_call_name(k),
+    syscalls = {}
+    for k, v in syscall_counts.items():
+        key = k.value
+        syscall_id = key >> 32
+        thread_id = (1 << 32) & key
+
+        syscalls.setdefault(thread_id, []).append({
+            'name': system_call_name(syscall_id),
             'count': v.count,
             'total_ns': v.total_ns,
         })
@@ -251,11 +263,34 @@ def get_syscalls(bpf, top):
 
 
 def system_call_name(k):
-    return syscall_name(k.value).decode('ascii')
+    if k == 435:
+        return "clone3"
+    return syscall_name(k).decode('ascii')
 
 
 def print_time():
     print("[%s]" % strftime("%H:%M:%S"))
+
+
+def get_syscall_stacks(bpf, pid):
+    syscall_counts_stacks = bpf['syscall_counts_stacks']
+    syscalls_per_thread = {}
+    stack_ids = []
+    pid_to_syscall_times = {}
+    for k, v in syscall_counts_stacks.items():
+        stack_set = syscalls_per_thread.setdefault(v.pid_tgid, {}).setdefault(system_call_name(v.id),
+                                                                              {'stacks': set(), 'number': 0})
+        stack_set['stacks'].add(v.stack_id)
+        stack_set['number'] += 1
+        stack_ids.append(v.stack_id)
+        pid_to_syscall_times.setdefault(v.pid_tgid, []).append(k.value)
+
+    stacks = {stack_id: get_trace_info_as_list(bpf, pid, bpf['stack_traces'], stack_id) for stack_id in stack_ids}
+    return {
+        'syscalls': syscalls_per_thread,
+        'stacks': stacks,
+        'pid_to_syscall_times': pid_to_syscall_times
+    }
 
 
 def save_snapshot(
@@ -265,23 +300,32 @@ def save_snapshot(
         top: int,
         snapshot_dir: str,
         with_memory: bool,
+        with_syscall_stacks: bool,
         snapshot_prefix: Optional[str] = None
 ):
     current_time_millis = int(round(time() * 1000))
-    stats = get_statistics(bpf, pid) if with_memory else {}
-    outstanding = get_outstanding(bpf, pid, min_age_ns, top) if with_memory else []
-    kernel_caches = gernel_kernel_cache(bpf, top) if with_memory else []
-    syscalls = get_syscalls(bpf, top)
-    snapshot = {
-        'time': current_time_millis,
-        'stats': stats,
-        'outstanding': outstanding,
-        'kernel_caches': kernel_caches,
-        'syscalls': syscalls,
-    }
+    snapshot = {'time': current_time_millis}
+    if with_memory:
+        snapshot['memory_stats'] = get_statistics(bpf, pid, min_age_ns, top)
+        snapshot['kernel_caches'] = gernel_kernel_cache(bpf, top)
+
+    snapshot['syscalls'] = get_syscalls(bpf)
+
+    if with_syscall_stacks:
+        snapshot['syscall_stacks'] = get_syscall_stacks(bpf, pid)
+
     os.makedirs(snapshot_dir, exist_ok=True)
-    with open(f'{snapshot_dir}/{snapshot_prefix or "snapshot"}-{current_time_millis}.json', 'w') as outfile:
-        json.dump(snapshot, outfile)
+    with open(get_result_file_name(snapshot_dir, snapshot_prefix or 'snapshot', 'json'), 'w') as outfile:
+        json.dump(snapshot, outfile, cls=SetEncoder)
+
+
+def get_result_file_name(dir_name: str, prefix: str, suffix: str):
+    index = 0
+    path = f'{dir_name}/{prefix}.{suffix}'
+    while os.path.isfile(path):
+        index += 1
+        path = f'{dir_name}/{prefix}_{index}.{suffix}'
+    return path
 
 
 class Arguments:
@@ -360,6 +404,7 @@ def attach_probes(
         max_alloc_size: Optional[int] = None,
         min_alloc_size: Optional[int] = None,
         with_memory: bool = False,
+        syscall_stacks: bool = False,
         communicate_with_signals: bool = False
 ) -> Optional[Tuple[BPF, int, spawn]]:
     if pid == -1 and command is None and process is None:
@@ -386,6 +431,7 @@ def attach_probes(
                   f"-DPAGE_SIZE={resource.getpagesize()}",
                   f"-DFILTER_BY_SIZE={get_size_filter(min_alloc_size, max_alloc_size)}",
                   "-DWITH_MEMORY" if with_memory else "",
+                  "-DCOLLECT_SYSCALL_STACK_INFO" if syscall_stacks else "",
               ])
 
     # Attaching probes
@@ -435,7 +481,7 @@ def signal_handler(_sig_no, _stack_frame):
 def is_terminated(pid: int, process: Optional[spawn]):
     if process is None:
         try:
-            # Sending signal 0 to a pid will raise OSError if the process does not exist
+            # Sending signal 0 to a process with id {pid} will raise OSError if the process does not exist
             os.kill(pid, 0)
         except OSError:
             return True
@@ -475,6 +521,7 @@ def harvest_ebpf(
         interval: int = 5,
         min_age_ns: int = 500,
         with_memory: bool = False,
+        with_syscall_stacks: bool = False,
         save_snapshots: Optional[str] = None,
         snapshot_prefix: Optional[str] = None,
         communicate_with_signals: bool = False,
@@ -492,7 +539,7 @@ def harvest_ebpf(
         except KeyboardInterrupt:
             break
         if save_snapshots:
-            save_snapshot(bpf, pid, min_age_ns, top, save_snapshots, with_memory, snapshot_prefix)
+            save_snapshot(bpf, pid, min_age_ns, top, save_snapshots, with_memory, with_syscall_stacks, snapshot_prefix)
         else:
             print_ebpf_info(bpf, pid, min_age_ns, top)
         if is_terminated(pid, process):
