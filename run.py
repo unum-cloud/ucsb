@@ -11,7 +11,7 @@ import argparse
 import termcolor
 
 """
-Below are listed supported databases, benchmark sizes, workloads and  more settings.
+Below are listed the supported databases, benchmark sizes, workloads and more settings.
 All of them are optional and treated as defaults, so you can select settings here or pass arguments from outside.
 Usage: sudo ./run.py [arguments], type -h or --help for help.
 Note there are some databases and sizes commented by default just to minimize the sample run, so select them according to your needs.
