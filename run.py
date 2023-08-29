@@ -11,9 +11,10 @@ import argparse
 import termcolor
 
 """
-Below are listed supported databases, benchmark sizes, workloads, and settings.
+Below are listed supported databases, benchmark sizes, workloads and  more settings.
 All of them are optional and treated as defaults, so you can select settings here or pass arguments from outside.
 Usage: sudo ./run.py [arguments], type -h or --help for help.
+Note there are some databases and sizes commented by default just to minimize the sample run, so select them according to your needs.
 """
 
 db_names = [
@@ -21,9 +22,9 @@ db_names = [
     "rocksdb",
     "leveldb",
     "wiredtiger",
-    "mongodb",
-    "redis",
-    "lmdb",
+    # "mongodb",
+    # "redis",
+    # "lmdb",
 ]
 
 sizes = [
@@ -50,7 +51,7 @@ workload_names = [
 threads_count = 1
 transactional = False
 
-drop_caches = True
+drop_caches = False
 run_in_docker_container = False
 
 main_dir_path = "./db_main/"
