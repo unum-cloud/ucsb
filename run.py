@@ -11,9 +11,9 @@ import argparse
 import termcolor
 
 """
-Run the script by passing arguments or selecting the settings below.
-All the settings are also treated as defaults, so passed arguments will overwrite them.
-See main() function.
+Below are listed supported databases, benchmark sizes, workloads, and settings.
+All of them are optional and treated as defaults, so you can select settings here or pass arguments from outside.
+Usage: sudo ./run.py [arguments], type -h or --help for help.
 """
 
 db_names = [
@@ -28,11 +28,11 @@ db_names = [
 
 sizes = [
     "100MB",
-    "1GB",
-    "10GB",
-    "100GB",
-    "1TB",
-    "10TB",
+    # "1GB",
+    # "10GB",
+    # "100GB",
+    # "1TB",
+    # "10TB",
 ]
 
 workload_names = [
@@ -47,11 +47,10 @@ workload_names = [
     "Remove",
 ]
 
-threads_count = 15
-transactional = True
+threads_count = 1
+transactional = False
 
-drop_caches = False
-cleanup_previous = False
+drop_caches = True
 run_in_docker_container = False
 
 main_dir_path = "./db_main/"
@@ -186,7 +185,6 @@ def parse_args():
     global storage_disk_paths
     global threads_count
     global transactional
-    global cleanup_previous
     global drop_caches
     global run_in_docker_container
 
@@ -248,13 +246,6 @@ def parse_args():
         default=transactional,
     )
     parser.add_argument(
-        "-cl",
-        "--cleanup-previous",
-        help="Drops existing database before start the new benchmark",
-        action=argparse.BooleanOptionalAction,
-        default=cleanup_previous,
-    )
-    parser.add_argument(
         "-dp",
         "--drop-caches",
         help="Drops system cashes before each benchmark",
@@ -277,7 +268,6 @@ def parse_args():
     storage_disk_paths = args.storage_dirs
     threads_count = args.threads
     transactional = args.transactional
-    cleanup_previous = args.cleanup_previous
     drop_caches = args.drop_caches
     run_in_docker_container = args.run_docker
 
@@ -304,7 +294,7 @@ def main() -> None:
     check_args()
 
     # Cleanup old DBs (Note: It actually cleanups if the first workload is `Init`)
-    if cleanup_previous and workload_names[0] == "Init":
+    if workload_names[0] == "Init":
         print(end="\x1b[1K\r")
         print(" [✱] Cleanup...", end="\r")
         for size in sizes:
