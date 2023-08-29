@@ -229,7 +229,8 @@ operation_result_t wiredtiger_t::remove(key_t key) {
     auto res = cursor->remove(cursor.get());
     cursor->reset(cursor.get());
 
-    return {size_t(res == 0), res == 0 ? operation_status_t::ok_k : operation_status_t::error_k};
+    bool ok = res == 0 || res == WT_NOTFOUND;
+    return {size_t(ok), ok ? operation_status_t::ok_k : operation_status_t::error_k};
 }
 
 operation_result_t wiredtiger_t::read(key_t key, value_span_t value) const {
