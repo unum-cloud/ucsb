@@ -354,8 +354,8 @@ struct progress_t {
             delta = fmt::format(fmt::fg(fmt::color::red), "▼");
         else if (opps_delta > 0 && std::abs(opps_delta) > prev_ops_per_second * 0.0001)
             delta = fmt::format(fmt::fg(fmt::color::green), "▲");
-        auto fails = fails_percent == 0.0 ? fmt::format("{}%", fails_percent)
-                                          : fmt::format(fmt::fg(fmt::color::red), "{}%", fails_percent);
+        auto fails = fails_percent == 0.0 ? fmt::format("{:g}%", fails_percent)
+                                          : fmt::format(fmt::fg(fmt::color::red), "{:g}%", fails_percent);
         fmt::print(" [✱] {}: {:.2f}% [{}/s {}| fails: {} | elapsed: {} | left: {}]\r",
                    name,
                    done_percent,

@@ -149,7 +149,7 @@ void console_reporter_t::ReportRuns(std::vector<Run> const& reports) {
                        fmt::format("{}", printable_bytes_t {mem_max}),
                        fmt::format("{:.1f}", cpu_avg),
                        fmt::format("{:.1f}", cpu_max),
-                       fmt::format("{}", fails),
+                       fmt::format("{:g}", fails),
                        fmt::format("{}", printable_duration_t {size_t(duration)})});
         table.row(0).format().width(column_width_).font_align(tabulate::FontAlign::right).hide_border_top().locale("C");
         table.column(0)
@@ -159,7 +159,7 @@ void console_reporter_t::ReportRuns(std::vector<Run> const& reports) {
             .font_color(tabulate::Color::green);
 
         // Highlight cells
-        if (fails > 0)
+        if (fails > 0.0)
             table[0][fails_column_idx_].format().font_color(tabulate::Color::red);
 
         // Print
