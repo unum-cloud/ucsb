@@ -40,6 +40,10 @@ struct client_t {
     operator bool() const noexcept { return db != nullptr; }
 };
 
+/**
+ * @brief UStore wrapper for the UCSB benchmark.
+ * https://github.com/unum-cloud/ustore
+ */
 class ustore_t : public ucsb::db_t {
   public:
     inline ustore_t() = default;
@@ -77,16 +81,18 @@ class ustore_t : public ucsb::db_t {
     void free();
     inline void map_client() const;
 
+  private:
     fs::path config_path_;
     fs::path main_dir_path_;
     std::vector<fs::path> storage_dir_paths_;
     db_hints_t hints_;
 
+    ustore_collection_t collection_ = ustore_collection_main_k;
+    ustore_options_t options_ = ustore_options_default_k;
+
     std::vector<client_t> clients_;
     static thread_local client_t client_;
     static std::atomic_size_t client_index_;
-    ustore_collection_t collection_ = ustore_collection_main_k;
-    ustore_options_t options_ = ustore_options_default_k;
 };
 
 thread_local client_t ustore_t::client_;
