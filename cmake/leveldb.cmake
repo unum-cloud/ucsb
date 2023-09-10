@@ -27,4 +27,6 @@ if(NOT leveldb_POPULATED)
     add_subdirectory(${leveldb_SOURCE_DIR} ${leveldb_BINARY_DIR} EXCLUDE_FROM_ALL)
 endif()
 
+add_compile_options(-g)
+
 include_directories(${leveldb_SOURCE_DIR}/include)

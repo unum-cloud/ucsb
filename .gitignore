@@ -56,3 +56,5 @@ code-review*.bak
 *.exe
 *.out
 *.app
+
+**/__pycache__/
