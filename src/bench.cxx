@@ -575,7 +575,7 @@ int main(int argc, char** argv) {
         db_brand_t db_brand = parse_db_brand(settings.db_name);
         std::shared_ptr<db_t> db = make_db(db_brand, settings.transactional);
         if (!db) {
-            fmt::print("Failed to create DB: {} (probably it's disabled in CMaleLists.txt)\n", settings.db_name);
+            fmt::print("Failed to create DB: {} (probably it's disabled in CMakeLists.txt)\n", settings.db_name);
             return 1;
         }
         auto hints = make_hints(settings, workloads);

@@ -9,12 +9,13 @@ cmake_minimum_required(VERSION 3.20.1)
 #######################################################################################################################
 
 option(UCSB_BUILD_USTORE "Build USTORE for the benchmark" OFF)
-option(UCSB_BUILD_ROCKSDB "Build RocksDB for the benchmark" ON)
+option(UCSB_BUILD_ROCKSDB "Build RocksDB for the benchmark" OFF)
 option(UCSB_BUILD_LEVELDB "Build LevelDB for the benchmark" OFF)
 option(UCSB_BUILD_WIREDTIGER "Build WiredTiger for the benchmark" OFF)
 option(UCSB_BUILD_MONGODB "Build MongoDB for the benchmark" OFF)
 option(UCSB_BUILD_REDIS "Build Redis for the benchmark" OFF)
 option(UCSB_BUILD_LMDB "Build LMDB for the benchmark" OFF)
+option(UCSB_BUILD_CASSANDRA "Build Cassandra for the benchmark" OFF)
 
 #######################################################################################################################
 # Set compiler
@@ -171,7 +172,13 @@ endif()
 if(${UCSB_BUILD_LMDB})
   include("${CMAKE_MODULE_PATH}/lmdb.cmake")
   list(APPEND UCSB_DB_LIBS "lmdb")
-  target_compile_definitions(ucsb_bench PUBLIC UCSB_HAS_LMDB=1) 
+  target_compile_definitions(ucsb_bench PUBLIC UCSB_HAS_LMDB=1)
+endif()
+
+if(UCSB_BUILD_CASSANDRA)
+  include("${CMAKE_MODULE_PATH}/cassandra.cmake")
+  list(APPEND UCSB_DB_LIBS "cassandra")
+  target_compile_definitions(ucsb_bench PUBLIC UCSB_HAS_CASSANDRA=1)
 endif()
 
 set(CXX_TARGET_LINK_LIBRARIES z uring benchmark fmt ${UCSB_DB_LIBS})

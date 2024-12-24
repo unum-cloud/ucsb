@@ -24,6 +24,9 @@
 #if defined(UCSB_HAS_LMDB)
 #include "src/lmdb/lmdb.hpp"
 #endif
+#if defined(UCSB_HAS_CASSANDRA)
+#include "src/cassandra/cassandra.hpp"
+#endif
 
 namespace ucsb {
 
@@ -37,6 +40,7 @@ enum class db_brand_t {
     mongodb_k,
     redis_k,
     lmdb_k,
+    cassandra_k,
 };
 
 std::shared_ptr<db_t> make_db(db_brand_t db_brand, bool transactional) {
@@ -47,6 +51,11 @@ std::shared_ptr<db_t> make_db(db_brand_t db_brand, bool transactional) {
 #endif
 #if defined(UCSB_HAS_ROCKSDB)
         case db_brand_t::rocksdb_k: return std::make_shared<facebook::rocksdb_t>(facebook::db_mode_t::transactional_k);
+#endif
+#if defined(UCSB_HAS_CASSANDRA)
+            // Cassandra doesn’t have a special transactional mode implemented,
+            // just return the same instance
+            case db_brand_t::cassandra_k: return std::make_shared<cassandra::cassandra_t>();
 #endif
         default: break;
         }
@@ -74,6 +83,9 @@ std::shared_ptr<db_t> make_db(db_brand_t db_brand, bool transactional) {
 #if defined(UCSB_HAS_LMDB)
         case db_brand_t::lmdb_k: return std::make_shared<symas::lmdb_t>();
 #endif
+#if defined(UCSB_HAS_CASSANDRA)
+            case db_brand_t::cassandra_k: return std::make_shared<cassandra::cassandra_t>();
+#endif
         default: break;
         }
     }
@@ -95,6 +107,8 @@ inline db_brand_t parse_db_brand(std::string const& name) {
         return db_brand_t::redis_k;
     if (name == "lmdb")
         return db_brand_t::lmdb_k;
+    if (name == "cassandra")
+        return db_brand_t::cassandra_k;
     return db_brand_t::unknown_k;
 }
 
