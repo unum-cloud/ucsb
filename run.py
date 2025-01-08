@@ -19,36 +19,37 @@ Note there are some databases and sizes commented by default just to minimize th
 
 db_names = [
     #"ustore",
-    "rocksdb",
+    # "rocksdb",
     #"leveldb",
     #"wiredtiger",
     # "mongodb",
     # "redis",
     # "lmdb",
+    "cassandra",
 ]
 
 sizes = [
-    "100MB",
+    # "100MB",
     # "1GB",
     # "10GB",
-    # "100GB",
+    "100GB",
     # "1TB",
     # "10TB",
 ]
 
 workload_names = [
-    "Init",
+    # "Init",
     "Read",
-    "BatchRead",
-    "RangeSelect",
-    "Scan",
-    "ReadUpdate_50_50",
-    "ReadUpsert_95_5",
-    "BatchUpsert",
-    "Remove",
+    # "BatchRead",
+    # "RangeSelect",
+    # "Scan",
+    # "ReadUpdate_50_50",
+    # "ReadUpsert_95_5",
+    # "BatchUpsert",
+    # "Remove",
 ]
 
-threads_count = 1
+threads_count = 32
 transactional = False
 
 drop_caches = False

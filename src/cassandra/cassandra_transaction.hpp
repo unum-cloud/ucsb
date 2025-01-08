@@ -9,6 +9,7 @@
 #include "src/core/types.hpp"
 #include "src/core/data_accessor.hpp"
 #include "src/core/db.hpp"
+#include "src/cassandra/cassandra_helpers.hpp"
 
 namespace ucsb::cassandra {
 
@@ -22,16 +23,16 @@ using value_lengths_spanc_t = ucsb::value_lengths_spanc_t;
 using operation_result_t = ucsb::operation_result_t;
 using operation_status_t = ucsb::operation_status_t;
 
-inline std::string key_to_string(key_t key) {
-    key = __builtin_bswap64(key);
-    char buffer[17];
-    snprintf(buffer, sizeof(buffer), "%016lx", static_cast<unsigned long>(key));
-    return std::string(buffer);
-}
-
-inline std::string value_to_string(value_spanc_t value) {
-    return std::string(reinterpret_cast<const char*>(value.data()), value.size());
-}
+//inline std::string key_to_string(key_t key) {
+//    key = __builtin_bswap64(key);
+//    char buffer[17];
+//    snprintf(buffer, sizeof(buffer), "%016lx", static_cast<unsigned long>(key));
+//    return std::string(buffer);
+//}
+//
+//inline std::string value_to_string(value_spanc_t value) {
+//    return std::string(reinterpret_cast<const char*>(value.data()), value.size());
+//}
 
 /**
  * @brief Cassandra "transaction" implemented using a logged batch.

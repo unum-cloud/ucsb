@@ -15,7 +15,7 @@ option(UCSB_BUILD_WIREDTIGER "Build WiredTiger for the benchmark" OFF)
 option(UCSB_BUILD_MONGODB "Build MongoDB for the benchmark" OFF)
 option(UCSB_BUILD_REDIS "Build Redis for the benchmark" OFF)
 option(UCSB_BUILD_LMDB "Build LMDB for the benchmark" OFF)
-option(UCSB_BUILD_CASSANDRA "Build Cassandra for the benchmark" OFF)
+option(UCSB_BUILD_CASSANDRA "Build Cassandra for the benchmark" ON)
 
 #######################################################################################################################
 # Set compiler

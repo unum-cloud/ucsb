@@ -7,6 +7,7 @@
 #include <string>
 #include <vector>
 #include <iostream>
+#include <chrono>  // To print timing statements
 
 #include <fmt/format.h>
 #include <cassandra.h>
@@ -15,6 +16,7 @@
 #include "src/core/db.hpp"
 #include "src/core/helper.hpp"
 #include "src/core/data_accessor.hpp"
+#include "src/cassandra/cassandra_helpers.hpp"
 #include "cassandra_transaction.hpp"
 
 namespace ucsb::cassandra {
@@ -50,19 +52,21 @@ using transaction_t = ucsb::transaction_t;
 
 // Helper functions:
 
-inline std::string key_to_string(key_t key) {
-    // Convert key from little-endian to big-endian to preserve lexical order as numeric order
-    key = __builtin_bswap64(key);
-    // Store as a hex string (16 hex chars)
-    char buffer[17];
-    snprintf(buffer, sizeof(buffer), "%016lx", static_cast<unsigned long>(key));
-    return std::string(buffer);
-}
+//inline std::string key_to_string(key_t key) {
+//    // Convert key from little-endian to big-endian to preserve lexical order as numeric order
+//    key = __builtin_bswap64(key);
+//    // Store as a hex string (16 hex chars)
+//    char buffer[17];
+//    snprintf(buffer, sizeof(buffer), "%016lx", static_cast<unsigned long>(key));
+//    return std::string(buffer);
+//}
+//
+//inline std::string value_to_string(value_spanc_t value) {
+//    // Treat value as text. If values are binary, consider using base64.
+//    return std::string(reinterpret_cast<const char*>(value.data()), value.size());
+//}
 
-inline std::string value_to_string(value_spanc_t value) {
-    // Treat value as text. If values are binary, consider using base64.
-    return std::string(reinterpret_cast<const char*>(value.data()), value.size());
-}
+// TODO: Add failure prints to all functions
 
 class cassandra_t : public ucsb::db_t {
   public:
@@ -136,6 +140,9 @@ bool cassandra_t::open(std::string& error) {
 
     cluster_ = cass_cluster_new();
     session_ = cass_session_new();
+
+    // Set protocol version to v4 (compatible with Cassandra 3.11)
+    cass_cluster_set_protocol_version(cluster_, CASS_PROTOCOL_VERSION_V4);
 
     // Host and port could be read from config, here hardcoded:
     cass_cluster_set_contact_points(cluster_, "127.0.0.1");
@@ -296,24 +303,36 @@ operation_result_t cassandra_t::remove(key_t key) {
 operation_result_t cassandra_t::read(key_t key, value_span_t value) const {
     std::string val_str;
     bool found = execute_single_read(key_to_string(key), val_str);
-    if (!found)
+    if (!found) {
+        printf("[CASSANDRA] Could not find entry for key = %lu %s\n", key, key_to_string(key).c_str());
         return {0, operation_status_t::not_found_k};
-    if (val_str.size() > value.size())
+    }
+    if (val_str.size() > value.size()) {
+        printf("[CASSANDRA] Not enough space for value of key = %lu %s\n", key, key_to_string(key).c_str());
         return {0, operation_status_t::error_k}; // not enough space
+    }
     memcpy(value.data(), val_str.data(), val_str.size());
     return {1, operation_status_t::ok_k};
 }
 
 operation_result_t cassandra_t::batch_upsert(keys_spanc_t keys, values_spanc_t values, value_lengths_spanc_t sizes) {
+  	// Print how many keys in total
+//    std::cout << "[CASSANDRA] batch_upsert: " << keys.size() << " keys to insert.\n";
+
     // Use a logged batch
     CassBatch* batch = cass_batch_new(CASS_BATCH_TYPE_LOGGED);
     size_t offset = 0;
+    auto start = std::chrono::steady_clock::now();
     for (size_t i = 0; i < keys.size(); ++i) {
+//        std::cout << "[CASSANDRA] Inserting key #" << i << " with value size = " << sizes[i] << " bytes\n";
         std::string query = "INSERT INTO " + table_ + " (key, value) VALUES (?, ?);";
         CassStatement* statement = cass_statement_new(query.c_str(), 2);
 
         std::string key_str = key_to_string(keys[i]);
+//        std::cout << "key_str = " << key_str << " , keys[i] = " << keys[i] << std::endl;
+//        printf("C-style padded hex: %lx\n", keys[i]);
         std::string val_str(reinterpret_cast<const char*>(values.data() + offset), sizes[i]);
+//        std::cout << "key: " << key_str << " value: " << val_str << std::endl;
         offset += sizes[i];
 
         cass_statement_bind_string(statement, 0, key_str.c_str());
@@ -322,13 +341,34 @@ operation_result_t cassandra_t::batch_upsert(keys_spanc_t keys, values_spanc_t v
         cass_batch_add_statement(batch, statement);
         cass_statement_free(statement);
     }
+    auto end = std::chrono::steady_clock::now();
+    std::chrono::duration<double> elapsed_seconds = end - start;
+//    std::cout << "Elapsed time (for loop): " << elapsed_seconds.count() << " seconds\n";
 
+    auto execute_start = std::chrono::steady_clock::now();
     CassFuture* future = cass_session_execute_batch(session_, batch);
     cass_batch_free(batch);
     cass_future_wait(future);
-    bool ok = (cass_future_error_code(future) == CASS_OK);
-    cass_future_free(future);
 
+    CassError rc = cass_future_error_code(future);
+	if (rc != CASS_OK) {
+    	// Retrieve the Cassandra driver’s error message
+    	const char* msg = nullptr;
+    	size_t msg_len = 0;
+    	cass_future_error_message(future, &msg, &msg_len);
+
+    	std::cerr << "[CASSANDRA] Error code: " << rc
+              << ", message: " << std::string(msg, msg_len) << std::endl;
+	}
+
+    bool ok = (rc == CASS_OK);
+//    printf("ok = %d\n", ok);
+    cass_future_free(future);
+    auto execute_end = std::chrono::steady_clock::now();
+    std::chrono::duration<double> execute_elapsed_seconds = execute_end - execute_start;
+//    std::cout << "Elapsed time (execution): " << execute_elapsed_seconds.count() << " seconds\n";
+
+//    bool ok = true;
     return {ok ? keys.size() : 0, ok ? operation_status_t::ok_k : operation_status_t::error_k};
 }
 
@@ -352,6 +392,7 @@ operation_result_t cassandra_t::batch_read(keys_spanc_t keys, values_span_t valu
 
 operation_result_t cassandra_t::bulk_load(keys_spanc_t keys, values_spanc_t values, value_lengths_spanc_t sizes) {
     // Cassandra doesn't have an external bulk load like sst files. Just do a batch insert.
+//    printf("[CASSANDRA] bulk_load\n");
     return batch_upsert(keys, values, sizes);
 }
 

@@ -84,7 +84,7 @@ std::shared_ptr<db_t> make_db(db_brand_t db_brand, bool transactional) {
         case db_brand_t::lmdb_k: return std::make_shared<symas::lmdb_t>();
 #endif
 #if defined(UCSB_HAS_CASSANDRA)
-            case db_brand_t::cassandra_k: return std::make_shared<cassandra::cassandra_t>();
+        case db_brand_t::cassandra_k: return std::make_shared<cassandra::cassandra_t>();
 #endif
         default: break;
         }
