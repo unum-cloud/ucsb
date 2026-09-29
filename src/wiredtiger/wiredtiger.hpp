@@ -34,7 +34,7 @@ using transaction_t = ucsb::transaction_t;
  */
 class wiredtiger_t : public ucsb::db_t {
   public:
-    inline wiredtiger_t() : conn_(nullptr), table_name_("table:access"), state_(0), bulk_load_cursor_(nullptr) {}
+    inline wiredtiger_t() : conn_(nullptr), table_name_("table:access"), state_(0) {}
     ~wiredtiger_t() override = default;
 
     void set_config(fs::path const& config_path,
@@ -88,23 +88,7 @@ class wiredtiger_t : public ucsb::db_t {
     size_t state_;
     std::vector<WT_SESSION*> sessions_;
     mutable std::atomic_size_t free_sessions_count_;
-
-    // Special cursor for bulk load
-    WT_CURSOR* bulk_load_cursor_;
 };
-
-inline int compare_keys(
-    WT_COLLATOR* collator, WT_SESSION* session, WT_ITEM const* left, WT_ITEM const* right, int* res) noexcept {
-    (void)collator;
-    (void)session;
-
-    key_t left_key = *reinterpret_cast<key_t const*>(left->data);
-    key_t right_key = *reinterpret_cast<key_t const*>(right->data);
-    *res = left_key < right_key ? -1 : left_key > right_key;
-    return 0;
-}
-
-WT_COLLATOR key_comparator = {compare_keys, nullptr, nullptr};
 
 void wiredtiger_t::set_config(fs::path const& config_path,
                               fs::path const& main_dir_path,
@@ -256,8 +240,10 @@ operation_result_t wiredtiger_t::read(key_t key, value_span_t value) const {
 
     cursor->set_key(cursor, key);
     auto res = cursor->search(cursor);
-    if (res)
+    if (res) {
+        close_cursor(cursor);
         return {0, operation_status_t::not_found_k};
+    }
 
     WT_ITEM db_value;
     res = cursor->get_value(cursor, &db_value);
@@ -323,28 +309,8 @@ operation_result_t wiredtiger_t::batch_read(keys_spanc_t keys, values_span_t val
 }
 
 operation_result_t wiredtiger_t::bulk_load(keys_spanc_t keys, values_spanc_t values, value_lengths_spanc_t sizes) {
-    // Warnings:
-    //   DB must be empty
-    //   This is single thread interface
-
-    if (!bulk_load_cursor_) {
-        bulk_load_cursor_ = open_cursor("bulk");
-        if (!bulk_load_cursor_)
-            return {0, operation_status_t::error_k};
-    }
-
-    size_t offset = 0;
-    for (size_t idx = 0; idx < keys.size(); ++idx) {
-        bulk_load_cursor_->set_key(bulk_load_cursor_, keys[idx]);
-        WT_ITEM db_value;
-        db_value.data = &values[offset];
-        db_value.size = sizes[idx];
-        bulk_load_cursor_->set_value(bulk_load_cursor_, &db_value);
-        bulk_load_cursor_->insert(bulk_load_cursor_);
-        offset += sizes[idx];
-    }
-
-    return {keys.size(), operation_status_t::ok_k};
+    // WiredTiger's bulk cursors need an empty table and a single thread
+    return batch_upsert(keys, values, sizes);
 }
 
 operation_result_t wiredtiger_t::range_select(key_t key, size_t length, values_span_t values) const {
@@ -354,23 +320,20 @@ operation_result_t wiredtiger_t::range_select(key_t key, size_t length, values_s
         return {0, operation_status_t::error_k};
 
     cursor->set_key(cursor, key);
-    auto res = cursor->search(cursor);
-    if (res)
-        return {0, operation_status_t::error_k};
+    int exact = 0;
+    auto res = cursor->search_near(cursor, &exact);
+    if (res == 0 && exact < 0)
+        res = cursor->next(cursor);
 
-    size_t i = 0;
     WT_ITEM db_value;
-    const char* db_key = nullptr;
     size_t offset = 0;
     size_t selected_records_count = 0;
-    while ((res = cursor->next(cursor)) == 0 && i++ < length) {
-        res = cursor->get_key(cursor, &db_key);
-        res |= cursor->get_value(cursor, &db_value);
-        if (res == 0) {
-            memcpy(values.data() + offset, db_value.data, db_value.size);
-            offset += db_value.size;
-            ++selected_records_count;
-        }
+    for (; res == 0 && selected_records_count < length; res = cursor->next(cursor)) {
+        if (cursor->get_value(cursor, &db_value))
+            break;
+        memcpy(values.data() + offset, db_value.data, db_value.size);
+        offset += db_value.size;
+        ++selected_records_count;
     }
     close_cursor(cursor);
 
@@ -384,21 +347,18 @@ operation_result_t wiredtiger_t::scan(key_t key, size_t length, value_span_t sin
         return {0, operation_status_t::error_k};
 
     cursor->set_key(cursor, key);
-    auto res = cursor->search(cursor);
-    if (res)
-        return {0, operation_status_t::error_k};
+    int exact = 0;
+    auto res = cursor->search_near(cursor, &exact);
+    if (res == 0 && exact < 0)
+        res = cursor->next(cursor);
 
-    size_t i = 0;
     WT_ITEM db_value;
-    const char* db_key = nullptr;
     size_t scanned_records_count = 0;
-    while ((res = cursor->next(cursor)) == 0 && i++ < length) {
-        res = cursor->get_key(cursor, &db_key);
-        res |= cursor->get_value(cursor, &db_value);
-        if (res == 0) {
-            memcpy(single_value.data(), db_value.data, db_value.size);
-            ++scanned_records_count;
-        }
+    for (; res == 0 && scanned_records_count < length; res = cursor->next(cursor)) {
+        if (cursor->get_value(cursor, &db_value))
+            break;
+        memcpy(single_value.data(), db_value.data, db_value.size);
+        ++scanned_records_count;
     }
     close_cursor(cursor);
 
@@ -410,10 +370,7 @@ std::string wiredtiger_t::info() {
 }
 
 void wiredtiger_t::flush() {
-    if (bulk_load_cursor_) {
-        close_cursor(bulk_load_cursor_);
-        bulk_load_cursor_ = nullptr;
-    }
+    // Nothing to do
 }
 
 size_t wiredtiger_t::size_on_disk() const { return ucsb::size_on_disk(main_dir_path_); }

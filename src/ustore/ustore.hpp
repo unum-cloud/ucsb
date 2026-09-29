@@ -498,8 +498,11 @@ operation_result_t ustore_t::scan(key_t key, size_t length, value_span_t single_
             if (lengths[idx] != ustore_length_missing_k)
                 memcpy(single_value.data(), values_ + offsets[idx], lengths[idx]);
 
-        key_ += len;
-        remaining_keys_cnt = remaining_keys_cnt - len;
+        // Resume after the last key found, as the keys may have gaps
+        if (!*found_counts)
+            break;
+        key_ = found_keys[*found_counts - 1] + 1;
+        remaining_keys_cnt -= std::min(*found_counts, remaining_keys_cnt);
         len = std::min(len, remaining_keys_cnt);
     }
 

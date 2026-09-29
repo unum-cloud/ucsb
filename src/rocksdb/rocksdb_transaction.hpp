@@ -88,13 +88,6 @@ rocksdb_transaction_t::~rocksdb_transaction_t() {
 operation_result_t rocksdb_transaction_t::upsert(key_t key, value_spanc_t value) {
     auto key_slice = to_slice(key);
     rocksdb::Status status = transaction_->Put(key_slice, to_slice(value));
-    if (!status.ok()) {
-        assert(status.IsTryAgain());
-        status = transaction_->Commit();
-        assert(status.ok());
-        status = transaction_->Put(key_slice, to_slice(value));
-        assert(status.ok());
-    }
     return {size_t(status.ok()), status.ok() ? operation_status_t::ok_k : operation_status_t::error_k};
 }
 
@@ -113,13 +106,6 @@ operation_result_t rocksdb_transaction_t::update(key_t key, value_spanc_t value)
 operation_result_t rocksdb_transaction_t::remove(key_t key) {
     auto key_slice = to_slice(key);
     rocksdb::Status status = transaction_->Delete(key_slice);
-    if (!status.ok()) {
-        assert(status.IsTryAgain());
-        status = transaction_->Commit();
-        assert(status.ok());
-        status = transaction_->Delete(key_slice);
-        assert(status.ok());
-    }
 
     return {size_t(status.ok()), status.ok() ? operation_status_t::ok_k : operation_status_t::error_k};
 }
@@ -145,13 +131,8 @@ operation_result_t rocksdb_transaction_t::batch_upsert(keys_spanc_t keys,
         auto key = keys[idx];
         auto key_slice = to_slice(key);
         rocksdb::Status status = transaction_->Put(key_slice, to_slice(values.subspan(offset, sizes[idx])));
-        if (!status.ok()) {
-            assert(status.IsTryAgain());
-            status = transaction_->Commit();
-            assert(status.ok());
-            status = transaction_->Put(key_slice, to_slice(values.subspan(offset, sizes[idx])));
-            assert(status.ok());
-        }
+        if (!status.ok())
+            return {idx, operation_status_t::error_k};
         offset += sizes[idx];
     }
     return {keys.size(), operation_status_t::ok_k};
@@ -171,14 +152,14 @@ operation_result_t rocksdb_transaction_t::batch_read(keys_spanc_t keys, values_s
 
     transaction_->MultiGet(read_options_,
                            cf_handles_.front(),
-                           transaction_key_slices.size(),
+                           keys.size(),
                            transaction_key_slices.data(),
                            transaction_value_slices.data(),
                            transaction_statuses.data());
 
     size_t offset = 0;
     size_t found_cnt = 0;
-    for (size_t i = 0; i < transaction_statuses.size(); ++i) {
+    for (size_t i = 0; i < keys.size(); ++i) {
         if (!transaction_statuses[i].ok())
             continue;
 

@@ -91,6 +91,8 @@ class mongodb_t : public ucsb::db_t {
 };
 
 static bsoncxx::oid make_oid(key_t key) {
+    // Big-endian, so that the ObjectIds order as the integer keys
+    key = __builtin_bswap64(key);
     size_t len_k = bsoncxx::oid::size();
     char padded_key[len_k] = {0};
     memcpy(padded_key + len_k - sizeof(key_t), &key, sizeof(key_t));
@@ -152,10 +154,10 @@ operation_result_t mongodb_t::upsert(key_t key, value_spanc_t value) {
     auto bin_val = make_binary(value.data(), value.size());
     mongocxx::options::update opts;
     opts.upsert(true);
-    if (coll.update_one(make_document(kvp("_id", make_oid(key))),
-                        make_document(kvp("$set", make_document(kvp("data", bin_val)))),
-                        opts)
-            ->modified_count())
+    auto result = coll.update_one(make_document(kvp("_id", make_oid(key))),
+                                  make_document(kvp("$set", make_document(kvp("data", bin_val)))),
+                                  opts);
+    if (result && result->matched_count() + result->upserted_count())
         return {1, operation_status_t::ok_k};
     return {0, operation_status_t::error_k};
 }
@@ -163,24 +165,21 @@ operation_result_t mongodb_t::upsert(key_t key, value_spanc_t value) {
 operation_result_t mongodb_t::update(key_t key, value_spanc_t value) {
     auto client = (*pool_).acquire();
     auto coll = (*client)["mongodb"][coll_name];
-    // TODO: Do we need upsert here?
-    mongocxx::options::update opts;
-    opts.upsert(true);
     auto bin_val = make_binary(value.data(), value.size());
-    if (coll.update_one(make_document(kvp("_id", make_oid(key))),
-                        make_document(kvp("$set", make_document(kvp("data", bin_val)))),
-                        opts)
-            ->modified_count())
+    auto result = coll.update_one(make_document(kvp("_id", make_oid(key))),
+                                  make_document(kvp("$set", make_document(kvp("data", bin_val)))));
+    if (result && result->matched_count())
         return {1, operation_status_t::ok_k};
-    return {0, operation_status_t::error_k};
+    return {0, operation_status_t::not_found_k};
 };
 
 operation_result_t mongodb_t::remove(key_t key) {
     auto client = (*pool_).acquire();
     auto coll = (*client)["mongodb"][coll_name];
-    if (coll.delete_one(make_document(kvp("_id", make_oid(key))))->deleted_count())
+    // Removing a missing key succeeds, as in RocksDB and WiredTiger
+    if (coll.delete_one(make_document(kvp("_id", make_oid(key)))))
         return {1, operation_status_t::ok_k};
-    return {0, operation_status_t::not_found_k};
+    return {0, operation_status_t::error_k};
 };
 
 operation_result_t mongodb_t::read(key_t key, value_span_t value) const {
@@ -208,8 +207,8 @@ operation_result_t mongodb_t::batch_upsert(keys_spanc_t keys, values_spanc_t val
         bulk.append(upsert_op);
         data_offset += sizes[index];
     }
-    size_t modified_count = bulk.execute()->modified_count();
-    if (modified_count == keys.size())
+    auto result = bulk.execute();
+    if (result && size_t(result->matched_count() + result->upserted_count()) == keys.size())
         return {keys.size(), operation_status_t::ok_k};
     return {0, operation_status_t::error_k};
 }
@@ -234,16 +233,12 @@ operation_result_t mongodb_t::batch_read(keys_spanc_t keys, values_span_t values
         auto key = doc["_id"].get_oid().value;
         auto data = doc["data"].get_binary();
         auto idx = batch_keys_map[key];
-        memcpy(&values[idx], data.bytes, data.size);
+        memcpy(values.data() + idx * (values.size() / keys.size()), data.bytes, data.size);
     }
 
     batch_keys_array.clear();
     batch_keys_map.clear();
-
-    if (found_cnt == keys.size())
-        return {keys.size(), operation_status_t::ok_k};
-
-    return {0, operation_status_t::error_k};
+    return {found_cnt, operation_status_t::ok_k};
 }
 
 operation_result_t mongodb_t::bulk_load(keys_spanc_t keys, values_spanc_t values, value_lengths_spanc_t sizes) {
@@ -271,7 +266,7 @@ operation_result_t mongodb_t::range_select(key_t key, size_t length, [[maybe_unu
     auto coll = (*client)["mongodb"][coll_name];
     mongocxx::options::find opts;
     opts.limit(length);
-    auto cursor = coll.find(make_document(kvp("_id", make_document(kvp("$gt", make_oid(key))))), opts);
+    auto cursor = coll.find(make_document(kvp("_id", make_document(kvp("$gte", make_oid(key))))), opts);
 
     if (cursor.begin() == cursor.end())
         return {0, operation_status_t::error_k};
@@ -289,7 +284,7 @@ operation_result_t mongodb_t::scan([[maybe_unused]] key_t key, size_t length, va
     auto coll = (*client)["mongodb"][coll_name];
     auto cursor = coll.find({});
     size_t i = 0;
-    for (auto doc = cursor.begin(); doc != cursor.end() && i++ < length; doc++) {
+    for (auto doc = cursor.begin(); doc != cursor.end() && i < length; ++doc, ++i) {
         auto data = (*doc)["data"].get_binary();
         memcpy(single_value.data(), data.bytes, data.size);
     }

@@ -169,7 +169,9 @@ bool rocksdb_t::open(std::string& error) {
     table_options.enable_index_compression = false;
     table_options.filter_policy.reset(rocksdb::NewBloomFilterPolicy(10));
     options_.table_factory.reset(rocksdb::NewBlockBasedTableFactory(table_options));
-    // options_.comparator = &key_cmp_;
+    // The column families loaded from the config carry their own table options, overriding `options_`
+    for (auto& cf_desc : cf_descs_)
+        cf_desc.options.table_factory = options_.table_factory;
 
     // Overwrite latency-affecting settings, that aren't externally configurable.
     read_options_.verify_checksums = false;
@@ -273,14 +275,14 @@ operation_result_t rocksdb_t::batch_read(keys_spanc_t keys, values_span_t values
 
     db_->MultiGet(read_options_,
                   cf_handles_.front(),
-                  key_slices.size(),
+                  keys.size(),
                   key_slices.data(),
                   value_slices.data(),
                   statuses.data());
 
     size_t offset = 0;
     size_t found_cnt = 0;
-    for (size_t i = 0; i != statuses.size(); ++i) {
+    for (size_t i = 0; i != keys.size(); ++i) {
         if (!statuses[i].ok())
             continue;
         memcpy(values.data() + offset, value_slices[i].data(), value_slices[i].size());
@@ -364,7 +366,7 @@ operation_result_t rocksdb_t::scan(key_t key, size_t length, value_span_t single
     // It's recommended to disable caching on long scans.
     // https://github.com/facebook/rocksdb/blob/49a10feb21dc5c766bb272406136667e1d8a969e/include/rocksdb/options.h#L1462
     scan_options.fill_cache = false;
-    std::unique_ptr<rocksdb::Iterator> it(db_->NewIterator(read_options_));
+    std::unique_ptr<rocksdb::Iterator> it(db_->NewIterator(scan_options));
     it->Seek(to_slice(key));
     for (; it->Valid() && i != length; i++, it->Next())
         memcpy(single_value.data(), it->value().data(), it->value().size());

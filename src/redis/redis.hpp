@@ -155,18 +155,22 @@ bool redis_t::open(std::string& error) {
 void redis_t::close() {}
 
 operation_result_t redis_t::upsert(key_t key, value_spanc_t value) {
-    auto status = (*redis_).hset("hash", to_string_view(key), to_string_view(value.data(), value.size()));
-    return {size_t(status), status ? operation_status_t::ok_k : operation_status_t::error_k};
+    // `HSET` returns the number of new fields, zero on an overwrite
+    (*redis_).hset("hash", to_string_view(key), to_string_view(value.data(), value.size()));
+    return {1, operation_status_t::ok_k};
 }
 
 operation_result_t redis_t::update(key_t key, value_spanc_t value) {
-    auto status = (*redis_).hset("hash", to_string_view(key), to_string_view(value.data(), value.size()));
-    return {status, status ? operation_status_t::ok_k : operation_status_t::not_found_k};
+    if (!(*redis_).hexists("hash", to_string_view(key)))
+        return {0, operation_status_t::not_found_k};
+    (*redis_).hset("hash", to_string_view(key), to_string_view(value.data(), value.size()));
+    return {1, operation_status_t::ok_k};
 }
 
 operation_result_t redis_t::remove(key_t key) {
-    size_t count = (*redis_).hdel("hash", to_string_view(key));
-    return {count, count ? operation_status_t::ok_k : operation_status_t::not_found_k};
+    // Removing a missing key succeeds, as in RocksDB and WiredTiger
+    (*redis_).hdel("hash", to_string_view(key));
+    return {1, operation_status_t::ok_k};
 }
 
 operation_result_t redis_t::read(key_t key, value_span_t value) const {
@@ -174,7 +178,7 @@ operation_result_t redis_t::read(key_t key, value_span_t value) const {
     if (!val)
         return {0, operation_status_t::not_found_k};
 
-    memcpy(value.data(), &val, sizeof(val));
+    memcpy(value.data(), val->data(), val->size());
     return {1, operation_status_t::ok_k};
 }
 
@@ -185,22 +189,23 @@ operation_result_t redis_t::batch_upsert(keys_spanc_t keys, values_spanc_t value
         key_t const* key_ptr_;
         val_t* val_ptr_;
         value_length_t const* size_ptr_;
-        pair_t pair_;
+        mutable pair_t pair_;
 
         kv_iterator_t(key_t const* key_ptr, val_t const* val_ptr, value_length_t const* size_ptr) noexcept
-            : key_ptr_(key_ptr), val_ptr_(val_ptr), size_ptr_(size_ptr),
-              pair_(std::make_pair(to_string_view(*key_ptr_), to_string_view(val_ptr_, *size_ptr_))) {}
+            : key_ptr_(key_ptr), val_ptr_(val_ptr), size_ptr_(size_ptr) {}
 
-        pair_t const& operator*() const noexcept { return pair_; }
-        pair_t const* operator->() const noexcept { return &pair_; }
+        // The pair is built on dereference, as the end iterator points past the last entry
+        pair_t const& operator*() const noexcept {
+            pair_ = std::make_pair(to_string_view(*key_ptr_), to_string_view(val_ptr_, *size_ptr_));
+            return pair_;
+        }
+        pair_t const* operator->() const noexcept { return &**this; }
         bool operator==(kv_iterator_t const& other) const noexcept { return key_ptr_ == other.key_ptr_; }
 
         kv_iterator_t& operator++() noexcept {
             key_ptr_++;
             val_ptr_ += *size_ptr_;
             size_ptr_++;
-            pair_.first = to_string_view(*key_ptr_);
-            pair_.second = to_string_view(val_ptr_, *size_ptr_);
             return *this;
         }
     };
@@ -237,8 +242,8 @@ operation_result_t redis_t::batch_read(keys_spanc_t keys, values_span_t values) 
         iterator push_back(value_type value) noexcept {
             if (!value)
                 return values.data() + offset;
-            memcpy(values.data() + offset, &value, sizeof(value));
-            offset += sizeof(value);
+            memcpy(values.data() + offset, value->data(), value->size());
+            offset += value->size();
             count++;
             return values.data() + offset;
         }
@@ -249,7 +254,7 @@ operation_result_t redis_t::batch_read(keys_spanc_t keys, values_span_t values) 
                     key_iterator_t(keys.data()),
                     key_iterator_t(keys.data() + keys.size()),
                     std::back_inserter(getter));
-    return {getter.count, getter.count ? operation_status_t::ok_k : operation_status_t::error_k};
+    return {getter.count, operation_status_t::ok_k};
 }
 
 operation_result_t redis_t::bulk_load(keys_spanc_t keys, values_spanc_t values, value_lengths_spanc_t sizes) {
@@ -260,13 +265,8 @@ operation_result_t redis_t::bulk_load(keys_spanc_t keys, values_spanc_t values, 
         data_offset += sizes[i];
     }
 
-    auto pipe_replies = pipe.exec();
-
-    size_t count = 0;
-    for (size_t i = 0; i != keys.size(); ++i)
-        count += pipe_replies.get<bool>(i);
-
-    return {count, operation_status_t::ok_k};
+    pipe.exec();
+    return {keys.size(), operation_status_t::ok_k};
 }
 
 operation_result_t redis_t::range_select(key_t /* key */, size_t /* length */, values_span_t /* values */) const {

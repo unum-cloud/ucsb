@@ -35,7 +35,11 @@ using operation_result_t = ucsb::operation_result_t;
 using db_hints_t = ucsb::db_hints_t;
 using transaction_t = ucsb::transaction_t;
 
-inline leveldb::Slice to_slice(key_t& key) { return {reinterpret_cast<char const*>(&key), sizeof(key_t)}; }
+// Keys are stored big-endian, so that the default bytewise comparator orders them as integers
+inline leveldb::Slice to_slice(key_t& key) {
+    key = __builtin_bswap64(key);
+    return {reinterpret_cast<char const*>(&key), sizeof(key_t)};
+}
 
 inline leveldb::Slice to_slice(value_spanc_t value) {
     return {reinterpret_cast<char const*>(value.data()), value.size()};
@@ -83,28 +87,13 @@ class leveldb_t : public ucsb::db_t {
     struct config_t {
         size_t write_buffer_size = 0;
         size_t max_file_size = 0;
-        size_t max_open_files = -1;
+        int max_open_files = -1;
         std::string compression;
         size_t cache_size = 0;
         size_t filter_bits = -1;
     };
 
     inline bool load_config(config_t& config);
-
-    class key_comparator_t final : public leveldb::Comparator {
-      public:
-        int Compare(leveldb::Slice const& left, leveldb::Slice const& right) const /*override*/ {
-            assert(left.size() == sizeof(key_t));
-            assert(right.size() == sizeof(key_t));
-
-            key_t left_key = *reinterpret_cast<key_t const*>(left.data());
-            key_t right_key = *reinterpret_cast<key_t const*>(right.data());
-            return left_key < right_key ? -1 : left_key > right_key;
-        }
-        const char* Name() const { return "KeyComparator"; }
-        void FindShortestSeparator(std::string*, const leveldb::Slice&) const {}
-        void FindShortSuccessor(std::string*) const {}
-    };
 
     fs::path config_path_;
     fs::path main_dir_path_;
@@ -115,7 +104,6 @@ class leveldb_t : public ucsb::db_t {
     leveldb::WriteOptions write_options_;
 
     std::unique_ptr<leveldb::DB> db_;
-    key_comparator_t key_cmp_;
 };
 
 void leveldb_t::set_config(fs::path const& config_path,
@@ -144,7 +132,6 @@ bool leveldb_t::open(std::string& error) {
 
     options_ = leveldb::Options();
     options_.create_if_missing = true;
-    // options_.comparator = &key_cmp_;
     if (config.write_buffer_size > 0)
         options_.write_buffer_size = config.write_buffer_size;
     if (config.max_file_size > 0)
@@ -178,13 +165,14 @@ operation_result_t leveldb_t::upsert(key_t key, value_spanc_t value) {
 operation_result_t leveldb_t::update(key_t key, value_spanc_t value) {
 
     std::string data;
-    leveldb::Status status = db_->Get(read_options_, to_slice(key), &data);
+    leveldb::Slice key_slice = to_slice(key);
+    leveldb::Status status = db_->Get(read_options_, key_slice, &data);
     if (status.IsNotFound())
         return {0, operation_status_t::not_found_k};
     else if (!status.ok())
         return {0, operation_status_t::error_k};
 
-    status = db_->Put(write_options_, to_slice(key), to_slice(value));
+    status = db_->Put(write_options_, key_slice, to_slice(value));
     return {size_t(status.ok()), status.ok() ? operation_status_t::ok_k : operation_status_t::error_k};
 }
 
@@ -294,7 +282,7 @@ bool leveldb_t::load_config(config_t& config) {
 
     config.write_buffer_size = j_config.value<size_t>("write_buffer_size", size_t(67'108'864));
     config.max_file_size = j_config.value<size_t>("max_file_size", size_t(67'108'864));
-    config.max_open_files = j_config.value<size_t>("max_open_files", size_t(1'000));
+    config.max_open_files = j_config.value<int>("max_open_files", 1'000);
     config.compression = j_config.value<std::string>("compression", "none");
     config.cache_size = j_config.value<size_t>("cache_size", size_t(134'217'728));
     config.filter_bits = j_config.value<size_t>("filter_bits", size_t(10));
