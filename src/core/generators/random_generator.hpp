@@ -16,25 +16,25 @@ class random_int_generator_t final : public generator_gt<uint32_t> {
   private:
     std::random_device device_;
     std::minstd_rand rand_;
-    float last_;
+    uint32_t last_;
 };
 
-class random_double_generator_t final : public generator_gt<float> {
+class random_double_generator_t final : public generator_gt<double> {
   public:
-    inline random_double_generator_t(float min, float max)
+    inline random_double_generator_t(double min, double max)
         : device_(), rand_(device_()), uniform_(min, max), last_(0.0) {
         generate();
     }
     ~random_double_generator_t() override = default;
 
-    inline float generate() override { return last_ = uniform_(rand_); }
-    inline float last() override { return last_; }
+    inline double generate() override { return last_ = uniform_(rand_); }
+    inline double last() override { return last_; }
 
   private:
     std::random_device device_;
-    std::minstd_rand rand_;
-    std::uniform_real_distribution<float> uniform_;
-    float last_;
+    std::mt19937_64 rand_;
+    std::uniform_real_distribution<double> uniform_;
+    double last_;
 };
 
 class random_byte_generator_t final : public generator_gt<char> {

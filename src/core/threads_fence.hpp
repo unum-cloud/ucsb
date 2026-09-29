@@ -23,12 +23,9 @@ class threads_fence_t {
         while (waiting_threads_count_.load() != threads_count_)
             ;
 
-        ++released_threads_count_;
-        if (released_threads_count_.load() == threads_count_) {
-            size_t tmp_waiting = threads_count_;
-            size_t tmp_released = threads_count_;
-            waiting_threads_count_.compare_exchange_weak(tmp_waiting, size_t(0));
-            released_threads_count_.compare_exchange_weak(tmp_released, size_t(0));
+        if (++released_threads_count_ == threads_count_) {
+            waiting_threads_count_.store(0);
+            released_threads_count_.store(0);
         }
     }
 

@@ -172,7 +172,7 @@ bool load(fs::path const& path, workloads_t& workloads) {
         workload.range_select_max_length = (*j_workload).value("range_select_max_length", 0);
         workload.range_select_length_dist =
             parse_distribution((*j_workload).value("range_select_length_dist", "uniform"));
-        if (workload.key_dist == distribution_kind_t::unknown_k) {
+        if (workload.range_select_length_dist == distribution_kind_t::unknown_k) {
             workloads.clear();
             return false;
         }

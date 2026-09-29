@@ -387,7 +387,6 @@ void bench(bm::State& state, workload_t const& workload, db_t& db, data_accessor
     auto chooser = create_operation_chooser(workload);
     ucsb::timer_t timer(state);
     worker_t worker(workload, data_accessor, timer);
-    std::atomic_bool do_flash = true;
 
     // Monitoring
     cpu_profiler_t cpu_prof;    // Only one thread profiles
@@ -436,9 +435,7 @@ void bench(bm::State& state, workload_t const& workload, db_t& db, data_accessor
                 progress.print(workload.name, timer.operations_elapsed_time(), timer.elapsed_time());
 
             // Last thread flushes the DB
-            bool only_once = true;
-            bool is_last_iteration = done_iterations == progress.total_iterations;
-            if (is_last_iteration && do_flash.compare_exchange_weak(only_once, false)) {
+            if (done_iterations == progress.total_iterations) {
                 progress_t::print_db_flush();
                 db.flush();
             }
@@ -600,12 +597,15 @@ int main(int argc, char** argv) {
     }
     catch (exception_t const& ex) {
         fmt::print("UCSB exception: {}\n", ex.what());
+        return 1;
     }
     catch (std::exception const& ex) {
         fmt::print("std exception: {}\n", ex.what());
+        return 1;
     }
     catch (...) {
         fmt::print("Unknown exception was thrown\n");
+        return 1;
     }
 
     return 0;
