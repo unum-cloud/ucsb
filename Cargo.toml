@@ -1,0 +1,104 @@
+[package]
+name = "crudeval"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.95"
+description = "Create, Read, Update and Delete benchmarks at crude hardware speeds"
+repository = "https://github.com/ashvardanian/CrudEval"
+
+[lib]
+path = "src/bench.rs"
+
+[[bin]]
+name = "crud-eval-rocksdb"
+path = "src/rocksdb.rs"
+required-features = ["rocksdb-backend"]
+
+[[bin]]
+name = "crud-eval-lmdb"
+path = "src/lmdb.rs"
+required-features = ["lmdb-backend"]
+
+[[bin]]
+name = "crud-eval-redb"
+path = "src/redb.rs"
+required-features = ["redb-backend"]
+
+[[bin]]
+name = "crud-eval-fjall"
+path = "src/fjall.rs"
+required-features = ["fjall-backend"]
+
+[[bin]]
+name = "crud-eval-sqlite"
+path = "src/sqlite.rs"
+required-features = ["sqlite-backend"]
+
+[[bin]]
+name = "crud-eval-redis"
+path = "src/redis.rs"
+required-features = ["redis-backend"]
+
+[[bin]]
+name = "crud-eval-mongodb"
+path = "src/mongodb.rs"
+required-features = ["mongodb-backend"]
+
+[[bin]]
+name = "crud-eval-postgres"
+path = "src/postgres.rs"
+required-features = ["postgres-backend"]
+
+[[bin]]
+name = "crud-eval-neo4j"
+path = "src/neo4j.rs"
+required-features = ["neo4j-backend"]
+
+[[bin]]
+name = "crud-eval-falkordb"
+path = "src/falkordb.rs"
+required-features = ["falkordb-backend"]
+
+[dependencies]
+clap = { version = "4.6", features = ["derive"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+uuid = { version = "1.26", features = ["serde"] }
+hdrhistogram = "7.6"
+sysinfo = { version = "0.39", default-features = false, features = ["system", "disk"] }
+libc = "0.2"
+rocksdb = { version = "0.25", optional = true, default-features = false, features = ["snappy", "lz4", "zstd", "bindgen-runtime"] }
+heed = { version = "0.22", optional = true }
+redb = { version = "4.3", optional = true }
+fjall = { version = "3.1", optional = true }
+rusqlite = { version = "0.40", optional = true, features = ["bundled"] }
+redis = { version = "1.7", optional = true, default-features = false }
+mongodb = { version = "3.9", optional = true, features = ["sync"] }
+postgres = { version = "0.19", optional = true, features = ["with-serde_json-1"] }
+neo4rs = { version = "0.8", optional = true }
+tokio = { version = "1", optional = true, features = ["rt-multi-thread", "time", "net"] }
+
+[target.'cfg(target_os = "linux")'.dependencies]
+perf-event2 = { version = "0.7", optional = true }
+
+[dev-dependencies]
+tempfile = "3"
+
+[features]
+default = ["sqlite-backend"]
+rocksdb-backend = ["dep:rocksdb"]
+lmdb-backend = ["dep:heed"]
+redb-backend = ["dep:redb"]
+fjall-backend = ["dep:fjall"]
+sqlite-backend = ["dep:rusqlite"]
+tier2 = []
+perf-counters = ["dep:perf-event2"]
+redis-backend = ["tier2", "dep:redis"]
+mongodb-backend = ["tier2", "dep:mongodb"]
+postgres-backend = ["tier2", "dep:postgres"]
+neo4j-backend = ["tier2", "dep:neo4rs", "dep:tokio"]
+falkordb-backend = ["tier2", "dep:redis"]
+
+[profile.release]
+lto = "thin"
+codegen-units = 1

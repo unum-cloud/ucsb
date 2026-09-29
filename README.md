@@ -1,301 +1,286 @@
-<h1 align="center">Unbranded Cloud Serving Benchmark</h1>
-<h3 align="center">
-Yahoo Cloud Serving Benchmark for NoSQL Databases<br/>
-Refactored and Extended with Batch and Range Queries<br/>
-</h3>
-<br/>
+# CrudEval
 
-<p align="center">
-<a href="https://discord.gg/AxsU9mctAn"><img height="25" src="https://github.com/unum-cloud/ustore/raw/main/assets/icons/discord.svg" alt="Discord"></a>
-&nbsp;&nbsp;&nbsp;
-<a href="https://www.linkedin.com/company/unum-cloud/"><img height="25" src="https://github.com/unum-cloud/ustore/raw/main/assets/icons/linkedin.svg" alt="LinkedIn"></a>
-&nbsp;&nbsp;&nbsp;
-<a href="https://twitter.com/unum_cloud"><img height="25" src="https://github.com/unum-cloud/ustore/raw/main/assets/icons/twitter.svg" alt="Twitter"></a>
-&nbsp;&nbsp;&nbsp;
-<a href="https://unum.cloud/post"><img height="25" src="https://github.com/unum-cloud/ustore/raw/main/assets/icons/blog.svg" alt="Blog"></a>
-&nbsp;&nbsp;&nbsp;
-<a href="https://github.com/unum-cloud/ucset"><img height="25" src="https://github.com/unum-cloud/ustore/raw/main/assets/icons/github.svg" alt="GitHub"></a>
-</p>
+__CrudEval__ benchmarks Create, Read, Update, and Delete paths at crude hardware speeds.
+It is the Rust successor to UCSB and a sibling of [RetriEval](https://github.com/ashvardanian/RetriEval).
+One shared runner drives embedded storage engines and database servers, with opt-in document and graph workloads.
+Runs use seeded data, verify returned values, and write latency distributions, throughput, resource usage, and configuration to JSON.
 
----
+## Build and run
 
-Unum Cloud Serving Benchmark is the grandchild of Yahoo Cloud Serving Benchmark, reimplemented in C++, with fewer mutexes or other bottlenecks, and with additional "batch" and "range" workloads, crafted specifically for the Big Data age!
-
-|                         | Present in YCSB | Present in UCSB |
-| :---------------------- | :-------------: | :-------------: |
-| Size of the dataset     |        ✅        |        ✅        |
-| DB configuration files  |        ✅        |        ✅        |
-| Workload specifications |        ✅        |        ✅        |
-| Tracking hardware usage |        ❌        |        ✅        |
-| Workload Isolation      |        ❌        |        ✅        |
-| Concurrency             |        ❌        |        ✅        |
-| Batch Operations        |        ❌        |        ✅        |
-| Bulk Operations         |        ❌        |        ✅        |
-| Support of Transactions |        ❌        |        ✅        |
-
-As you may know, benchmarking databases is very complex.
-There is too much control flow to tune, so instead of learning the names of a thousand CLI arguments, you'd use a [`run.py`](https://github.com/unum-cloud/UCSB/blob/main/run.py) script to launch the benchmarks.
-The outputs will be placed in the `bench/results/` folder.
+Rust 1.95 or newer is required.
+Ubuntu 26.04 is the primary Linux target; embedded backends also build on macOS.
+The packaged compiler may be older than the current dependencies require, so install the toolchain with rustup.
 
 ```sh
-git clone https://github.com/unum-cloud/ucsb.git && cd ucsb && ./run.py
+sudo apt-get install build-essential clang libclang-dev cmake pkg-config
+cargo run --release --bin crud-eval-sqlite -- \
+    --records 100K --threads 4 --output results/
+
+cargo run --release --no-default-features --features rocksdb-backend \
+    --bin crud-eval-rocksdb -- --records 100K,1M --threads 1,4
 ```
 
-## Supported Databases
-
-Key-Value Stores and NoSQL databases differ in supported operations.
-Including the ones queried by UCSB, like "batch" operations.
-When batches aren't natively supported, we simulate them with multiple single-entry operations.
-
-|                        | Bulk Scan | Batch Read | Batch Write | Integer Keys |
-| :--------------------- | :-------: | :--------: | :---------: | :----------: |
-|                        |           |            |             |              |
-| 💾 Embedded Databases   |           |            |             |              |
-| WiredTiger             |     ✅     |     ❌      |      ❌      |      ✅       |
-| LevelDB                |     ✅     |     ❌      |      ✅      |      ❌       |
-| RocksDB                |     ✅     |     ✅      |      ✅      |      ❓       |
-| LMDB                   |     ✅     |     ❌      |      ❌      |      ❌       |
-| UDisk                  |     ✅     |     ✅      |      ✅      |      ✅       |
-|                        |           |            |             |              |
-| 🖥️ Standalone Databases |           |            |             |              |
-| Redis                  |     ❌     |     ✅      |      ✅      |      ❌       |
-| MongoDB                |     ✅     |     ✅      |      ✅      |      ✅       |
-
-There is also asymmetry elsewhere:
-
-* WiredTiger supports fixed-size integer keys.
-* LevelDB only supports variable length keys and values.
-* RocksDB has minimal support for [`fixed_key_len`](https://cs.github.com/facebook/rocksdb?q=fixed_key_len), incompatible with `BlockBasedTable`.
-* UDisk supports both fixed-size keys and values.
-
-Just like YCSB, we use 8-byte integer keys and 1000-byte values.
-Both WiredTiger and UDisk were configured to use integer keys natively.
-RocksDB wrapper reverts the order of bytes in keys to use the native comparator.
-None of the DBs was set to use fixed-size values, as only UDisk supports that.
-
----
-
-Recent results:
-
-* 1 TB collections. Mar 22, 2022. [post](https://unum.cloud/post/2022-03-22-ucsb)
-* 10 TB collections. Sep 13, 2022. [post](https://unum.cloud/post/2022-09-13-ucsb-10tb/)
-
----
-
-- [Supported Databases](#supported-databases)
-- [Yet Another Benchmark?](#yet-another-benchmark)
-- [Preset Workloads](#preset-workloads)
-- [Ways to Spoil a DBMS Benchmark](#ways-to-spoil-a-dbms-benchmark)
-  - [Durability vs Write Speed](#durability-vs-write-speed)
-  - [Strict vs Flexible RAM Limits](#strict-vs-flexible-ram-limits)
-  - [Dataset Size and NAND Modes](#dataset-size-and-nand-modes)
-  - [Slow Benchmarks for Fast Code](#slow-benchmarks-for-fast-code)
-  - [Incomplete Measurements](#incomplete-measurements)
-
----
-
-## Yet Another Benchmark?
-
-Yes.
-In the DBMS world there are just 2 major benchmarks:
-
-* [YCSB](https://github.com/brianfrankcooper/YCSB) for NoSQL.
-* [TPC](https://www.tpc.org/) for SQL.
-
-With YCSB everything seems simple - clone the repo, pick a DBMS, run the benchmark.
-TPC suite seems more "enterprisey", and after a few years in the industry, I still don't understand the procedure.
-Moreover, most SQL databases these days are built on top of other NoSQL solutions, so NoSQL is more foundational.
-So naturally we used YCSB internally.
-
-We were getting great numbers.
-All was fine until it wasn't.
-We looked under the hood and realized that the benchmark code itself was less efficient than the databases it was trying to evaluate, causing additional bottlenecks and affecting the measurements.
-So just like others, we decided to port it to C++, refactor it, and share with the world.
-
-## Preset Workloads
-
-* **∅**: imports monotonically increasing keys 🔄
-* **A**: 50% reads + 50% updates, all random
-* **C**: reads, all random
-* **D**: 95% reads + 5% inserts, all random
-* **E**: range scan 🔄
-* **✗**: batch read 🆕
-* **Y**: batch insert 🆕
-* **Z**: scans 🆕
-
-The **∅** was previously implemented as one-by-one inserts, but some KVS support the external construction of its internal representation files.
-The **E** was [previously](https://github.com/brianfrankcooper/YCSB/blob/master/workloads/workloade) mixed with 5% insertions.
-
-## Ways to Spoil a DBMS Benchmark
-
-> Unlike humans, [ACID](https://en.wikipedia.org/wiki/ACID) is one of the best things that can happen to DBMS 😁
-
-### Durability vs Write Speed
-
-Like all good things, ACID is unreachable, because of at least one property - Durability.
-Absolute Durability is practically impossible and high Durability is expensive.
-
-All high-performance DBs are designed as [Log Structured Merge Trees](https://en.wikipedia.org/wiki/Log-structured_merge-tree).
-It's a design that essentially bans in-place file overwrites.
-Instead, it builds layers of immutable files arranged in a Tree-like order.
-The problem is that until you have enough content to populate an entire top-level file, you keep data in RAM - in structures often called `MemTable`s.
-
-![LSM Tree](assets/lsm-tree.png)
-
-If the lights go off, volatile memory will be discarded.
-So a copy of every incoming write is generally appended to a Write-Ahead-Log (WAL).
-Two problems  here:
-
-1. You can't have a full write confirmation before appending to WAL. It's still a write to disk. A system call. A context switch to kernel space. Want to avoid it with [`io_uring`](https://unixism.net/loti/what_is_io_uring.html) or [`SPDK`](https://spdk.io), then be ready to change all the above logic to work in an async manner, but fast enough not to create a new bottleneck.  Hint: [`std::async`](https://en.cppreference.com/w/cpp/thread/async) will not cut it.
-2. WAL is functionally stepping on the toes of a higher-level logic. Every wrapping DBMS, generally implements such mechanisms, so they disable WAL in KVS, to avoid extra stalls and replication. Example: [Yugabyte is a port](https://blog.yugabyte.com/how-we-built-a-high-performance-document-store-on-rocksdb/) of Postgres to RocksDB and disables the embedded WAL.
-
-We generally disable WAL and benchmark the core.
-Still, you can tweak all of that in the UCSB configuration files yourself.
-
-Furthermore, as widely discussed, [flushing the data still may not guarantee it's preservation on your SSD](https://twitter.com/xenadu02/status/1495693475584557056?s=20&t=eG2cIbzMg_rTq379EkkHMQ).
-So pick you ~~poison~~ hardware wisely and tune your benchmarks cautiously.
-
-### Strict vs Flexible RAM Limits
-
-When users specify a RAM limit for a KVS, they expect all of the required in-memory state to fit into that many bytes.
-It would be too obvious for modern software, so here is one more problem.
-
-Fast I/O is hard.
-The faster you want it, the more abstractions you will need to replace.
-
-```mermaid
-graph LR
-    Application -->|libc| LIBC[Userspace Buffers]
-    Application -->|mmap| PC[Page Cache]
-    Application -->|mmap+O_DIRECT| BL[Block I/O Layer]
-    Application -->|SPDK| DL[Device Layer]
-
-    LIBC --> PC
-    PC --> BL
-    BL --> DL
-```
-
-Generally, OS keeps copies of the requested pages in RAM cache.
-To avoid it, enable [`O_DIRECT`](https://man7.org/linux/man-pages/man2/open.2.html).
-It will slow down the app and would require some more engineering.
-For one, all the disk I/O will have to be aligned to page sizes, [generally 4KB](https://docs.pmem.io/persistent-memory/getting-started-guide/creating-development-environments/linux-environments/advanced-topics/i-o-alignment-considerations), which includes both the address in the file and the address in the userspace buffers.
-Split-loads should also be managed with an extra code on your side.
-So most KVS (except for UDisk, of course 😂) solutions don't bother implementing very fast I/O, like `SPDK`.
-In that case, they can't even know how much RAM the underlying OS has reserved for them.
-So we have to configure them carefully and, ideally, add external constraints:
+SQLite is the default Cargo feature.
+Every other binary has its own `<engine>-backend` feature; engine code is compiled only when selected.
+Server binaries require a running Docker daemon and pull a pinned image on first use.
+They publish a random port on localhost, wait for a successful database request, and remove their own containers when the run ends.
+Database files remain in the run's data directory.
 
 ```sh
-systemd-run --scope -p MemoryLimit=100M /path/ucsb
+cargo run --release --no-default-features --features redis-backend \
+    --bin crud-eval-redis -- --records 100K --threads 4
+cargo run --release --no-default-features --features mongodb-backend \
+    --bin crud-eval-mongodb -- --data-model documents --durability buffered \
+    --records 10K --workloads bulk-load,read-95-update-5,read
+cargo run --release --no-default-features --features postgres-backend \
+    --bin crud-eval-postgres -- --data-model graph --records 1K --degree 8
+cargo run --release --no-default-features --features neo4j-backend \
+    --bin crud-eval-neo4j -- --data-model graph --durability flushed --records 1K
 ```
 
-Now a question.
-Let's say you want to [`mmap`](https://man7.org/linux/man-pages/man2/mmap.2.html) files and be done.
-Anyways, Linux can do a far better job at managing caches than most DBs.
-In that case - the memory usage will always be very high but within the limits of that process.
-As soon as we near the limit - the OS will drop the old caches.
-Is it better to use the least RAM or the most RAM until the limit?
+## Backends
 
-For our cloud-first offering, we will favour the second option.
-It will give the users the most value for their money on single-purpose instances.
+| Before: UCSB | Now: CrudEval | Key-value | Documents | Graphs |
+| :-- | :-- | :--: | :--: | :--: |
+| RocksDB | `crud-eval-rocksdb`, RocksDB 11.8.1 | ✓ | | |
+| LMDB | `crud-eval-lmdb`, through `heed` | ✓ | | |
+| LevelDB | Deferred to UStore v1's LevelDB engine | | | |
+| WiredTiger | Covered through MongoDB; no native submodule | | | |
+| UStore's old C API | Deferred until UStore v1 has a public Rust dependency | | | |
+| Redis | `crud-eval-redis`, Redis, Valkey, Dragonfly, Garnet, or Kvrocks | ✓ | | |
+| MongoDB | `crud-eval-mongodb`, MongoDB or FerretDB | ✓ | ✓ | |
+| — | `crud-eval-redb` | ✓ | | |
+| — | `crud-eval-fjall` | ✓ | | |
+| — | `crud-eval-sqlite` | ✓ | ✓ | |
+| — | `crud-eval-postgres` | ✓ | ✓ | ✓ |
+| — | `crud-eval-neo4j`, Neo4j or Memgraph | | | ✓ |
+| — | `crud-eval-falkordb` | | | ✓ |
 
-Furthermore, we allow and enable "**Workload Isolation**" in UCSB by default.
-It will create a separate process and a separate address space for each workload of each DB.
-Between this, we flush the whole system.
-The caches filled during insertions benchmarks, will be invalidated before the reads begin.
-This will make the numbers more reliable but limits concurrent benchmarks to one.
+Run each binary with `--help` for its engine-specific settings.
+Reports include the effective durability settings and whether batch and bulk operations are native.
+Redis has no ordered range operation; range reads and full scans are reported as skipped.
+A data model unsupported by the selected binary is rejected explicitly.
 
-### Dataset Size and NAND Modes
+## Workloads
 
-Large capacity SSDs store multiple bits per cell.
-If you are buying a Quad Level Cell SSD, you expect each of them to store 4 bits of relevant information.
-That may be a false expectation.
+Names spell out the operation and mix; there are no single-letter workload codes.
+`--distribution uniform|zipf|latest` overrides sampling; an explicitly named latest-read workload requires the latest distribution.
+A run executes the comma-separated chain in order, preserving data between phases.
+The default chain preserves UCSB's nine phases:
 
-![SLC MLC vs TLC](assets/slc-mlc-tlc-shape.jpg)
-
-The SSD can switch to SLC mode during intensive writes, where IO is faster, especially if a lot of space is available.
-In the case of an 8 TB SSD, before we reach 2 TB used space, all [NAND](https://en.wikipedia.org/wiki/Flash_memory) arrays can, in theory, be populated with just one relevant bit.
-
-![SLC vs eMLC vs MLC vs TLC](assets/slc-mlc-tlc-specs.png)
-
-If you are benchmarking the DBMS, not the SSD, ensure that you did all benchmarks within the same mode.
-In our case for a 1 TB workload on 8 TB drives, it's either:
-
-* starting with an empty drive,
-* starting with an 80% full drive.
-
-### Slow Benchmarks for Fast Code
-
-Returning to the topic of deficiencies in the original implementation, let's linger on the fact that is implemented in Java, while all performant Key-Value Stores are implemented in C and C++.
-This means, that you would need some form of a “Foreign Function Interface” to interact with the KVS.
-This immediately adds unnecessary work for our CPU, but it’s a minor problem compared to rest.
-
-Every language and its ecosystem has different priorities. Java focuses on the simplicity of development, while C++ trades it for higher performance.
-
-```java
-private static String getRowKey(String db, String table, String key) {
-    return db + ":" + table + ":" + key;
-}
+```text
+bulk-load,read,batch-read-256,range-read-256,full-scan,read-50-update-50,read-latest-95-insert-5,batch-insert-1000,delete-oldest
 ```
 
-The above snippet is from the [Apples & SnowFlakes FoundationDB adapter inside YCSB](https://github.com/brianfrankcooper/YCSB/blob/ce3eb9ce51c84ee9e236998cdd2cefaeb96798a8/foundationdb/src/main/java/site/ycsb/db/foundationdb/FoundationDBClient.java#L100), but it’s identical across the entire repo.
-It’s responsible for generating keys for queries, so it runs on the hot path.
-Here is what a modern recommended C++ version would look like:
+| UCSB / YCSB | Workload | Meaning |
+| :-- | :-- | :-- |
+| Init | `bulk-load` | Load fresh ascending keys in batches of 100,000 |
+| Read / C | `read` | Read one existing key |
+| BatchRead | `batch-read-256` | Read 256 distinct keys per call |
+| RangeSelect | `range-read-256` | Inclusive ordered range, at most 256 entries |
+| Scan | `full-scan` | Page through disjoint contiguous shards |
+| ReadUpdate / A | `read-50-update-50` | Half reads, half updates |
+| B | `read-95-update-5` | Read-mostly mix |
+| ReadUpsert / D | `read-latest-95-insert-5` | Read recent keys and insert fresh keys |
+| E | `range-read-95-insert-5` | Short ranges of 1–100 entries, with inserts |
+| F | `read-50-read-modify-write-50` | Read, then modify the returned record |
+| BatchUpsert | `batch-insert-1000` | Insert 1,000 fresh keys per call |
+| Remove | `delete-oldest` | Delete the oldest live keys once each |
 
-```cpp
-auto get_row_key(std::string_view db, std::string_view table, std::string_view key) {
-    return std::format("{}:{}:{}", db, table, key);
-}
+The numeric suffixes on batch, range, and bulk-load names are configurable: `batch-read-64`, `range-read-1K`, or `bulk-load-10K`.
+Mix percentages are per call; throughput is successful entries per second.
+`--entries 10%` sets each ordinary phase's attempted entry budget relative to the initial record count.
+A final partial batch uses the remaining budget.
+Bulk load always loads `--records`; full scan covers the current live keyspace.
+`--duration 30s` replaces the ordinary phases' entry budget with a time limit.
+
+```sh
+cargo run --release --bin crud-eval-sqlite -- \
+    --records 100K --threads 4 --entries 20K --value-size 100B..1KiB \
+    --workloads bulk-load,read-95-update-5,read-50-read-modify-write-50 \
+    --transaction-size 32 --durability flushed
 ```
 
-From Java 7 onwards, the [Java String Pool](https://www.baeldung.com/java-string-pool) lives in the Heap space, which is garbage collected by the JVM.
-This code will produce a `StringBuilder`, a heap-allocated array of pointers to heap-allocated strings, later materializing in the final concatenated `String`.
-Of course, on-heap again.
-And if we know something about High-Performance Computing, the heap is expensive, but together with Garbage Collection and multithreading, it becomes completely intolerable.
-The same applies to the C++ version.
-Yes, we are doing only 1 allocation there, but it is also too slow to be called HPC.
-We need to replace `std::format` with `std::format_to` and export the result into a reusable buffer.
+`--rate` specifies aggregate scheduled calls per second across workers.
+Rate-controlled latency starts at the intended arrival time, including queueing when workers fall behind.
+Without a rate, latency measures the adapter call only.
+End-to-end throughput includes workload generation and verification; `--no-verify` disables value verification for measuring that cost separately.
+Transactions commit within the measured phase, every `--transaction-size` calls, including a final partial group.
+Backends without grouped transactions reject that option.
 
----
+## Data models
 
-If one example is not enough, below is the [code snippet](https://github.com/brianfrankcooper/YCSB/blob/ce3eb9ce51c84ee9e236998cdd2cefaeb96798a8/core/src/main/java/site/ycsb/generator/ZipfianGenerator.java#L250), which produces random integers before packing them into `String` key.
+| Operation | Key-value | Documents | Graphs |
+| :-- | :-- | :-- | :-- |
+| Insert / load | UUID and binary value | JSON document | Vertex and outgoing edges |
+| Read | Complete value | Complete document | Vertex version and outgoing adjacency |
+| Update | Replace existing value | Set `/score` using the database's JSON/document operation | Rewire the first outgoing edge |
+| Delete | Remove key | Remove document | Remove vertex and incident edges |
+| Range read | Ordered keys | Ordered documents | Distinct two-hop outgoing neighbors, capped by range length |
+| Full scan | Ordered keyspace | Ordered document collection | Ordered vertex scan with adjacency |
 
-```java
-long nextLong(long itemcount) {
-    // from "Quickly Generating Billion-Record Synthetic Databases", Jim Gray et al, SIGMOD 1994
-    if (itemcount != countforzeta) {
-        synchronized (this) {
-            if (itemcount > countforzeta) {
-                ...
-            else
-                ...
-        }
-    }
+### UUID representation and ordering
 
-    double u = ThreadLocalRandom.current().nextDouble();
-    double uz = u * zetan;
-    if (uz < 1.0)
-        return base;
-    if (uz < 1.0 + Math.pow(0.5, theta))
-        return base + 1;
+`Key` is `uuid::Uuid`, constructed as `Uuid::from_u128(n as u128)` from a sequential `u64` counter starting at zero.
+Its logical width is 16 bytes: the integer is zero-extended to 128 bits and encoded big-endian.
+For example, key 1 renders as `00000000-0000-0000-0000-000000000001`, and key 256 as `00000000-0000-0000-0000-000000000100`.
+The constructor preserves those bits; it does not set UUID version or variant bits.
+These are deterministic benchmark identifiers, not generated UUIDv4 or UUIDv7 values, and independent datasets intentionally reuse them.
 
-    long ret = base + (long) ((itemcount) * Math.pow(eta * u - eta + 1, alpha));
-    setLastValue(ret);
-    return ret;
-}
+| Adapter | Indexed key representation |
+| :-- | :-- |
+| RocksDB, LMDB, redb, fjall, SQLite, Redis family | Raw 16-byte keys; SQLite uses a BLOB |
+| PostgreSQL | 16-byte `bytea`, rather than PostgreSQL's native `uuid` type |
+| MongoDB and FerretDB | 16-byte BSON Binary `_id` with the generic subtype, rather than the UUID subtype |
+| Neo4j, Memgraph, FalkorDB | Canonical 36-character UUID strings in the vertex `id` property |
+
+Binary keys and canonical strings preserve the same integer ordering; Redis-family adapters do not expose ordered ranges.
+Documents and graph payloads also render identifiers as canonical strings where their JSON representation requires them.
+The logical 16-byte width does not imply equal physical index size or serialization cost across engines.
+Sequential insertion favors ordered-key locality; this workload does not measure random-UUID insertion behavior.
+This deliberately changes UCSB's eight-byte key format, so the historical results are not a like-for-like key-size comparison.
+
+One shared keyspace allocates disjoint insert ranges and exposes only a contiguous prefix of completed commits to readers.
+Each thread has a seeded generator; concurrency still makes mixed-workload interleavings nondeterministic.
+Zipfian sampling retains UCSB's θ=0.99, fixed large domain, and FNV scramble using double precision.
+
+Binary values have a 24-byte UUID/version header and a deterministic body drawn from a 64 MiB pool built before measurement.
+Reads verify the requested key, encoded length, and every body byte.
+Documents contain `_id`, mutable integer `score`, and an immutable hex payload derived from the binary value.
+Consequently `--value-size` describes the binary payload, not the larger serialized document size; reports count actual processed bytes.
+Document updates currently target `/score` only.
+Graph vertices carry a version and stable edge slots; their targets follow a seeded skewed distribution over the initial population.
+`--degree` is capped at the initial population minus one, with self-loops and duplicate targets excluded.
+Adjacency reads are checked against the deterministic graph model, accounting for deleted vertices.
+Two-hop results are checked for valid keys, duplicates, and the requested bound; the verifier does not independently replay a concurrent graph traversal.
+
+## Configuration and reports
+
+| Old interface | New interface |
+| :-- | :-- |
+| `ucsb_bench -db rocksdb` | `crud-eval-rocksdb` |
+| CMake engine switches | Cargo `<engine>-backend` features |
+| `run.py -sz 100MB,1GB -th 1,8` | `--records 100K,1M --threads 1,8` |
+| Workload JSON files | `--workloads` and explicit workload names |
+| Engine `.cfg` files | Typed engine-specific CLI options |
+| `operations_count` | `--entries` or `--duration` |
+| `value_length` | `--value-size` |
+| `run.py -dp` | `--drop-caches`, Linux only |
+| Nested merged Google Benchmark files | One `<backend>-<config-hash>.json` per configuration |
+
+`--data-dir` defaults to `data/` and `--output` to `results/`.
+A chain beginning with bulk load replaces only its own marked benchmark directory.
+Unmarked existing directories are never cleared.
+A chain without bulk load reuses that configuration's data and restores the live key range saved after its last successful phase.
+Interrupted or failed mutations leave the dataset marked dirty; reload it before another run.
+Do not run two copies of the same configuration against the same data directory concurrently.
+The server adapters currently reject `--reopen` and `--drop-caches`; embedded adapters close and reopen between phases when requested.
+Dropping the page cache requires Linux permissions and affects the whole host.
+It does not provide a separate process or machine for each phase.
+
+Reports are rewritten atomically after each phase.
+They contain the machine, requested configuration, engine metadata, capabilities, completed/skipped/failed phases, successful entries, missing entries, errors, processed bytes, and disk size.
+Latency is recorded in nanoseconds with p50, p90, p99, p99.9, and maximum per operation.
+The timeline counts completed entries in each second of the phase.
+Flush/checkpoint time is reported separately from workload time.
+CPU, RSS, virtual memory, and process I/O are sampled every 100 ms; very short phases have limited sampling resolution.
+Server reports additionally include a Docker resource snapshot after the phase, explicitly separate from client process measurements.
+These snapshots are not interval-average server measurements.
+Optional `--perf-counters` requires a Linux build with the `perf-counters` feature and kernel permission to open hardware counters.
+Counters cover worker threads, excluding background engine threads and server processes.
+Missing results, failed operations, and corrupted values are distinct; execution errors produce a nonzero exit status and preserve the partial report.
+
+```sh
+uv run scripts/plot.py results/
 ```
 
-To generate a `long`, YCSB is doing numerous operations on `double`-s, by far the most computationally expensive numeric type on modern computers (except for integer division).
-Aside from that, this Pseudo-Random Generator contains 4x if statements and `synchronized (this)` mutex.
-Creating random integers for most distributions is generally within 50 CPU cycles or 10 nanoseconds.
-In this implementation, every if branch may cost that much, and the mutex may cost orders of magnitude more.
-If you are writing a benchmark, don't do that.
+The plotting script reads the JSON reports and writes throughput, latency, memory, and disk figures.
 
-### Incomplete Measurements
+## Project structure
 
-If you use Google Benchmark, you know about its [bunch of nifty tricks](/post/2022-03-04-gbench), like `DoNotOptimize` or the automatic resolution of the number of iterations at runtime.
-It's widespread in micro-benchmarking, but it begs for extensions when you start profiling a DBMS.
-The ones shipped with UCSB spawn a sibling process that samples usage statistics from the OS.
-Like `valgrind`, we read from `/proc/*` [files](https://man7.org/linux/man-pages/man5/proc.5.html) and aggregate stats like SSD I/O and overall RAM usage.
-Those are better than nothing, but they are far less accurate, than what can be accomplished with eBPF.
-We have a pending ticket for its implementation.
-Don't wait, contribute 🤗
+```text
+Cargo.toml                 Feature-gated backend binaries
+src/bench.rs               Library root, CLI, sweeps, worker loop
+src/backend.rs             Backend and per-worker session contracts
+src/workload.rs            Explicit workload names and size parsing
+src/data.rs                Seeded sampling, keyspace, binary values
+src/model.rs               Key-value, document, and graph verification
+src/measure.rs             Histograms and process resource sampling
+src/output.rs              Machine/configuration reports and atomic output
+src/perf_counters.rs       Optional Linux worker hardware counters
+src/docker.rs              Owned container lifecycle
+src/cypher.rs              Shared graph operations for Cypher servers
+src/<engine>.rs            One binary per storage adapter
+scripts/plot.py            Report visualization
+```
+
+Directory guides describe [source contracts](src/README.md), [test coverage](src/README.md#tests), [plotting](scripts/README.md), [standalone server configurations](docker/README.md), and [historical figures](assets/README.md).
+
+## Remaining scope
+
+The implemented backend matrix above describes current support, not the full set of candidates considered during planning.
+UStore v1 remains deferred until its Rust dependency is public; its LevelDB engine is consequently absent too.
+Native WiredTiger was deliberately excluded to avoid a separate C build and submodule; MongoDB exercises WiredTiger through a different interface and is not a substitute for a direct engine benchmark.
+ScyllaDB, Cassandra, FoundationDB, Aerospike, SurrealDB, SplinterDB, and Haura remain later candidates, with no adapters or placeholder binaries in this crate.
+
+The following planned capabilities remain incomplete:
+
+- Grouped transactions beyond LMDB, redb, SQLite, and PostgreSQL.
+- Docker reopen/cache-drop support and continuous server resource sampling; current server statistics are post-phase snapshots.
+- Document field updates beyond `/score`, incoming-neighbor graph reads, and an independent exact verifier for two-hop traversals.
+- Multiple storage directories; the old multi-disk configuration has no replacement yet.
+- Automated live-server integration tests and CI; current server validation was run manually against the pinned containers.
+
+## Ways to spoil a DBMS benchmark
+
+### Durability versus write speed
+
+Acknowledging a write in memory differs from acknowledging it after a durable log flush.
+`--durability none`, `buffered`, and `flushed` make the requested policy explicit; metadata records the engine's actual settings.
+Some engines cannot disable logging, and stronger behavior must not be presented as equivalent to a log-free write.
+MongoDB requires `buffered` or `flushed`; Neo4j and Memgraph require `flushed`.
+Device firmware and power-loss protection also affect what a successful flush guarantees.
+
+LSM engines buffer writes and merge sorted files in the background.
+
+![LSM tree](assets/lsm-tree.png)
+
+Compaction can outlast the foreground workload.
+RocksDB's bulk-load flush includes compaction, outside the measured load phase.
+Keep that separate time when comparing ingestion costs.
+
+### Engine caches and operating-system caches
+
+An engine's configured cache limit is not a process or machine memory limit.
+Memory-mapped pages, the filesystem cache, client buffers, and database server memory all matter.
+Measure the server as well as the client, and use operating-system limits when the experiment calls for a fixed memory budget.
+A warm-cache read and a cold-cache read answer different questions.
+Report the cache policy and working set rather than assuming one run establishes both.
+
+### Dataset size and NAND modes
+
+An SSD's write performance can change after its SLC cache fills and as available capacity falls.
+
+![SLC, MLC, and TLC cells](assets/slc-mlc-tlc-shape.jpg)
+
+![Flash storage characteristics](assets/slc-mlc-tlc-specs.png)
+
+Compare engines on similarly prepared drives, with enough data and runtime to reach the intended operating regime.
+Small datasets can benchmark the device's cache rather than its sustained storage behavior.
+
+### Harness overhead and incomplete measurements
+
+Allocations, synchronization, key generation, value generation, and verification can bottleneck an otherwise fast engine.
+CrudEval keeps generated values outside the engine-call latency interval and uses worker-local histograms.
+Throughput still includes the harness cost, so inspect both metrics.
+A batch's latency is the latency of the whole batch, not a fabricated per-key percentile.
+A read-modify-write without a transaction is two calls and does not promise isolation against concurrent updates.
+Resource samples are approximate, and a Docker snapshot does not replace continuous server profiling.
+
+## History
+
+UCSB expanded the Yahoo Cloud Serving Benchmark with batch and range operations and described itself as the “Unbranded Cloud Serving Benchmark,” a grandchild of YCSB implemented in C++.
+The original work was introduced in [Unbranding and Extending the Yahoo Cloud Serving Benchmark](https://www.unum.cloud/blog/2022-03-22-ucsb) on March 22, 2022, followed by [Beating RocksDB by up to 7x in almost every workload](https://www.unum.cloud/blog/2022-09-13-ucsb-10tb) on September 13, 2022.
+Those historical results are not measurements of this Rust implementation.
+The old single-precision Zipfian generator also restricted the effective sampled keyspace; the cleanup corrected it before this rewrite.
+CrudEval preserves the workload lineage while changing key width, verification, key allocation, transaction timing, and reporting.

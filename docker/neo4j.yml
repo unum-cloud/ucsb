@@ -1,0 +1,21 @@
+services:
+  neo4j:
+    image: neo4j:2026.09.0-community
+    ports: ["127.0.0.1::7687"]
+    environment:
+      NEO4J_AUTH: neo4j/crudeval-password
+    volumes: ["neo4j-data:/data"]
+    healthcheck:
+      test: ["CMD", "cypher-shell", "-u", "neo4j", "-p", "crudeval-password", "RETURN 1"]
+      interval: 2s
+      timeout: 10s
+      retries: 45
+  memgraph:
+    image: memgraph/memgraph:3.13.1
+    profiles: [memgraph]
+    ports: ["127.0.0.1::7687"]
+    command: ["--storage-wal-enabled=true", "--storage-snapshot-interval-sec=300", "--storage-wal-file-flush-every-n-tx=1"]
+    volumes: ["memgraph-data:/var/lib/memgraph"]
+volumes:
+  memgraph-data:
+  neo4j-data:

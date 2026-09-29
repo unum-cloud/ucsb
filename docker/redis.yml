@@ -1,0 +1,33 @@
+services:
+  redis:
+    image: redis:8.10.2
+    ports: ["127.0.0.1::6379"]
+    command: ["redis-server", "--save", "", "--appendonly", "no"]
+    volumes: ["redis-data:/data"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 1s
+      timeout: 2s
+      retries: 60
+  valkey:
+    image: valkey/valkey:9.1.2
+    profiles: [valkey]
+    ports: ["127.0.0.1::6379"]
+    command: ["valkey-server", "--save", "", "--appendonly", "no"]
+  dragonfly:
+    image: ghcr.io/dragonflydb/dragonfly:v2.0.0
+    profiles: [dragonfly]
+    ports: ["127.0.0.1::6379"]
+    command: ["--dir=/data", "--dbfilename=crudeval", "--snapshot_cron="]
+  garnet:
+    image: ghcr.io/microsoft/garnet:2.1.8
+    profiles: [garnet]
+    ports: ["127.0.0.1::6379"]
+    command: ["--bind", "0.0.0.0", "--port", "6379", "--storage-tier", "--recover", "--logdir", "/data/log", "--checkpointdir", "/data/checkpoint", "--memory", "256m", "--index", "64m"]
+  kvrocks:
+    image: apache/kvrocks:2.17.0
+    profiles: [kvrocks]
+    ports: ["127.0.0.1::6379"]
+    command: ["--bind", "0.0.0.0", "--port", "6379", "--dir", "/data", "--rocksdb.write_options.disable_wal", "yes"]
+volumes:
+  redis-data:

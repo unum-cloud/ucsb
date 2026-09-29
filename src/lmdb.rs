@@ -1,0 +1,239 @@
+//! LMDB key-value benchmark with per-worker transactions.
+//!
+//! Requires a C compiler; the engine is bundled through heed.
+//!
+//! ## Build and run
+//!
+//! ```sh
+//! cargo run --release --no-default-features --features lmdb-backend \
+//!     --bin crud-eval-lmdb -- --records 100K --threads 4
+//! ```
+
+use clap::Parser;
+use crudeval::{backend::*, run, CommonArgs};
+use heed::{types::Bytes, Database, Env, EnvFlags, EnvOpenOptions};
+use serde_json::json;
+use std::{
+    collections::BTreeMap,
+    path::{Path, PathBuf},
+};
+
+#[derive(Parser)]
+struct Cli {
+    #[command(flatten)]
+    common: CommonArgs,
+    #[arg(long, default_value = "1TiB", value_parser = crudeval::workload::parse_count)]
+    map_size: u64,
+}
+struct LmdbBackend {
+    env: Env,
+    db: Database<Bytes, Bytes>,
+    path: PathBuf,
+    durability: Durability,
+    map_size: usize,
+}
+impl LmdbBackend {
+    fn open(path: &Path, durability: Durability, map_size: usize) -> Result<Self> {
+        if map_size == 0 {
+            return Err("map size must be positive".into());
+        }
+        std::fs::create_dir_all(path).map_err(|e| e.to_string())?;
+        let mut options = EnvOpenOptions::new();
+        options.map_size(map_size).max_readers(4096);
+        let flags = match durability {
+            Durability::None => EnvFlags::NO_SYNC,
+            Durability::Buffered => EnvFlags::NO_META_SYNC,
+            Durability::Flushed => EnvFlags::empty(),
+        };
+        // Each sweep owns an isolated path and keeps its environment alive for every session.
+        let env = unsafe { options.flags(flags).open(path) }.map_err(|e| e.to_string())?;
+        let mut transaction = env.write_txn().map_err(|e| e.to_string())?;
+        let db = env.create_database(&mut transaction, None).map_err(|e| e.to_string())?;
+        transaction.commit().map_err(|e| e.to_string())?;
+        Ok(Self {
+            env,
+            db,
+            path: path.into(),
+            durability,
+            map_size,
+        })
+    }
+}
+impl Backend for LmdbBackend {
+    fn metadata(&self) -> BTreeMap<String, serde_json::Value> {
+        BTreeMap::from([
+            ("backend".into(), json!("lmdb")),
+            ("client_version".into(), json!("heed 0.22.1")),
+            ("library_version".into(), json!(heed::lmdb_version().string)),
+            (
+                "sync_mode".into(),
+                json!(match self.durability {
+                    Durability::None => "NO_SYNC",
+                    Durability::Buffered => "NO_META_SYNC",
+                    Durability::Flushed => "sync",
+                }),
+            ),
+            ("durability".into(), json!(self.durability)),
+            ("map_size".into(), json!(self.map_size)),
+        ])
+    }
+    fn capabilities(&self) -> BackendCapabilities {
+        BackendCapabilities {
+            ordered_ranges: true,
+            transactions: true,
+            ..Default::default()
+        }
+    }
+    fn session(&self) -> Result<Box<dyn BackendSession + '_>> {
+        Ok(Box::new(LmdbSession {
+            backend: self,
+            transaction: None,
+        }))
+    }
+    fn flush(&self) -> Result<()> {
+        self.env.force_sync().map_err(|e| e.to_string())
+    }
+    fn disk_bytes(&self) -> Result<u64> {
+        directory_bytes(&self.path)
+    }
+}
+struct LmdbSession<'a> {
+    backend: &'a LmdbBackend,
+    transaction: Option<heed::RwTxn<'a>>,
+}
+impl LmdbSession<'_> {
+    fn write(&mut self, operation: impl FnOnce(&mut heed::RwTxn<'_>) -> Result<usize>) -> Result<usize> {
+        if let Some(transaction) = &mut self.transaction {
+            return operation(transaction);
+        }
+        let mut transaction = self.backend.env.write_txn().map_err(|e| e.to_string())?;
+        let count = operation(&mut transaction)?;
+        transaction.commit().map_err(|e| e.to_string())?;
+        Ok(count)
+    }
+}
+impl BackendSession for LmdbSession<'_> {
+    fn insert(&mut self, keys: &[Key], values: &RecordBatch) -> Result<usize> {
+        let db = self.backend.db;
+        self.write(|tx| {
+            for (i, key) in keys.iter().enumerate() {
+                db.put(tx, key.as_bytes(), values.get(i).ok_or("missing input value")?)
+                    .map_err(|e| e.to_string())?;
+            }
+            Ok(keys.len())
+        })
+    }
+    fn read(&mut self, keys: &[Key], output: &mut RecordBatch) -> Result<usize> {
+        output.clear();
+        let read;
+        let tx: &heed::RoTxn = if let Some(tx) = &self.transaction {
+            tx
+        } else {
+            read = self.backend.env.read_txn().map_err(|e| e.to_string())?;
+            &read
+        };
+        let mut found = 0;
+        for key in keys {
+            let value = self.backend.db.get(tx, key.as_bytes()).map_err(|e| e.to_string())?;
+            found += usize::from(value.is_some());
+            output.push(value);
+        }
+        Ok(found)
+    }
+    fn update(&mut self, keys: &[Key], values: &RecordBatch) -> Result<usize> {
+        let db = self.backend.db;
+        self.write(|tx| {
+            let mut count = 0;
+            for (i, key) in keys.iter().enumerate() {
+                if db.get(tx, key.as_bytes()).map_err(|e| e.to_string())?.is_some() {
+                    db.put(tx, key.as_bytes(), values.get(i).ok_or("missing input value")?)
+                        .map_err(|e| e.to_string())?;
+                    count += 1;
+                }
+            }
+            Ok(count)
+        })
+    }
+    fn delete(&mut self, keys: &[Key]) -> Result<usize> {
+        let db = self.backend.db;
+        self.write(|tx| {
+            let mut count = 0;
+            for key in keys {
+                count += usize::from(db.delete(tx, key.as_bytes()).map_err(|e| e.to_string())?);
+            }
+            Ok(count)
+        })
+    }
+    fn range_read(&mut self, start: Key, limit: usize, keys: &mut Vec<Key>, output: &mut RecordBatch) -> Result<usize> {
+        keys.clear();
+        output.clear();
+        let read;
+        let tx: &heed::RoTxn = if let Some(tx) = &self.transaction {
+            tx
+        } else {
+            read = self.backend.env.read_txn().map_err(|e| e.to_string())?;
+            &read
+        };
+        let range = (
+            std::ops::Bound::Included(start.as_bytes().as_slice()),
+            std::ops::Bound::Unbounded,
+        );
+        for row in self
+            .backend
+            .db
+            .range(tx, &range)
+            .map_err(|e| e.to_string())?
+            .take(limit)
+        {
+            let (key, value) = row.map_err(|e| e.to_string())?;
+            keys.push(Key::from_slice(key).map_err(|e| e.to_string())?);
+            output.push(Some(value));
+        }
+        Ok(keys.len())
+    }
+    fn begin(&mut self) -> Result<()> {
+        if self.transaction.is_some() {
+            return Err("transaction already active".into());
+        }
+        self.transaction = Some(self.backend.env.write_txn().map_err(|e| e.to_string())?);
+        Ok(())
+    }
+    fn commit(&mut self) -> Result<()> {
+        self.transaction
+            .take()
+            .ok_or("no active transaction")?
+            .commit()
+            .map_err(|e| e.to_string())
+    }
+    fn rollback(&mut self) -> Result<()> {
+        self.transaction.take().ok_or("no active transaction")?.abort();
+        Ok(())
+    }
+}
+
+fn main() -> Result<()> {
+    let cli = Cli::parse();
+    run(cli.common, json!({"map_size": cli.map_size}), move |args, path| {
+        if args.data_model != DataModel::KeyValue {
+            return Err("LMDB supports only kv data_model".into());
+        }
+        Ok(Box::new(LmdbBackend::open(
+            path,
+            args.durability,
+            usize::try_from(cli.map_size).map_err(|_| "map size exceeds platform limit")?,
+        )?))
+    })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn embedded_contract() {
+        let directory = tempfile::tempdir().unwrap();
+        let path = directory.path();
+        let db = LmdbBackend::open(path, Durability::None, 64 << 20).unwrap();
+        crudeval::assert_backend_contract!(&db);
+    }
+}

@@ -1,0 +1,14 @@
+services:
+  falkordb:
+    image: falkordb/falkordb:6.0.0
+    ports: ["127.0.0.1::6379"]
+    environment:
+      REDIS_ARGS: "--save '' --appendonly no"
+    volumes: ["falkordb-data:/data"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "GRAPH.QUERY", "health", "RETURN 1"]
+      interval: 1s
+      timeout: 2s
+      retries: 60
+volumes:
+  falkordb-data:

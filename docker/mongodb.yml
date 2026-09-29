@@ -1,0 +1,36 @@
+services:
+  mongodb:
+    image: mongodb/mongodb-community-server:9.0.2-ubi9-slim
+    ports: ["127.0.0.1::27017"]
+    volumes: ["mongodb-data:/data/db"]
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand({ping:1})"]
+      interval: 1s
+      timeout: 2s
+      retries: 60
+  documentdb:
+    image: ghcr.io/ferretdb/postgres-documentdb:17-0.107.0-ferretdb-2.7.0
+    profiles: [ferretdb]
+    environment:
+      POSTGRES_USER: crudeval
+      POSTGRES_PASSWORD: crudeval
+      POSTGRES_DB: postgres
+    volumes: ["documentdb-data:/var/lib/postgresql/data"]
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "crudeval", "-d", "postgres"]
+      interval: 1s
+      timeout: 2s
+      retries: 60
+  ferretdb:
+    image: ghcr.io/ferretdb/ferretdb:2.7.0
+    profiles: [ferretdb]
+    ports: ["127.0.0.1::27017"]
+    environment:
+      FERRETDB_POSTGRESQL_URL: postgres://crudeval:crudeval@documentdb:5432/postgres
+      FERRETDB_TELEMETRY: disabled
+    depends_on:
+      documentdb:
+        condition: service_healthy
+volumes:
+  documentdb-data:
+  mongodb-data:
