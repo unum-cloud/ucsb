@@ -116,6 +116,7 @@ def drop_system_caches():
     print(end="\x1b[1K\r")
     print(" [✱] Dropping system caches...", end="\r")
     try:
+        os.sync()  # Only clean pages can be dropped
         with open("/proc/sys/vm/drop_caches", "w") as stream:
             stream.write("3\n")
         time.sleep(8)  # Wait for other apps to reload its caches
@@ -154,7 +155,7 @@ def run(
 
     runner: str
     if run_in_docker_container:
-        runner = f"docker run -v {os.getcwd()}/bench:/ucsb/bench -v {os.getcwd()}/tmp:/ucsb/tmp -it ucsb-image-dev"
+        runner = f"docker run -v {os.getcwd()}/bench:/ucsb/bench -v {os.getcwd()}/tmp:/ucsb/tmp -it ucsb-image"
     else:
         runner = "./build_release/build/bin/ucsb_bench"
         if not os.path.exists(runner):
@@ -176,6 +177,8 @@ def run(
                 termcolor.colored(f"Benchmark terminated (signal: {sig.name})", "red")
             )
         exit(process.signalstatus)
+    if process.exitstatus:
+        exit(process.exitstatus)
 
 
 def parse_args():

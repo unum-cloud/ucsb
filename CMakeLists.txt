@@ -8,7 +8,7 @@ cmake_minimum_required(VERSION 3.20.1)
 # Enable/Disable Databases
 #######################################################################################################################
 
-option(UCSB_BUILD_USTORE "Build USTORE for the benchmark" ON)
+option(UCSB_BUILD_USTORE "Build USTORE for the benchmark" OFF)
 option(UCSB_BUILD_ROCKSDB "Build RocksDB for the benchmark" ON)
 option(UCSB_BUILD_LEVELDB "Build LevelDB for the benchmark" ON)
 option(UCSB_BUILD_WIREDTIGER "Build WiredTiger for the benchmark" ON)
@@ -67,11 +67,6 @@ if(NOT CMAKE_BUILD_TYPE)
   message(STATUS "Build type not specified: Use RELEASE by default")
 endif()
 
-if(CMAKE_BUILD_TYPE EQUAL "RELEASE")
-  set(CMAKE_INTERPROCEDURAL_OPTIMIZATION ON)
-  set(CMAKE_UNITY_BUILD ON)
-endif()
-
 #######################################################################################################################
 # Macros and additional flags
 #######################################################################################################################
@@ -109,7 +104,6 @@ if (CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -ferror-limit=1")
   # Riscky Performance Optimization, that require tuning.
   set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -momit-leaf-frame-pointer")
-  set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -funsafe-math-optimizations")
   set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -fno-omit-frame-pointer")
 elseif (CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fmax-errors=1")  

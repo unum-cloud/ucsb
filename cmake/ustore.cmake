@@ -4,7 +4,7 @@
 # Note: This is set in top CMakeLists.txt
 option(USTORE_ENGINE_NAME "Choose engine")
 
-set(REPOSITORY_BRANCH "main-dev")
+set(REPOSITORY_COMMIT "64b1256117cc2a154680f1bdf812d9dc6fc0ec77")
 list(APPEND BUILD_ARGS "-DUSTORE_BUILD_BUNDLES=1" "-DUSTORE_BUILD_TESTS=0" "-DUSTORE_BUILD_BENCHMARKS=0" "-DUSTORE_BUILD_SANITIZE=0")
 
 if(USTORE_ENGINE_NAME STREQUAL "FLIGHT_CLIENT")
@@ -21,7 +21,7 @@ endif()
 string(TOLOWER ${USTORE_ENGINE_NAME} LOWERCASE_ENGINE_NAME)
 set(PREFIX_DIR ${CMAKE_BINARY_DIR}/_deps)
 
-set(VERSION_URL "https://raw.githubusercontent.com/unum-cloud/ustore/${REPOSITORY_BRANCH}/VERSION")
+set(VERSION_URL "https://raw.githubusercontent.com/unum-cloud/UStore/${REPOSITORY_COMMIT}/VERSION")
 file(DOWNLOAD "${VERSION_URL}" "${PREFIX_DIR}/ustore-src/VERSION")
 file(STRINGS "${PREFIX_DIR}/ustore-src/VERSION" USTORE_VERSION)
 
@@ -30,9 +30,8 @@ include(ExternalProject)
 ExternalProject_Add(
     ustore_external
 
-    GIT_REPOSITORY "https://github.com/unum-cloud/ukv"
-    GIT_TAG "${REPOSITORY_BRANCH}"
-    GIT_SHALLOW 1
+    GIT_REPOSITORY "https://github.com/unum-cloud/UStore"
+    GIT_TAG "${REPOSITORY_COMMIT}"
     GIT_PROGRESS 0
     GIT_SUBMODULES ""
     
