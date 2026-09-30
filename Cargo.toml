@@ -2,7 +2,7 @@
 name = "crudeval"
 version = "0.1.0"
 edition = "2021"
-rust-version = "1.95"
+rust-version = "1.100"
 description = "Create, Read, Update and Delete benchmarks at crude hardware speeds"
 repository = "https://github.com/ashvardanian/CrudEval"
 
@@ -59,24 +59,52 @@ name = "crud-eval-falkordb"
 path = "src/falkordb.rs"
 required-features = ["falkordb-backend"]
 
+[[bin]]
+name = "crud-eval-turso"
+path = "src/turso.rs"
+required-features = ["turso-backend"]
+
+[[bin]]
+name = "crud-eval-surrealdb"
+path = "src/surrealdb.rs"
+required-features = ["surrealdb-backend"]
+
 [dependencies]
 clap = { version = "4.6", features = ["derive"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 uuid = { version = "1.26", features = ["serde"] }
 hdrhistogram = "7.6"
-sysinfo = { version = "0.39", default-features = false, features = ["system", "disk"] }
+sysinfo = { version = "0.39", default-features = false, features = [
+    "system",
+    "disk",
+] }
 libc = "0.2"
-rocksdb = { version = "0.25", optional = true, default-features = false, features = ["snappy", "lz4", "zstd", "bindgen-runtime"] }
+rocksdb = { version = "0.25", optional = true, default-features = false, features = [
+    "snappy",
+    "lz4",
+    "zstd",
+    "bindgen-runtime",
+] }
 heed = { version = "0.22", optional = true }
 redb = { version = "4.3", optional = true }
 fjall = { version = "3.1", optional = true }
 rusqlite = { version = "0.40", optional = true, features = ["bundled"] }
 redis = { version = "1.7", optional = true, default-features = false }
 mongodb = { version = "3.9", optional = true, features = ["sync"] }
-postgres = { version = "0.19", optional = true, features = ["with-serde_json-1"] }
+postgres = { version = "0.19", optional = true, features = [
+    "with-serde_json-1",
+] }
 neo4rs = { version = "0.8", optional = true }
-tokio = { version = "1", optional = true, features = ["rt-multi-thread", "time", "net"] }
+tokio = { version = "1", optional = true, features = [
+    "rt-multi-thread",
+    "time",
+    "net",
+] }
+turso = { version = "=0.8.1", optional = true, default-features = false }
+ureq = { version = "3", optional = true, default-features = false, features = [
+    "json",
+] }
 
 [target.'cfg(target_os = "linux")'.dependencies]
 perf-event2 = { version = "0.7", optional = true }
@@ -91,6 +119,8 @@ lmdb-backend = ["dep:heed"]
 redb-backend = ["dep:redb"]
 fjall-backend = ["dep:fjall"]
 sqlite-backend = ["dep:rusqlite"]
+turso-backend = ["dep:turso", "dep:tokio"]
+surrealdb-backend = ["tier2", "dep:ureq"]
 tier2 = []
 perf-counters = ["dep:perf-event2"]
 redis-backend = ["tier2", "dep:redis"]
@@ -102,3 +132,11 @@ falkordb-backend = ["tier2", "dep:redis"]
 [profile.release]
 lto = "thin"
 codegen-units = 1
+
+[lints.clippy]
+format_push_string = "warn"
+inefficient_to_string = "warn"
+needless_collect = "warn"
+redundant_clone = "warn"
+unnecessary_to_owned = "warn"
+wildcard_imports = "warn"

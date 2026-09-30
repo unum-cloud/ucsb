@@ -1,8 +1,10 @@
 //! Explicit workload names, operation mixes, and checked size parsing.
 
-use crate::data::{Distribution, RandomGenerator};
-use serde::Serialize;
 use std::{fmt, ops::RangeInclusive, str::FromStr};
+
+use serde::Serialize;
+
+use crate::data::{Distribution, RandomGenerator};
 
 pub const DEFAULT_WORKLOADS: &str = "bulk-load,read,batch-read-256,range-read-256,full-scan,read-50-update-50,read-latest-95-insert-5,batch-insert-1000,delete-oldest";
 
@@ -66,6 +68,7 @@ impl FromStr for Workload {
     type Err = String;
     fn from_str(input: &str) -> Result<Self, Self::Err> {
         use Operation::*;
+
         let name = input;
         let distribution = Distribution::Zipf;
         let mut result = Self {
@@ -155,6 +158,7 @@ pub fn parse_value_size(input: &str) -> Result<RangeInclusive<usize>, String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
     #[test]
     fn explicit_workloads_round_trip() {
         for name in DEFAULT_WORKLOADS.split(',').chain([

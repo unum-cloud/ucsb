@@ -9,14 +9,26 @@
 //!     --bin crud-eval-redb -- --records 100K --threads 4
 //! ```
 
-use clap::Parser;
-use crudeval::{backend::*, run, CommonArgs};
-use redb::{Database, ReadableDatabase, ReadableTable, TableDefinition};
-use serde_json::json;
+#![feature(allocator_ext, btreemap_alloc)]
+
 use std::{
+    alloc::System,
     collections::BTreeMap,
     path::{Path, PathBuf},
 };
+
+use clap::Parser;
+use redb::{Database, ReadableDatabase, ReadableTable, TableDefinition};
+use serde_json::json;
+
+use crudeval::{
+    backend::{
+        directory_bytes, Backend, BackendCapabilities, BackendSession, DataModel, Durability, Key, KeysOutput,
+        RecordInput, RecordOutput, Result, TransactionSession,
+    },
+    run, CommonArgs,
+};
+
 const RECORDS: TableDefinition<&[u8], &[u8]> = TableDefinition::new("records");
 #[derive(Parser)]
 struct Cli {
@@ -53,8 +65,9 @@ impl RedbBackend {
     }
 }
 impl Backend for RedbBackend {
-    fn metadata(&self) -> BTreeMap<String, serde_json::Value> {
-        BTreeMap::from([
+    fn metadata(&self) -> BTreeMap<String, serde_json::Value, System> {
+        let mut metadata = BTreeMap::new_in(System);
+        metadata.extend([
             ("backend".into(), json!("redb")),
             ("library_version".into(), json!("4.3.0")),
             ("durability".into(), json!(self.durability)),
@@ -66,7 +79,8 @@ impl Backend for RedbBackend {
                     "immediate"
                 }),
             ),
-        ])
+        ]);
+        metadata
     }
     fn capabilities(&self) -> BackendCapabilities {
         BackendCapabilities {
@@ -75,11 +89,14 @@ impl Backend for RedbBackend {
             ..Default::default()
         }
     }
-    fn session(&self) -> Result<Box<dyn BackendSession + '_>> {
-        Ok(Box::new(RedbSession {
-            backend: self,
-            transaction: None,
-        }))
+    fn session(&self) -> Result<Box<dyn BackendSession + '_, System>> {
+        Ok(Box::new_in(
+            RedbSession {
+                backend: self,
+                transaction: None,
+            },
+            System,
+        ))
     }
     fn flush(&self) -> Result<()> {
         let mut tx = self.db.begin_write().map_err(|e| e.to_string())?;
@@ -109,14 +126,14 @@ impl RedbSession<'_> {
 fn read_rows(
     table: &impl ReadableTable<&'static [u8], &'static [u8]>,
     keys: &[Key],
-    output: &mut RecordBatch,
+    output: &mut RecordOutput<'_>,
 ) -> Result<usize> {
     output.clear();
     let mut count = 0;
     for key in keys {
         let value = table.get(key.as_bytes().as_slice()).map_err(|e| e.to_string())?;
         count += usize::from(value.is_some());
-        output.push(value.as_ref().map(|v| v.value()));
+        output.push(value.as_ref().map(|v| v.value()))?;
     }
     Ok(count)
 }
@@ -124,8 +141,8 @@ fn scan_rows(
     table: &impl ReadableTable<&'static [u8], &'static [u8]>,
     start: Key,
     limit: usize,
-    keys: &mut Vec<Key>,
-    output: &mut RecordBatch,
+    keys: &mut KeysOutput<'_>,
+    output: &mut RecordOutput<'_>,
 ) -> Result<usize> {
     keys.clear();
     output.clear();
@@ -135,13 +152,13 @@ fn scan_rows(
         .take(limit)
     {
         let (key, value) = row.map_err(|e| e.to_string())?;
-        keys.push(Key::from_slice(key.value()).map_err(|e| e.to_string())?);
-        output.push(Some(value.value()));
+        keys.push(Key::from_slice(key.value()).map_err(|e| e.to_string())?)?;
+        output.push(Some(value.value()))?;
     }
     Ok(keys.len())
 }
 impl BackendSession for RedbSession<'_> {
-    fn insert(&mut self, keys: &[Key], values: &RecordBatch) -> Result<usize> {
+    fn insert(&mut self, keys: &[Key], values: &RecordInput<'_>) -> Result<usize> {
         self.write(|tx| {
             let mut table = tx.open_table(RECORDS).map_err(|e| e.to_string())?;
             for (i, key) in keys.iter().enumerate() {
@@ -152,14 +169,14 @@ impl BackendSession for RedbSession<'_> {
             Ok(keys.len())
         })
     }
-    fn read(&mut self, keys: &[Key], output: &mut RecordBatch) -> Result<usize> {
+    fn read(&mut self, keys: &[Key], output: &mut RecordOutput<'_>) -> Result<usize> {
         if let Some(tx) = &self.transaction {
             return read_rows(&tx.open_table(RECORDS).map_err(|e| e.to_string())?, keys, output);
         }
         let tx = self.backend.db.begin_read().map_err(|e| e.to_string())?;
         read_rows(&tx.open_table(RECORDS).map_err(|e| e.to_string())?, keys, output)
     }
-    fn update(&mut self, keys: &[Key], values: &RecordBatch) -> Result<usize> {
+    fn update(&mut self, keys: &[Key], values: &RecordInput<'_>) -> Result<usize> {
         self.write(|tx| {
             let mut table = tx.open_table(RECORDS).map_err(|e| e.to_string())?;
             let mut count = 0;
@@ -193,7 +210,13 @@ impl BackendSession for RedbSession<'_> {
             Ok(count)
         })
     }
-    fn range_read(&mut self, start: Key, limit: usize, keys: &mut Vec<Key>, output: &mut RecordBatch) -> Result<usize> {
+    fn range_read(
+        &mut self,
+        start: Key,
+        limit: usize,
+        keys: &mut KeysOutput<'_>,
+        output: &mut RecordOutput<'_>,
+    ) -> Result<usize> {
         if let Some(tx) = &self.transaction {
             return scan_rows(
                 &tx.open_table(RECORDS).map_err(|e| e.to_string())?,
@@ -212,6 +235,9 @@ impl BackendSession for RedbSession<'_> {
             output,
         )
     }
+}
+
+impl TransactionSession for RedbSession<'_> {
     fn begin(&mut self) -> Result<()> {
         if self.transaction.is_some() {
             return Err("transaction already active".into());
@@ -241,7 +267,7 @@ fn main() -> Result<()> {
         if args.data_model != DataModel::KeyValue {
             return Err("redb supports only kv data_model".into());
         }
-        Ok(Box::new(RedbBackend::open(path, args.durability)?))
+        Ok(Box::new_in(RedbBackend::open(path, args.durability)?, System))
     })
 }
 

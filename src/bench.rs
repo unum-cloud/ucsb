@@ -1,5 +1,8 @@
 //! Shared benchmark runner: CLI sweeps, workload execution, and resumable data directories.
 
+#![feature(allocator_ext)]
+#![cfg_attr(test, feature(btreemap_alloc))]
+
 pub mod backend;
 pub mod data;
 #[cfg(feature = "tier2")]
@@ -9,9 +12,13 @@ pub mod output;
 pub mod perf_counters;
 pub mod workload;
 
-pub use backend::{Backend, BackendCapabilities, BackendSession, DataModel, Durability, Key, RecordBatch, Result};
-use clap::Args;
 use std::path::{Path, PathBuf};
+
+use clap::Args;
+
+pub use crate::backend::{
+    Backend, BackendCapabilities, BackendSession, DataModel, Durability, Key, RecordBatch, Result,
+};
 
 #[derive(Args, Clone, Debug, serde::Serialize)]
 pub struct CommonArgs {
@@ -80,7 +87,7 @@ pub struct CommonArgs {
 pub fn run(
     args: CommonArgs,
     backend_options: impl serde::Serialize,
-    open: impl Fn(&CommonArgs, &Path) -> Result<Box<dyn Backend>>,
+    open: impl Fn(&CommonArgs, &Path) -> Result<Box<dyn Backend, System>>,
 ) -> Result<()> {
     run_benchmarks(
         args,
@@ -89,15 +96,21 @@ pub fn run(
     )
 }
 
-use data::{derive_seed, KeySpace, RandomGenerator};
-use measure::{ResourceSampler, WorkloadMeasurements};
-use std::collections::HashSet;
-use std::sync::{
-    atomic::{AtomicBool, Ordering},
-    Barrier, OnceLock,
+use std::{
+    alloc::System,
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        Barrier, OnceLock,
+    },
+    time::{Duration, Instant, SystemTime, UNIX_EPOCH},
 };
-use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
-use workload::{Operation, Workload};
+
+use crate::{
+    data::{derive_seed, KeySpace, RandomGenerator},
+    measure::{ResourceSampler, WorkloadMeasurements},
+    workload::{Operation, Workload},
+};
+
 pub mod model;
 
 fn duration(value: &str) -> Result<Duration> {
@@ -179,7 +192,7 @@ impl DataManifest {
 fn run_benchmarks(
     args: CommonArgs,
     backend_options: serde_json::Value,
-    open: impl Fn(&CommonArgs, &Path) -> Result<Box<dyn Backend>>,
+    open: impl Fn(&CommonArgs, &Path) -> Result<Box<dyn Backend, System>>,
 ) -> Result<()> {
     if args.records.is_empty() || args.records.contains(&0) || args.threads.is_empty() || args.threads.contains(&0) {
         return Err("records and threads must be positive".into());
@@ -210,6 +223,15 @@ fn run_benchmarks(
             workload.distribution = distribution;
         }
     }
+    if workloads.iter().any(|workload| {
+        workload.operations.iter().any(|(op, _)| *op == Operation::Delete)
+            && workload
+                .operations
+                .iter()
+                .any(|(op, _)| matches!(op, Operation::Insert | Operation::Update | Operation::ReadModifyWrite))
+    }) {
+        return Err("delete workloads cannot mix insertion or updates".into());
+    }
     let loading = workloads[0].operations[0].0 == Operation::BulkLoad;
     if workloads
         .iter()
@@ -230,6 +252,7 @@ fn run_benchmarks(
             config.records = vec![records];
             config.threads = vec![threads];
             let identity = output::config_hash(&(
+                2u32,
                 records,
                 threads,
                 args.data_model,
@@ -271,7 +294,7 @@ fn run_benchmarks(
                 return Err("this backend does not support --transaction-size".into());
             }
             let mut report = output::ConfigReport {
-                schema_version: 1,
+                schema_version: 2,
                 started_unix_seconds: SystemTime::now()
                     .duration_since(UNIX_EPOCH)
                     .unwrap_or_default()
@@ -283,6 +306,15 @@ fn run_benchmarks(
                 phases: Vec::new(),
             };
             report.config.insert("key_bytes".into(), 16.into());
+            report.config.insert("adapter_revision".into(), 2.into());
+            report.config.insert(
+                "latency_scope".into(),
+                "attempted calls, including failures and rolled-back transactions".into(),
+            );
+            report.config.insert(
+                "throughput_scope".into(),
+                "successful entries published after commit".into(),
+            );
             report.config.insert("backend_options".into(), backend_options.clone());
             report.config.insert("initial_key_floor".into(), manifest.floor.into());
             report.config.insert("initial_key_end".into(), manifest.next.into());
@@ -390,7 +422,8 @@ fn empty_phase(workload: &Workload, status: &str, error: Option<String>) -> outp
         corrupted: 0,
         processed_bytes: 0,
         latency: Default::default(),
-        timeline_entries: Vec::new(),
+        timeline_entries: Vec::new_in(System),
+        timeline_buffer_growths: 0,
         client_usage: Default::default(),
         server_usage: None,
         hardware_counters: None,
@@ -409,25 +442,39 @@ fn execute_phase(
     duration: Option<Duration>,
 ) -> Result<output::WorkloadReport> {
     let threads = args.threads[0];
+    keyspace.workers(threads);
     let barrier = Barrier::new(threads);
     let start = OnceLock::new();
     let cancelled = AtomicBool::new(false);
     let sampler = ResourceSampler::start();
     let result = std::thread::scope(|scope| {
-        let mut handles = Vec::new();
+        let mut handles = Vec::with_capacity_in(threads, System);
         for thread in 0..threads {
             let barrier = &barrier;
             let start = &start;
             let cancelled = &cancelled;
             handles.push(scope.spawn(move || {
                 let session = backend.session();
+                let live = keyspace.live();
+                let total = match workload.operations[0].0 {
+                    Operation::BulkLoad => args.records[0],
+                    Operation::FullScan => live.end - live.start,
+                    _ => budget,
+                };
+                let target = total / threads as u64 + u64::from((thread as u64) < total % threads as u64);
+                let buffers = WorkerBuffers::new(
+                    args,
+                    workload,
+                    model,
+                    target,
+                    duration.filter(|_| !matches!(workload.operations[0].0, Operation::BulkLoad | Operation::FullScan)),
+                );
                 if barrier.wait().is_leader() {
                     let _ = start.set(Instant::now());
                 }
                 barrier.wait();
-                let mut session = session;
-                let measurements = match &mut session {
-                    Ok(session) => run_worker(
+                let measurements = match (session, buffers) {
+                    (Ok(mut session), Ok(buffers)) => run_worker(
                         session.as_mut(),
                         args,
                         workload,
@@ -438,12 +485,13 @@ fn execute_phase(
                         thread,
                         *start.get().unwrap(),
                         cancelled,
+                        buffers,
                     ),
-                    Err(error) => {
+                    (Err(error), _) | (_, Err(error)) => {
                         cancelled.store(true, Ordering::Relaxed);
                         WorkloadMeasurements {
                             failed: 1,
-                            error: Some(error.clone()),
+                            error: Some(error),
                             ..Default::default()
                         }
                     }
@@ -481,8 +529,406 @@ fn execute_phase(
     phase.latency = measurements.latencies();
     phase.hardware_counters = measurements.hardware_counters;
     phase.timeline_entries = measurements.timeline;
+    phase.timeline_buffer_growths = measurements.timeline_buffer_growths;
     phase.client_usage = usage;
     Ok(phase)
+}
+
+enum WorkerSession<'a> {
+    KeyValue(&'a mut dyn BackendSession),
+    Documents(&'a mut dyn backend::DocumentSession),
+    Graph(&'a mut dyn backend::GraphSession),
+}
+impl<'a> WorkerSession<'a> {
+    fn select(session: &'a mut dyn BackendSession, data_model: DataModel) -> Result<Self> {
+        match data_model {
+            DataModel::KeyValue => Ok(Self::KeyValue(session)),
+            DataModel::Documents => session
+                .documents()
+                .map(Self::Documents)
+                .ok_or("document records unsupported".into()),
+            DataModel::Graph => session
+                .graph()
+                .map(Self::Graph)
+                .ok_or("graph records unsupported".into()),
+        }
+    }
+    fn transaction(&mut self) -> &mut dyn backend::TransactionSession {
+        match self {
+            Self::KeyValue(s) => *s,
+            Self::Documents(s) => *s,
+            Self::Graph(s) => *s,
+        }
+    }
+    fn delete(&mut self, keys: &[Key]) -> Result<usize> {
+        match self {
+            Self::KeyValue(s) => s.delete(keys),
+            Self::Documents(s) => s.delete(keys),
+            Self::Graph(s) => s.delete(keys),
+        }
+    }
+}
+enum WorkerRecords {
+    KeyValue {
+        input: RecordBatch,
+        output: RecordBatch,
+    },
+    Documents {
+        input: backend::DocumentBatch,
+        output: backend::DocumentBatch,
+        patches: Vec<backend::DocumentPatch, System>,
+    },
+    Graph {
+        input: backend::GraphBatch,
+        output: backend::GraphBatch,
+        patches: Vec<backend::GraphPatch, System>,
+        scratch: Vec<backend::GraphEdge, System>,
+    },
+}
+impl WorkerRecords {
+    fn new(data_model: DataModel, rows: usize, generator: &model::RecordGenerator) -> Result<Self> {
+        Ok(match data_model {
+            DataModel::KeyValue => {
+                let bytes = rows
+                    .checked_mul(generator.max_value_size())
+                    .ok_or("record buffers exceed address space")?;
+                Self::KeyValue {
+                    input: RecordBatch::new(rows, bytes),
+                    output: RecordBatch::new(rows, bytes),
+                }
+            }
+            DataModel::Documents => {
+                let bytes = rows
+                    .checked_mul(generator.max_value_size())
+                    .and_then(|n| n.checked_mul(2))
+                    .ok_or("document buffers exceed address space")?;
+                let mut patches = Vec::with_capacity_in(rows, System);
+                patches.resize(rows, backend::DocumentPatch::default());
+                Self::Documents {
+                    input: backend::DocumentBatch::new(rows, bytes),
+                    output: backend::DocumentBatch::new(rows, bytes),
+                    patches,
+                }
+            }
+            DataModel::Graph => {
+                let edges = rows
+                    .checked_mul(generator.degree())
+                    .ok_or("graph buffers exceed address space")?;
+                let mut patches = Vec::with_capacity_in(rows, System);
+                patches.resize(rows, backend::GraphPatch::default());
+                let mut scratch = Vec::with_capacity_in(generator.degree(), System);
+                scratch.resize(generator.degree(), backend::GraphEdge::default());
+                Self::Graph {
+                    input: backend::GraphBatch::new(rows, edges),
+                    output: backend::GraphBatch::new(rows, edges),
+                    patches,
+                    scratch,
+                }
+            }
+        })
+    }
+    fn prepare(
+        &mut self,
+        generator: &model::RecordGenerator,
+        keys: &[Key],
+        operation: Operation,
+        floor: u64,
+        rng: &mut RandomGenerator,
+    ) -> Result<()> {
+        let updating = operation == Operation::Update;
+        match self {
+            Self::KeyValue { input, .. } => {
+                let mut out = input.as_output();
+                for &key in keys {
+                    generator.fill_value(
+                        key,
+                        if operation == Operation::BulkLoad {
+                            0
+                        } else {
+                            rng.next_u64() & i64::MAX as u64
+                        },
+                        &mut out,
+                    )?;
+                }
+            }
+            Self::Documents { input, patches, .. } => {
+                if updating {
+                    for patch in &mut patches[..keys.len()] {
+                        patch.score = rng.next_u64() & i64::MAX as u64;
+                    }
+                } else {
+                    let mut out = input.as_output();
+                    for &key in keys {
+                        generator.fill_document(
+                            key,
+                            if operation == Operation::BulkLoad {
+                                0
+                            } else {
+                                rng.next_u64() & i64::MAX as u64
+                            },
+                            &mut out,
+                        )?;
+                    }
+                }
+            }
+            Self::Graph {
+                input,
+                patches,
+                scratch,
+                ..
+            } => {
+                if updating {
+                    for (index, &key) in keys.iter().enumerate() {
+                        patches[index] = generator.graph_patch(key, rng.next_u64(), floor, scratch);
+                    }
+                } else {
+                    let mut out = input.as_output();
+                    for &key in keys {
+                        generator.fill_vertex(
+                            key,
+                            if operation == Operation::BulkLoad {
+                                0
+                            } else {
+                                rng.next_u64()
+                            },
+                            floor,
+                            scratch,
+                            &mut out,
+                        )?;
+                    }
+                }
+            }
+        }
+        Ok(())
+    }
+    fn modify(&mut self, generator: &model::RecordGenerator, keys: &[Key], floor: u64) -> Result<()> {
+        match self {
+            Self::KeyValue { input, output } => {
+                let values = output.as_input();
+                let mut out = input.as_output();
+                for (index, &key) in keys.iter().enumerate() {
+                    let value = values.get(index).ok_or("missing read-modify-write value")?;
+                    let header = value.get(16..24).ok_or("truncated read-modify-write header")?;
+                    let version = u64::from_be_bytes(header.try_into().unwrap());
+                    generator.fill_value(key, model::next_version(version), &mut out)?;
+                }
+            }
+            Self::Documents { output, patches, .. } => {
+                let values = output.as_input();
+                for (index, patch) in patches[..keys.len()].iter_mut().enumerate() {
+                    patch.score =
+                        model::next_version(values.get(index).ok_or("missing read-modify-write document")?.score);
+                }
+            }
+            Self::Graph {
+                output,
+                patches,
+                scratch,
+                ..
+            } => {
+                let values = output.as_input();
+                for (index, &key) in keys.iter().enumerate() {
+                    let version =
+                        model::next_version(values.get(index).ok_or("missing read-modify-write vertex")?.version);
+                    patches[index] = generator.graph_patch(key, version, floor, scratch);
+                }
+            }
+        }
+        Ok(())
+    }
+    fn read(&mut self, session: &mut WorkerSession<'_>, keys: &[Key]) -> Result<usize> {
+        match (self, session) {
+            (Self::KeyValue { output, .. }, WorkerSession::KeyValue(s)) => s.read(keys, &mut output.as_output()),
+            (Self::Documents { output, .. }, WorkerSession::Documents(s)) => s.read(keys, &mut output.as_output()),
+            (Self::Graph { output, .. }, WorkerSession::Graph(s)) => s.read(keys, &mut output.as_output()),
+            _ => unreachable!(),
+        }
+    }
+    fn write(&mut self, session: &mut WorkerSession<'_>, keys: &[Key], operation: Operation) -> Result<usize> {
+        match (self, session) {
+            (Self::KeyValue { input, .. }, WorkerSession::KeyValue(s)) => match operation {
+                Operation::BulkLoad => s.bulk_load(keys, &input.as_input()),
+                Operation::Insert => s.insert(keys, &input.as_input()),
+                _ => s.update(keys, &input.as_input()),
+            },
+            (Self::Documents { input, patches, .. }, WorkerSession::Documents(s)) => match operation {
+                Operation::BulkLoad => s.bulk_load(keys, &input.as_input()),
+                Operation::Insert => s.insert(keys, &input.as_input()),
+                _ => s.update(keys, &patches[..keys.len()]),
+            },
+            (Self::Graph { input, patches, .. }, WorkerSession::Graph(s)) => match operation {
+                Operation::BulkLoad => s.bulk_load(keys, &input.as_input()),
+                Operation::Insert => s.insert(keys, &input.as_input()),
+                _ => s.update(keys, &patches[..keys.len()]),
+            },
+            _ => unreachable!(),
+        }
+    }
+    fn range_read(
+        &mut self,
+        session: &mut WorkerSession<'_>,
+        start: Key,
+        limit: usize,
+        keys: &mut backend::KeysOutput<'_>,
+    ) -> Result<usize> {
+        match (self, session) {
+            (Self::KeyValue { output, .. }, WorkerSession::KeyValue(s)) => {
+                s.range_read(start, limit, keys, &mut output.as_output())
+            }
+            (Self::Documents { output, .. }, WorkerSession::Documents(s)) => {
+                s.range_read(start, limit, keys, &mut output.as_output())
+            }
+            (Self::Graph { output, .. }, WorkerSession::Graph(s)) => {
+                s.range_read(start, limit, keys, &mut output.as_output())
+            }
+            _ => unreachable!(),
+        }
+    }
+    fn verify(
+        &mut self,
+        generator: &model::RecordGenerator,
+        keys: &[Key],
+        affected: usize,
+        floor: u64,
+        verify: bool,
+    ) -> Result<()> {
+        let (rows, found) = match self {
+            Self::KeyValue { output, .. } => {
+                let rows = output.as_input();
+                if verify {
+                    for (index, &key) in keys.iter().enumerate().take(rows.len()) {
+                        if let Some(value) = rows.get(index) {
+                            generator.verify_value(key, value)?;
+                        }
+                    }
+                }
+                (rows.len(), rows.found.iter().filter(|&&f| f).count())
+            }
+            Self::Documents { output, .. } => {
+                let rows = output.as_input();
+                if verify {
+                    for (index, &key) in keys.iter().enumerate().take(rows.len()) {
+                        if let Some(value) = rows.get(index) {
+                            generator.verify_document(key, value)?;
+                        }
+                    }
+                }
+                (rows.len(), rows.payloads.found.iter().filter(|&&f| f).count())
+            }
+            Self::Graph { output, scratch, .. } => {
+                let rows = output.as_input();
+                if verify {
+                    for (index, &key) in keys.iter().enumerate().take(rows.len()) {
+                        if let Some(value) = rows.get(index) {
+                            generator.verify_vertex(key, value, floor, scratch)?;
+                        }
+                    }
+                }
+                (rows.len(), rows.found.iter().filter(|&&f| f).count())
+            }
+        };
+        if rows != keys.len() || found != affected {
+            return Err("backend results do not match requested rows".into());
+        }
+        Ok(())
+    }
+    fn bytes(&self, operation: Operation, rows: usize) -> u64 {
+        let writing = matches!(
+            operation,
+            Operation::Insert | Operation::BulkLoad | Operation::Update | Operation::ReadModifyWrite
+        );
+        let updating = matches!(operation, Operation::Update | Operation::ReadModifyWrite);
+        match self {
+            Self::KeyValue { input, output } => (if writing { input } else { output }).as_input().bytes.len() as u64,
+            Self::Documents { input, output, .. } => {
+                if updating {
+                    rows as u64 * 8
+                } else {
+                    let batch = (if writing { input } else { output }).as_input();
+                    batch.payloads.bytes.len() as u64 + batch.len() as u64 * 8
+                }
+            }
+            Self::Graph { input, output, .. } => {
+                if updating {
+                    rows as u64 * 24
+                } else {
+                    let batch = (if writing { input } else { output }).as_input();
+                    batch.edges.len() as u64 * 20 + batch.len() as u64 * 8
+                }
+            }
+        }
+    }
+}
+struct WorkerBuffers {
+    records: WorkerRecords,
+    keys: Vec<Key, System>,
+    scanned: Vec<Key, System>,
+    selected: Vec<u64, System>,
+    measurements: WorkloadMeasurements,
+}
+impl WorkerBuffers {
+    fn new(
+        args: &CommonArgs,
+        workload: &Workload,
+        generator: &model::RecordGenerator,
+        target: u64,
+        duration: Option<Duration>,
+    ) -> Result<Self> {
+        let batch = workload
+            .range_size
+            .as_ref()
+            .map_or(workload.batch_size, |range| *range.end())
+            .max(workload.batch_size);
+        let rows = if duration.is_some() {
+            batch
+        } else {
+            batch.min(target.max(1) as usize)
+        };
+        let mut scanned = Vec::with_capacity_in(rows, System);
+        scanned.resize(rows, Key::nil());
+        let slots = rows
+            .checked_mul(2)
+            .and_then(usize::checked_next_power_of_two)
+            .ok_or("batch size exceeds address space")?;
+        let mut selected = Vec::with_capacity_in(slots, System);
+        selected.resize(slots, u64::MAX);
+        let histogram_names = workload.operations.iter().map(|(operation, _)| *operation);
+        let timeline = match duration {
+            Some(limit) => usize::try_from(limit.as_secs())
+                .ok()
+                .and_then(|seconds| seconds.checked_add(2))
+                .ok_or("timeline exceeds address space")?,
+            None => 3600,
+        };
+        Ok(Self {
+            records: WorkerRecords::new(args.data_model, rows, generator)?,
+            keys: Vec::with_capacity_in(rows, System),
+            scanned,
+            selected,
+            measurements: WorkloadMeasurements::new(histogram_names, args.transaction_size > 0, timeline)?,
+        })
+    }
+    fn select(&mut self, key: u64) -> bool {
+        let mask = self.selected.len() - 1;
+        let mut slot = (key.wrapping_mul(0x9e3779b97f4a7c15) >> 32) as usize & mask;
+        loop {
+            let value = self.selected[slot];
+            if value == key {
+                return false;
+            }
+            if value == u64::MAX {
+                self.selected[slot] = key;
+                return true;
+            }
+            slot = (slot + 1) & mask;
+        }
+    }
+}
+#[derive(Default)]
+struct PendingCounts {
+    entries: u64,
+    missing: u64,
+    bytes: u64,
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -491,60 +937,54 @@ fn run_worker(
     args: &CommonArgs,
     workload: &Workload,
     keyspace: &KeySpace,
-    model: &model::RecordGenerator,
+    generator: &model::RecordGenerator,
     budget: u64,
     duration: Option<Duration>,
     thread: usize,
     start: Instant,
     cancelled: &AtomicBool,
+    mut buffers: WorkerBuffers,
 ) -> WorkloadMeasurements {
     let threads = args.threads[0] as u64;
     let bulk_load = workload.operations[0].0 == Operation::BulkLoad;
     let full_scan = workload.operations[0].0 == Operation::FullScan;
-    let live = keyspace.live();
+    let mut snapshot = keyspace.live();
     let total = if bulk_load {
         args.records[0]
     } else if full_scan {
-        live.end - live.start
+        snapshot.end - snapshot.start
     } else {
         budget
     };
     let target = total / threads + u64::from((thread as u64) < total % threads);
-    let scan_offset = (total / threads) * thread as u64 + (thread as u64).min(total % threads);
-    let mut scan_start = live.start + scan_offset;
+    let mut scan_start = snapshot.start + (total / threads) * thread as u64 + (thread as u64).min(total % threads);
     let scan_end = scan_start + target;
     let timed = duration.filter(|_| !bulk_load && !full_scan);
     let mut rng = RandomGenerator::new(derive_seed(args.seed, &workload.name, thread));
-    let mut measurements = WorkloadMeasurements::default();
-    let mut pending = WorkloadMeasurements::default();
-    let mut reservations = Vec::new();
-    let mut keys = Vec::new();
-    let mut selected = HashSet::new();
-    let mut values = RecordBatch::default();
-    let mut output = RecordBatch::default();
-    let mut scanned_keys = Vec::new();
-    let mut value = Vec::new();
-    let mut attempted = 0u64;
+    let mut pending = PendingCounts::default();
+    let mut attempted = 0;
     let mut calls = 0u64;
-    let mut transaction_calls = 0usize;
+    let mut transaction_calls = 0;
     let mut in_transaction = false;
-    let transaction_size = args.transaction_size;
-    let mut snapshot = live;
     let mut performance_counters = None;
+    let mut session = match WorkerSession::select(session, args.data_model) {
+        Ok(s) => s,
+        Err(error) => {
+            buffers.measurements.failed = 1;
+            buffers.measurements.error = Some(error);
+            cancelled.store(true, Ordering::Relaxed);
+            return buffers.measurements;
+        }
+    };
     let result = (|| -> Result<()> {
         if args.perf_counters {
-            performance_counters =
-                Some(perf_counters::PerfCounters::start().map_err(|e| format!("worker performance counters: {e}"))?);
+            performance_counters = Some(perf_counters::PerfCounters::start().map_err(|e| e.to_string())?);
         }
         loop {
-            if cancelled.load(Ordering::Relaxed) {
-                break;
-            }
-            if let Some(limit) = timed {
-                if start.elapsed() >= limit {
-                    break;
-                }
-            } else if attempted >= target {
+            if cancelled.load(Ordering::Relaxed)
+                || timed.is_some_and(|limit| start.elapsed() >= limit)
+                || timed.is_none() && attempted >= target
+            {
                 break;
             }
             let scheduled = if let Some(rate) = args.rate {
@@ -572,44 +1012,37 @@ fn run_worker(
             if calls.is_multiple_of(256) {
                 snapshot = keyspace.live();
             }
-            let batch_size = if operation == Operation::RangeRead {
-                workload
-                    .range_size
-                    .as_ref()
-                    .map(|r| *r.start() + rng.below((r.end() - r.start() + 1) as u64) as usize)
-                    .unwrap_or(workload.batch_size)
+            let batch = if operation == Operation::RangeRead {
+                workload.range_size.as_ref().map_or(workload.batch_size, |range| {
+                    *range.start() + rng.below((range.end() - range.start() + 1) as u64) as usize
+                })
             } else if operation == Operation::Insert && workload.operations.len() > 1 {
                 1
             } else {
                 workload.batch_size
             };
-            let mut count = batch_size as u64;
+            let mut count = batch as u64;
             if timed.is_none() {
                 count = count.min(target - attempted);
             }
-            keys.clear();
-            values.clear();
-            output.clear();
-            scanned_keys.clear();
-            let reservation = if matches!(operation, Operation::Insert | Operation::BulkLoad) {
-                let range = keyspace.reserve(count)?;
-                keys.extend(range.clone().map(|k| Key::from_u128(k as u128)));
-                Some(range)
+            buffers.keys.clear();
+            if matches!(operation, Operation::Insert | Operation::BulkLoad) {
+                let range = keyspace.reserve(thread, count)?;
+                buffers.keys.extend(range.map(|key| Key::from_u128(u128::from(key))));
             } else if operation == Operation::Delete {
-                let range = keyspace.delete_oldest(count);
-                keys.extend(range.map(|k| Key::from_u128(k as u128)));
-                count = keys.len() as u64;
+                buffers
+                    .keys
+                    .extend(keyspace.delete_oldest(count).map(|key| Key::from_u128(u128::from(key))));
+                count = buffers.keys.len() as u64;
                 if count == 0 {
                     break;
                 }
-                None
             } else if full_scan {
                 if scan_start >= scan_end {
                     break;
                 }
                 count = count.min(scan_end - scan_start);
-                keys.push(Key::from_u128(scan_start as u128));
-                None
+                buffers.keys.push(Key::from_u128(u128::from(scan_start)));
             } else {
                 let live_count = snapshot.end - snapshot.start;
                 if live_count == 0 {
@@ -619,165 +1052,202 @@ fn run_worker(
                     count = count.min(live_count);
                 }
                 let distinct = if operation == Operation::Read { count } else { 1 };
-                selected.clear();
-                if distinct == live_count && distinct > 1 {
-                    keys.extend(snapshot.clone().map(|number| Key::from_u128(number as u128)));
-                    for index in (1..keys.len()).rev() {
-                        keys.swap(index, rng.below(index as u64 + 1) as usize);
+                if distinct == 1 {
+                    buffers.keys.push(Key::from_u128(u128::from(
+                        rng.sample(workload.distribution, snapshot.clone()).unwrap(),
+                    )));
+                } else if distinct == live_count {
+                    buffers
+                        .keys
+                        .extend(snapshot.clone().map(|key| Key::from_u128(u128::from(key))));
+                    for index in (1..buffers.keys.len()).rev() {
+                        buffers.keys.swap(index, rng.below(index as u64 + 1) as usize);
                     }
                 } else {
-                    while keys.len() < distinct as usize {
-                        let mut number = rng.sample(workload.distribution, snapshot.clone()).unwrap();
+                    buffers.selected.fill(u64::MAX);
+                    while buffers.keys.len() < distinct as usize {
+                        let mut key = rng.sample(workload.distribution, snapshot.clone()).unwrap();
+                        let mut accepted = false;
                         for _ in 0..16 {
-                            if !selected.contains(&number) {
+                            if buffers.select(key) {
+                                accepted = true;
                                 break;
                             }
-                            number = rng.sample(workload.distribution, snapshot.clone()).unwrap();
+                            key = rng.sample(workload.distribution, snapshot.clone()).unwrap();
                         }
-                        while !selected.insert(number) {
-                            number = if number + 1 == snapshot.end {
-                                snapshot.start
-                            } else {
-                                number + 1
-                            };
+                        if !accepted {
+                            while !buffers.select(key) {
+                                key = if key + 1 == snapshot.end {
+                                    snapshot.start
+                                } else {
+                                    key + 1
+                                };
+                            }
                         }
-                        keys.push(Key::from_u128(number as u128));
+                        buffers.keys.push(Key::from_u128(u128::from(key)));
                     }
                 }
-                None
-            };
-            if matches!(operation, Operation::Insert | Operation::BulkLoad | Operation::Update) {
-                for key in &keys {
-                    let version = if bulk_load { 0 } else { rng.next_u64() & i64::MAX as u64 };
-                    model.fill_with_floor(*key, version, snapshot.start, &mut value);
-                    values.push(Some(&value));
-                }
             }
-            if transaction_size > 0 && !in_transaction {
-                session.begin()?;
+            if matches!(operation, Operation::Insert | Operation::BulkLoad | Operation::Update) {
+                buffers
+                    .records
+                    .prepare(generator, &buffers.keys, operation, snapshot.start, &mut rng)?;
+            }
+            if args.transaction_size > 0 && !in_transaction {
+                session.transaction().begin()?;
                 in_transaction = true;
             }
-            let call_start = if args.rate.is_some() { scheduled } else { Instant::now() };
-            let mut read_affected = None;
-            let mut read_modify_latency = None;
-            let affected = match operation {
-                Operation::Insert => session.insert(&keys, &values)?,
-                Operation::BulkLoad => session.bulk_load(&keys, &values)?,
-                Operation::Update => session.update(&keys, &values)?,
-                Operation::Delete => session.delete(&keys)?,
-                Operation::Read => session.read(&keys, &mut output)?,
-                Operation::ReadModifyWrite => {
-                    let read_start = Instant::now();
-                    let found = session.read(&keys, &mut output)?;
-                    let read_latency = read_start.elapsed();
-                    let counters = if transaction_size > 0 {
-                        &mut pending
-                    } else {
-                        &mut measurements
-                    };
-                    verify_rows(args, model, &keys, &output, found as u64, snapshot.start, counters)?;
-                    read_affected = Some(found as u64);
-                    if found == keys.len() {
-                        for (index, &key) in keys.iter().enumerate() {
-                            model.modify(key, output.get(index).unwrap(), snapshot.start, &mut value)?;
-                            values.push(Some(&value));
+            let call_start = Instant::now();
+            let mut storage_time = Duration::ZERO;
+            let mut scan_count = 0;
+            let call = (|| -> Result<usize> {
+                match operation {
+                    Operation::Insert | Operation::BulkLoad | Operation::Update => {
+                        buffers.records.write(&mut session, &buffers.keys, operation)
+                    }
+                    Operation::Delete => session.delete(&buffers.keys),
+                    Operation::Read => buffers.records.read(&mut session, &buffers.keys),
+                    Operation::ReadModifyWrite => {
+                        let before = Instant::now();
+                        let result = buffers.records.read(&mut session, &buffers.keys);
+                        storage_time += before.elapsed();
+                        let found = result?;
+                        if let Err(error) =
+                            buffers
+                                .records
+                                .verify(generator, &buffers.keys, found, snapshot.start, !args.no_verify)
+                        {
+                            buffers.measurements.corrupted += 1;
+                            return Err(error);
                         }
-                        let update_start = Instant::now();
-                        let affected = session.update(&keys, &values)?;
-                        read_modify_latency = Some(read_latency + update_start.elapsed());
-                        affected
-                    } else {
-                        read_modify_latency = Some(read_latency);
-                        0
+                        if found != buffers.keys.len() {
+                            return Ok(0);
+                        }
+                        buffers.records.modify(generator, &buffers.keys, snapshot.start)?;
+                        let before = Instant::now();
+                        let result = buffers.records.write(&mut session, &buffers.keys, Operation::Update);
+                        storage_time += before.elapsed();
+                        result
+                    }
+                    Operation::RangeRead | Operation::FullScan => {
+                        let mut keys = backend::KeysOutput::new(&mut buffers.scanned);
+                        let result = if operation == Operation::RangeRead {
+                            if let WorkerSession::Graph(graph) = &mut session {
+                                graph.expand_neighbors(buffers.keys[0], count as usize, &mut keys)
+                            } else {
+                                buffers
+                                    .records
+                                    .range_read(&mut session, buffers.keys[0], count as usize, &mut keys)
+                            }
+                        } else {
+                            buffers
+                                .records
+                                .range_read(&mut session, buffers.keys[0], count as usize, &mut keys)
+                        };
+                        scan_count = keys.len();
+                        result
                     }
                 }
-                Operation::RangeRead if args.data_model == DataModel::Graph => {
-                    session.expand_neighbors(keys[0], count as usize, &mut scanned_keys)?
-                }
-                Operation::RangeRead | Operation::FullScan => {
-                    session.range_read(keys[0], count as usize, &mut scanned_keys, &mut output)?
-                }
-            } as u64;
+            })();
             let latency = if args.rate.is_some() {
+                scheduled.elapsed()
+            } else if operation == Operation::ReadModifyWrite {
+                storage_time
+            } else {
                 call_start.elapsed()
-            } else {
-                read_modify_latency.unwrap_or_else(|| call_start.elapsed())
             };
-            let counters = if transaction_size > 0 {
-                &mut pending
-            } else {
-                &mut measurements
-            };
+            buffers.measurements.record_attempt(operation, latency)?;
+            let affected = call? as u64;
             if affected > count {
                 return Err("backend returned more entries than requested".into());
             }
-            counters.missing += count - affected;
             if matches!(operation, Operation::Insert | Operation::BulkLoad) && affected != count {
                 return Err("backend did not insert the complete reserved key range".into());
             }
-            if matches!(operation, Operation::Read | Operation::ReadModifyWrite) {
-                if read_affected.is_none() {
-                    verify_rows(args, model, &keys, &output, affected, snapshot.start, counters)?;
+            if operation == Operation::Read {
+                if let Err(error) = buffers.records.verify(
+                    generator,
+                    &buffers.keys,
+                    affected as usize,
+                    snapshot.start,
+                    !args.no_verify,
+                ) {
+                    buffers.measurements.corrupted += 1;
+                    return Err(error);
                 }
-            } else if matches!(operation, Operation::RangeRead | Operation::FullScan) {
-                if scanned_keys.len() != affected as usize {
+            }
+            if matches!(operation, Operation::RangeRead | Operation::FullScan) {
+                let keys = &buffers.scanned[..scan_count];
+                if scan_count != affected as usize {
                     return Err("range key count differs from affected count".into());
                 }
                 if args.data_model == DataModel::Graph && operation == Operation::RangeRead {
-                    let unique: HashSet<_> = scanned_keys.iter().collect();
-                    if unique.len() != scanned_keys.len() || scanned_keys.contains(&keys[0]) {
-                        return Err("invalid graph expansion".into());
+                    for (index, key) in keys.iter().enumerate() {
+                        if *key == buffers.keys[0] || keys[..index].contains(key) {
+                            return Err("invalid graph expansion".into());
+                        }
                     }
                 } else {
-                    if scanned_keys.windows(2).any(|pair| pair[0] >= pair[1])
-                        || scanned_keys.first().is_some_and(|k| *k < keys[0])
+                    if keys.windows(2).any(|pair| pair[0] >= pair[1])
+                        || keys.first().is_some_and(|key| *key < buffers.keys[0])
                     {
-                        return Err("range keys must be unique, ascending, and at least the start key".into());
+                        return Err("range keys must be unique, ascending, and at least start".into());
                     }
                     if full_scan
-                        && scanned_keys.iter().enumerate().any(|(index, key)| {
+                        && keys.iter().enumerate().any(|(index, key)| {
                             key.as_u128() != u128::from(scan_start) + index as u128
                                 || key.as_u128() >= u128::from(scan_end)
                         })
                     {
                         return Err("full scan crossed its shard or skipped an existing key".into());
                     }
-                    verify_rows(args, model, &scanned_keys, &output, affected, snapshot.start, counters)?;
+                    if let Err(error) =
+                        buffers
+                            .records
+                            .verify(generator, keys, affected as usize, snapshot.start, !args.no_verify)
+                    {
+                        buffers.measurements.corrupted += 1;
+                        return Err(error);
+                    }
                 }
                 if full_scan {
                     if affected != count {
-                        return Err("full scan ended before the expected record count".into());
+                        return Err("full scan ended before expected record count".into());
                     }
-                    scan_start = u64::try_from(scanned_keys.last().unwrap().as_u128())
-                        .map_err(|_| "invalid scan key")?
-                        .checked_add(1)
-                        .ok_or("scan key overflow")?;
+                    scan_start = scan_start.checked_add(affected).ok_or("scan key overflow")?;
                 }
             }
-            counters.processed_bytes += if values.is_empty() {
-                output.bytes.len() as u64
+            let bytes = if affected == 0
+                || operation == Operation::Delete
+                || args.data_model == DataModel::Graph && operation == Operation::RangeRead
+            {
+                0
             } else {
-                values.bytes.len() as u64
+                buffers.records.bytes(operation, affected as usize)
             };
-            counters.record(operation.as_str(), latency, start.elapsed(), affected)?;
-            if let Some(range) = reservation {
-                if transaction_size > 0 {
-                    reservations.push(range);
-                } else {
-                    keyspace.acknowledge(range)?;
+            if args.transaction_size > 0 {
+                pending.entries += affected;
+                pending.missing += count - affected;
+                pending.bytes += bytes;
+            } else {
+                buffers
+                    .measurements
+                    .publish(start.elapsed(), affected, count - affected, bytes);
+                if matches!(operation, Operation::Insert | Operation::BulkLoad) {
+                    keyspace.acknowledge(thread)?;
                 }
             }
             attempted += count;
             calls += 1;
-            if transaction_size > 0 {
+            if args.transaction_size > 0 {
                 transaction_calls += 1;
-                if transaction_calls == transaction_size {
+                if transaction_calls == args.transaction_size {
                     commit(
-                        session,
+                        &mut session,
                         keyspace,
-                        &mut reservations,
+                        thread,
                         &mut pending,
-                        &mut measurements,
+                        &mut buffers.measurements,
                         start,
                     )?;
                     in_transaction = false;
@@ -787,11 +1257,11 @@ fn run_worker(
         }
         if in_transaction {
             commit(
-                session,
+                &mut session,
                 keyspace,
-                &mut reservations,
+                thread,
                 &mut pending,
-                &mut measurements,
+                &mut buffers.measurements,
                 start,
             )?;
             in_transaction = false;
@@ -801,84 +1271,55 @@ fn run_worker(
     if let Err(error) = result {
         cancelled.store(true, Ordering::Relaxed);
         if in_transaction {
-            let _ = session.rollback();
-            measurements.aborted += pending.entries;
+            let _ = session.transaction().rollback();
+            buffers.measurements.aborted += pending.entries;
         }
-        measurements.corrupted += pending.corrupted;
-        measurements.failed += 1;
-        measurements.error = Some(error);
+        buffers.measurements.failed += 1;
+        buffers.measurements.error = Some(error);
     }
-    measurements.elapsed = start.elapsed();
+    buffers.measurements.elapsed = start.elapsed();
     if let Some(counters) = performance_counters {
         match counters.finish() {
-            Ok(sample) => measurements.hardware_counters = Some(sample),
+            Ok(sample) => buffers.measurements.hardware_counters = Some(sample),
             Err(error) => {
                 cancelled.store(true, Ordering::Relaxed);
-                measurements.failed += 1;
-                if measurements.error.is_none() {
-                    measurements.error = Some(format!("worker performance counters: {error}"));
+                buffers.measurements.failed += 1;
+                if buffers.measurements.error.is_none() {
+                    buffers.measurements.error = Some(error.to_string());
                 }
             }
         }
     }
-    measurements
+    buffers.measurements
 }
-
 fn commit(
-    session: &mut dyn BackendSession,
+    session: &mut WorkerSession<'_>,
     keyspace: &KeySpace,
-    reservations: &mut Vec<std::ops::Range<u64>>,
-    pending: &mut WorkloadMeasurements,
+    thread: usize,
+    pending: &mut PendingCounts,
     measurements: &mut WorkloadMeasurements,
     start: Instant,
 ) -> Result<()> {
     let before = Instant::now();
-    session.commit()?;
-    pending.record("commit", before.elapsed(), start.elapsed(), 0)?;
-    for range in reservations.drain(..) {
-        keyspace.acknowledge(range)?;
-    }
-    measurements.merge(std::mem::take(pending))
-}
-
-fn verify_rows(
-    args: &CommonArgs,
-    model: &model::RecordGenerator,
-    keys: &[Key],
-    batch: &RecordBatch,
-    affected: u64,
-    floor: u64,
-    counters: &mut WorkloadMeasurements,
-) -> Result<()> {
-    if batch.len() != keys.len()
-        || batch.found.len() != keys.len()
-        || batch.ends.last().copied().unwrap_or(0) != batch.bytes.len()
-        || batch.ends.windows(2).any(|ends| ends[0] > ends[1])
-        || batch.found.iter().filter(|&&found| found).count() as u64 != affected
-    {
-        return Err("backend read results do not match the requested keys".into());
-    }
-    if !args.no_verify {
-        for (index, &key) in keys.iter().enumerate() {
-            if let Some(value) = batch.get(index) {
-                if let Err(error) = model.verify_with_floor(key, value, floor) {
-                    counters.corrupted += 1;
-                    return Err(error);
-                }
-            }
-        }
-    }
+    let result = session.transaction().commit();
+    measurements.record_commit(before.elapsed())?;
+    result?;
+    keyspace.acknowledge(thread)?;
+    measurements.publish(start.elapsed(), pending.entries, pending.missing, pending.bytes);
+    *pending = PendingCounts::default();
     Ok(())
 }
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use clap::Parser;
     use std::{
         collections::BTreeMap,
         sync::{atomic::AtomicUsize, Arc, Mutex},
     };
+
+    use clap::Parser;
+
+    use super::*;
 
     #[derive(Parser)]
     struct Cli {
@@ -899,8 +1340,8 @@ mod tests {
         pending: Option<BTreeMap<Key, Option<Vec<u8>>>>,
     }
     impl Backend for Memory {
-        fn metadata(&self) -> BTreeMap<String, serde_json::Value> {
-            BTreeMap::new()
+        fn metadata(&self) -> BTreeMap<String, serde_json::Value, System> {
+            BTreeMap::new_in(System)
         }
         fn capabilities(&self) -> BackendCapabilities {
             BackendCapabilities {
@@ -909,11 +1350,14 @@ mod tests {
                 ..Default::default()
             }
         }
-        fn session(&self) -> Result<Box<dyn BackendSession + '_>> {
-            Ok(Box::new(MemorySession {
-                backend: self,
-                pending: None,
-            }))
+        fn session(&self) -> Result<Box<dyn BackendSession + '_, System>> {
+            Ok(Box::new_in(
+                MemorySession {
+                    backend: self,
+                    pending: None,
+                },
+                System,
+            ))
         }
         fn flush(&self) -> Result<()> {
             Ok(())
@@ -940,7 +1384,7 @@ mod tests {
         }
     }
     impl BackendSession for MemorySession<'_> {
-        fn insert(&mut self, keys: &[Key], values: &RecordBatch) -> Result<usize> {
+        fn insert(&mut self, keys: &[Key], values: &backend::RecordInput<'_>) -> Result<usize> {
             for (index, &key) in keys.iter().enumerate() {
                 if self.get(&key).is_some() {
                     return Err("duplicate insert".into());
@@ -949,8 +1393,9 @@ mod tests {
             }
             Ok(keys.len())
         }
-        fn read(&mut self, keys: &[Key], output: &mut RecordBatch) -> Result<usize> {
+        fn read(&mut self, keys: &[Key], output: &mut backend::RecordOutput<'_>) -> Result<usize> {
             output.clear();
+            let mut found = 0;
             for key in keys {
                 let mut value = self.get(key);
                 if self.backend.corrupt {
@@ -958,11 +1403,12 @@ mod tests {
                         value[0] ^= 1;
                     }
                 }
-                output.push(value.as_deref());
+                found += usize::from(value.is_some());
+                output.push(value.as_deref())?;
             }
-            Ok(output.found.iter().filter(|&&found| found).count())
+            Ok(found)
         }
-        fn update(&mut self, keys: &[Key], values: &RecordBatch) -> Result<usize> {
+        fn update(&mut self, keys: &[Key], values: &backend::RecordInput<'_>) -> Result<usize> {
             let mut found = 0;
             for (index, &key) in keys.iter().enumerate() {
                 if self.get(&key).is_some() {
@@ -986,17 +1432,19 @@ mod tests {
             &mut self,
             start: Key,
             limit: usize,
-            keys: &mut Vec<Key>,
-            output: &mut RecordBatch,
+            keys: &mut backend::KeysOutput<'_>,
+            output: &mut backend::RecordOutput<'_>,
         ) -> Result<usize> {
             keys.clear();
             output.clear();
             for (&key, value) in self.backend.rows.lock().unwrap().range(start..).take(limit) {
-                keys.push(key);
-                output.push(Some(value));
+                keys.push(key)?;
+                output.push(Some(value))?;
             }
             Ok(keys.len())
         }
+    }
+    impl backend::TransactionSession for MemorySession<'_> {
         fn begin(&mut self) -> Result<()> {
             self.pending = Some(BTreeMap::new());
             Ok(())
@@ -1066,6 +1514,9 @@ mod tests {
             let result = phase(&backend, &args, "bulk-load-2", &keys, &model, 7);
             if fail_commit {
                 assert_eq!((result.entries, result.failed, result.aborted), (0, 1, 4));
+                assert_eq!(result.calls, 3);
+                assert_eq!(result.latency["commit"].count, 1);
+                assert_eq!(result.latency["bulk-load"].count, 2);
                 assert_eq!(keys.live(), 0..0);
                 assert!(backend.rows.lock().unwrap().is_empty());
             } else {
@@ -1115,22 +1566,23 @@ mod tests {
         ]);
         args.data_dir = temp.path().join("data");
         args.output = temp.path().join("results");
-        run(args.clone(), (), |_, _| Ok(Box::new(backend.clone()))).unwrap();
+        run(args.clone(), (), |_, _| Ok(Box::new_in(backend.clone(), System))).unwrap();
         assert_eq!(backend.rows.lock().unwrap().keys().next().unwrap().as_u128(), 2);
         args.workloads = "full-scan,batch-insert-1".into();
-        run(args.clone(), (), |_, _| Ok(Box::new(backend.clone()))).unwrap();
+        run(args.clone(), (), |_, _| Ok(Box::new_in(backend.clone(), System))).unwrap();
         assert_eq!(backend.rows.lock().unwrap().len(), 9);
-        assert!(
-            run(args.clone(), "different-server", |_, _| Ok(Box::new(backend.clone())))
-                .unwrap_err()
-                .contains("no existing")
-        );
+        assert!(run(args.clone(), "different-server", |_, _| Ok(Box::new_in(
+            backend.clone(),
+            System
+        )))
+        .unwrap_err()
+        .contains("no existing"));
         args.workloads = "batch-insert-1".into();
         args.transaction_size = 1;
         backend.fail_commit = true;
-        assert!(run(args.clone(), (), |_, _| Ok(Box::new(backend.clone()))).is_err());
+        assert!(run(args.clone(), (), |_, _| Ok(Box::new_in(backend.clone(), System))).is_err());
         args.workloads = "read".into();
-        assert!(run(args, (), |_, _| Ok(Box::new(backend.clone())))
+        assert!(run(args, (), |_, _| Ok(Box::new_in(backend.clone(), System)))
             .unwrap_err()
             .contains("interrupted"));
     }
@@ -1147,7 +1599,7 @@ mod tests {
         ]);
         args.data_dir = temp.path().join("data");
         args.output = temp.path().join("results");
-        run(args.clone(), (), |_, _| Ok(Box::new(backend.clone()))).unwrap();
+        run(args.clone(), (), |_, _| Ok(Box::new_in(backend.clone(), System))).unwrap();
         assert_eq!(backend.rows.lock().unwrap().len(), 8);
         args.rate = Some(0.01);
         let keys = KeySpace::new(8);

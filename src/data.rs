@@ -1,15 +1,17 @@
 //! Seeded key sampling, commit-gated key allocation, and verifiable binary values.
 
-use crate::backend::Key;
-use serde::Serialize;
 use std::{
-    collections::BTreeMap,
+    alloc::System,
     ops::{Range, RangeInclusive},
     sync::{
         atomic::{AtomicU64, Ordering},
         Mutex,
     },
 };
+
+use serde::Serialize;
+
+use crate::backend::Key;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, clap::ValueEnum, Serialize)]
 #[serde(rename_all = "kebab-case")]
@@ -117,7 +119,7 @@ pub fn derive_seed(seed: u64, workload: &str, thread: usize) -> u64 {
 
 struct Reservations {
     next: u64,
-    pending: BTreeMap<u64, (u64, bool)>,
+    pending: Vec<Option<u64>, System>,
 }
 
 /// Published keys include only contiguous, successfully committed insert reservations.
@@ -134,7 +136,7 @@ impl KeySpace {
             acknowledged: AtomicU64::new(initial),
             reservations: Mutex::new(Reservations {
                 next: initial,
-                pending: BTreeMap::new(),
+                pending: Vec::new_in(System),
             }),
         }
     }
@@ -150,50 +152,54 @@ impl KeySpace {
         let end = self.acknowledged.load(Ordering::Acquire);
         self.floor.load(Ordering::Acquire).min(end)..end
     }
-    pub fn reserve(&self, count: u64) -> Result<Range<u64>, String> {
+    pub fn workers(&self, count: usize) {
+        let mut state = self.reservations.lock().unwrap();
+        assert!(state.pending.iter().all(Option::is_none));
+        state.pending.clear();
+        state.pending.resize(count, None);
+    }
+    pub fn reserve(&self, worker: usize, count: u64) -> Result<Range<u64>, String> {
         let mut state = self.reservations.lock().unwrap();
         let start = state.next;
         let end = start.checked_add(count).ok_or("key space exhausted")?;
         if count != 0 {
-            state.pending.insert(start, (end, false));
+            if state.pending[worker].is_none() {
+                state.pending[worker] = Some(start);
+            }
             state.next = end;
         }
         Ok(start..end)
     }
-    pub fn acknowledge(&self, range: Range<u64>) -> Result<(), String> {
-        if range.is_empty() {
-            return Ok(());
-        }
+    pub fn acknowledge(&self, worker: usize) -> Result<(), String> {
         let mut state = self.reservations.lock().unwrap();
-        let reservation = state
+        state.pending[worker] = None;
+        let end = state
             .pending
-            .get_mut(&range.start)
-            .ok_or("unknown insert reservation")?;
-        if reservation.0 != range.end || reservation.1 {
-            return Err("invalid insert acknowledgment".into());
-        }
-        reservation.1 = true;
-        let mut end = self.acknowledged.load(Ordering::Relaxed);
-        while let Some(&(next, true)) = state.pending.get(&end) {
-            state.pending.remove(&end);
-            end = next;
-        }
+            .iter()
+            .filter_map(|&start| start)
+            .min()
+            .unwrap_or(state.next);
         self.acknowledged.store(end, Ordering::Release);
         Ok(())
     }
     pub fn delete_oldest(&self, count: u64) -> Range<u64> {
-        let _state = self.reservations.lock().unwrap();
-        let start = self.floor.load(Ordering::Relaxed);
-        let end = start
-            .saturating_add(count)
-            .min(self.acknowledged.load(Ordering::Acquire));
-        self.floor.store(end, Ordering::Release);
-        start..end
+        let end = self.acknowledged.load(Ordering::Acquire);
+        let mut start = self.floor.load(Ordering::Acquire);
+        loop {
+            let next = start.saturating_add(count).min(end);
+            match self
+                .floor
+                .compare_exchange_weak(start, next, Ordering::AcqRel, Ordering::Acquire)
+            {
+                Ok(_) => return start..next,
+                Err(actual) => start = actual,
+            }
+        }
     }
 }
 
 pub struct ValuePool {
-    bytes: Vec<u8>,
+    bytes: Vec<u8, System>,
     sizes: RangeInclusive<usize>,
 }
 
@@ -203,8 +209,9 @@ impl ValuePool {
             return Err("value sizes must be at least 24 bytes and ascending".into());
         }
         let mut rng = RandomGenerator::new(seed);
-        let mut bytes = vec![0; 64 * 1024 * 1024];
-        for chunk in bytes.chunks_exact_mut(8) {
+        let mut bytes = Vec::with_capacity_in(64 * 1024 * 1024, System);
+        bytes.resize(64 * 1024 * 1024, 0);
+        for chunk in bytes.as_chunks_mut::<8>().0 {
             chunk.copy_from_slice(&rng.next_u64().to_le_bytes());
         }
         Ok(Self { bytes, sizes })
@@ -214,17 +221,63 @@ impl ValuePool {
         let len = *self.sizes.start() + (hash % ((*self.sizes.end() - *self.sizes.start() + 1) as u64)) as usize;
         (len, (hash.rotate_left(31) % self.bytes.len() as u64) as usize)
     }
-    pub fn fill(&self, key: Key, version: u64, output: &mut Vec<u8>) {
+    pub fn len(&self, key: Key, version: u64) -> usize {
+        self.layout(key, version).0
+    }
+    pub fn fill(&self, key: Key, version: u64, output: &mut [u8]) -> Result<(), String> {
         let (len, mut offset) = self.layout(key, version);
-        output.clear();
-        output.reserve(len);
-        output.extend_from_slice(key.as_bytes());
-        output.extend_from_slice(&version.to_be_bytes());
-        while output.len() < len {
-            let take = (len - output.len()).min(self.bytes.len() - offset);
-            output.extend_from_slice(&self.bytes[offset..offset + take]);
+        if output.len() != len {
+            return Err("value buffer length mismatch".into());
+        }
+        output[..16].copy_from_slice(key.as_bytes());
+        output[16..24].copy_from_slice(&version.to_be_bytes());
+        let mut position = 24;
+        while position < len {
+            let take = (len - position).min(self.bytes.len() - offset);
+            output[position..position + take].copy_from_slice(&self.bytes[offset..offset + take]);
+            position += take;
             offset = 0;
         }
+        Ok(())
+    }
+    pub fn fill_hex(&self, key: Key, output: &mut [u8]) -> Result<(), String> {
+        let (len, offset) = self.layout(key, 0);
+        if output.len() != len * 2 {
+            return Err("document payload length mismatch".into());
+        }
+        const HEX: &[u8; 16] = b"0123456789abcdef";
+        for (index, pair) in output.as_chunks_mut::<2>().0.iter_mut().enumerate() {
+            let byte = if index < 16 {
+                key.as_bytes()[index]
+            } else if index < 24 {
+                0
+            } else {
+                self.bytes[(offset + index - 24) % self.bytes.len()]
+            };
+            pair[0] = HEX[(byte >> 4) as usize];
+            pair[1] = HEX[(byte & 15) as usize];
+        }
+        Ok(())
+    }
+    pub fn verify_hex(&self, key: Key, value: &str) -> Result<(), String> {
+        let (len, offset) = self.layout(key, 0);
+        if value.len() != len * 2 {
+            return Err("document payload length mismatch".into());
+        }
+        const HEX: &[u8; 16] = b"0123456789abcdef";
+        for (index, pair) in value.as_bytes().as_chunks::<2>().0.iter().enumerate() {
+            let byte = if index < 16 {
+                key.as_bytes()[index]
+            } else if index < 24 {
+                0
+            } else {
+                self.bytes[(offset + index - 24) % self.bytes.len()]
+            };
+            if *pair != [HEX[(byte >> 4) as usize], HEX[(byte & 15) as usize]] {
+                return Err("document payload mismatch".into());
+            }
+        }
+        Ok(())
     }
     pub fn verify(&self, key: Key, value: &[u8]) -> Result<u64, String> {
         if value.len() < 24 || value[..16] != *key.as_bytes() {
@@ -251,14 +304,16 @@ impl ValuePool {
 #[cfg(test)]
 mod tests {
     use super::*;
+
     #[test]
     fn reservations_publish_only_after_gaps_commit() {
         let keys = KeySpace::new(10);
-        let first = keys.reserve(5).unwrap();
-        let second = keys.reserve(7).unwrap();
-        keys.acknowledge(second).unwrap();
+        keys.workers(2);
+        keys.reserve(0, 5).unwrap();
+        keys.reserve(1, 7).unwrap();
+        keys.acknowledge(1).unwrap();
         assert_eq!(keys.live(), 0..10);
-        keys.acknowledge(first).unwrap();
+        keys.acknowledge(0).unwrap();
         assert_eq!(keys.live(), 0..22);
         assert_eq!(keys.delete_oldest(30), 0..22);
         assert_eq!(keys.live(), 22..22);
@@ -266,12 +321,14 @@ mod tests {
     #[test]
     fn concurrent_reservations_are_unique() {
         let keys = KeySpace::new(0);
+        keys.workers(8);
         std::thread::scope(|scope| {
-            for _ in 0..8 {
-                scope.spawn(|| {
+            for worker in 0..8 {
+                let keys = &keys;
+                scope.spawn(move || {
                     for _ in 0..1000 {
-                        let range = keys.reserve(3).unwrap();
-                        keys.acknowledge(range).unwrap();
+                        keys.reserve(worker, 3).unwrap();
+                        keys.acknowledge(worker).unwrap();
                     }
                 });
             }
@@ -282,8 +339,9 @@ mod tests {
     fn verification_rejects_damage_and_wrong_keys() {
         let pool = ValuePool::new(42, 24..=1024).unwrap();
         let key = Key::from_u128(123);
-        let mut value = Vec::new();
-        pool.fill(key, 7, &mut value);
+        let mut value = Vec::with_capacity_in(pool.len(key, 7), System);
+        value.resize(pool.len(key, 7), 0);
+        pool.fill(key, 7, &mut value).unwrap();
         assert_eq!(pool.verify(key, &value).unwrap(), 7);
         assert!(pool.verify(Key::from_u128(124), &value).is_err());
         let end = value.len() - 1;

@@ -25,12 +25,13 @@ def main():
     rows = []
     for path in paths:
         report = json.loads(path.read_text())
-        if report.get("schema_version") != 1:
+        if report.get("schema_version") not in (1, 2):
             raise ValueError(f"Unsupported report schema: {path}")
+        version = report["schema_version"]
         config = report["workload"]
-        label = f"{report['config']['backend']} · {config['data_model']} · {config['records'][0]:,} records · {config['threads'][0]} threads · {path.stem.rsplit('-', 1)[-1][:6]}"
+        label = f"schema {version} · {report['config']['backend']} · {config['data_model']} · {config['records'][0]:,} records · {config['threads'][0]} threads · {path.stem.rsplit('-', 1)[-1][:6]}"
         rows.extend(
-            (label, config["data_model"], phase)
+            (label, f"schema {version} / {config['data_model']}", phase)
             for phase in report["phases"]
             if phase["status"] == "completed"
         )

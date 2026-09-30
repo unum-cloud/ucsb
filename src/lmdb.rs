@@ -9,13 +9,24 @@
 //!     --bin crud-eval-lmdb -- --records 100K --threads 4
 //! ```
 
-use clap::Parser;
-use crudeval::{backend::*, run, CommonArgs};
-use heed::{types::Bytes, Database, Env, EnvFlags, EnvOpenOptions};
-use serde_json::json;
+#![feature(allocator_ext, btreemap_alloc)]
+
 use std::{
+    alloc::System,
     collections::BTreeMap,
     path::{Path, PathBuf},
+};
+
+use clap::Parser;
+use heed::{types::Bytes, Database, Env, EnvFlags, EnvOpenOptions};
+use serde_json::json;
+
+use crudeval::{
+    backend::{
+        directory_bytes, Backend, BackendCapabilities, BackendSession, DataModel, Durability, Key, KeysOutput,
+        RecordInput, RecordOutput, Result, TransactionSession,
+    },
+    run, CommonArgs,
 };
 
 #[derive(Parser)]
@@ -60,8 +71,9 @@ impl LmdbBackend {
     }
 }
 impl Backend for LmdbBackend {
-    fn metadata(&self) -> BTreeMap<String, serde_json::Value> {
-        BTreeMap::from([
+    fn metadata(&self) -> BTreeMap<String, serde_json::Value, System> {
+        let mut metadata = BTreeMap::new_in(System);
+        metadata.extend([
             ("backend".into(), json!("lmdb")),
             ("client_version".into(), json!("heed 0.22.1")),
             ("library_version".into(), json!(heed::lmdb_version().string)),
@@ -75,7 +87,8 @@ impl Backend for LmdbBackend {
             ),
             ("durability".into(), json!(self.durability)),
             ("map_size".into(), json!(self.map_size)),
-        ])
+        ]);
+        metadata
     }
     fn capabilities(&self) -> BackendCapabilities {
         BackendCapabilities {
@@ -84,11 +97,14 @@ impl Backend for LmdbBackend {
             ..Default::default()
         }
     }
-    fn session(&self) -> Result<Box<dyn BackendSession + '_>> {
-        Ok(Box::new(LmdbSession {
-            backend: self,
-            transaction: None,
-        }))
+    fn session(&self) -> Result<Box<dyn BackendSession + '_, System>> {
+        Ok(Box::new_in(
+            LmdbSession {
+                backend: self,
+                transaction: None,
+            },
+            System,
+        ))
     }
     fn flush(&self) -> Result<()> {
         self.env.force_sync().map_err(|e| e.to_string())
@@ -113,7 +129,7 @@ impl LmdbSession<'_> {
     }
 }
 impl BackendSession for LmdbSession<'_> {
-    fn insert(&mut self, keys: &[Key], values: &RecordBatch) -> Result<usize> {
+    fn insert(&mut self, keys: &[Key], values: &RecordInput<'_>) -> Result<usize> {
         let db = self.backend.db;
         self.write(|tx| {
             for (i, key) in keys.iter().enumerate() {
@@ -123,7 +139,7 @@ impl BackendSession for LmdbSession<'_> {
             Ok(keys.len())
         })
     }
-    fn read(&mut self, keys: &[Key], output: &mut RecordBatch) -> Result<usize> {
+    fn read(&mut self, keys: &[Key], output: &mut RecordOutput<'_>) -> Result<usize> {
         output.clear();
         let read;
         let tx: &heed::RoTxn = if let Some(tx) = &self.transaction {
@@ -136,11 +152,11 @@ impl BackendSession for LmdbSession<'_> {
         for key in keys {
             let value = self.backend.db.get(tx, key.as_bytes()).map_err(|e| e.to_string())?;
             found += usize::from(value.is_some());
-            output.push(value);
+            output.push(value)?;
         }
         Ok(found)
     }
-    fn update(&mut self, keys: &[Key], values: &RecordBatch) -> Result<usize> {
+    fn update(&mut self, keys: &[Key], values: &RecordInput<'_>) -> Result<usize> {
         let db = self.backend.db;
         self.write(|tx| {
             let mut count = 0;
@@ -164,7 +180,13 @@ impl BackendSession for LmdbSession<'_> {
             Ok(count)
         })
     }
-    fn range_read(&mut self, start: Key, limit: usize, keys: &mut Vec<Key>, output: &mut RecordBatch) -> Result<usize> {
+    fn range_read(
+        &mut self,
+        start: Key,
+        limit: usize,
+        keys: &mut KeysOutput<'_>,
+        output: &mut RecordOutput<'_>,
+    ) -> Result<usize> {
         keys.clear();
         output.clear();
         let read;
@@ -186,11 +208,14 @@ impl BackendSession for LmdbSession<'_> {
             .take(limit)
         {
             let (key, value) = row.map_err(|e| e.to_string())?;
-            keys.push(Key::from_slice(key).map_err(|e| e.to_string())?);
-            output.push(Some(value));
+            keys.push(Key::from_slice(key).map_err(|e| e.to_string())?)?;
+            output.push(Some(value))?;
         }
         Ok(keys.len())
     }
+}
+
+impl TransactionSession for LmdbSession<'_> {
     fn begin(&mut self) -> Result<()> {
         if self.transaction.is_some() {
             return Err("transaction already active".into());
@@ -217,11 +242,14 @@ fn main() -> Result<()> {
         if args.data_model != DataModel::KeyValue {
             return Err("LMDB supports only kv data_model".into());
         }
-        Ok(Box::new(LmdbBackend::open(
-            path,
-            args.durability,
-            usize::try_from(cli.map_size).map_err(|_| "map size exceeds platform limit")?,
-        )?))
+        Ok(Box::new_in(
+            LmdbBackend::open(
+                path,
+                args.durability,
+                usize::try_from(cli.map_size).map_err(|_| "map size exceeds platform limit")?,
+            )?,
+            System,
+        ))
     })
 }
 

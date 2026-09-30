@@ -8,18 +8,23 @@
 //! cargo run --release --no-default-features --features falkordb-backend \
 //!     --bin crud-eval-falkordb -- --records 1K --threads 4 --data-model graph
 //! ```
+#![feature(allocator_ext, btreemap_alloc)]
 
 mod cypher;
+
+use std::{alloc::System, collections::BTreeMap, io::Write, path::Path};
+
 use clap::Parser;
+use redis::{Client, Connection as RedisConnection, Value as RedisValue};
+use serde_json::{json, Value};
+
+use crate::cypher::{CypherConnection, CypherOutput, CypherSession, GraphRow, Parameters, Shape};
 use crudeval::{
-    backend::{Backend, BackendCapabilities, BackendSession, DataModel, Durability, Result},
+    backend::{Backend, BackendCapabilities, BackendSession, BatchMode, DataModel, Durability, Key, Result},
     docker::ContainerHandle,
     run, CommonArgs,
 };
-use cypher::{CypherConnection, CypherSession};
-use redis::{Client, Connection as RedisConnection, Value as RedisValue};
-use serde_json::{json, Value};
-use std::{collections::BTreeMap, path::Path};
+
 #[derive(Parser)]
 struct Cli {
     #[command(flatten)]
@@ -31,39 +36,113 @@ struct FalkorDbBackend {
     durability: Durability,
 }
 struct FalkorDbConnection(RedisConnection);
+fn scalar_i64(value: &RedisValue) -> Result<Option<i64>> {
+    match value {
+        RedisValue::Nil => Ok(None),
+        RedisValue::Int(n) => Ok(Some(*n)),
+        _ => Err("Expected integer graph scalar".into()),
+    }
+}
+fn scalar_key(value: &RedisValue) -> Result<Option<Key>> {
+    match value {
+        RedisValue::Nil => Ok(None),
+        RedisValue::BulkString(bytes) => Key::parse_str(std::str::from_utf8(bytes).map_err(|e| e.to_string())?)
+            .map(Some)
+            .map_err(|e| e.to_string()),
+        _ => Err("Expected UUID graph scalar".into()),
+    }
+}
 impl CypherConnection for FalkorDbConnection {
-    fn rows(&mut self, query: &str, columns: usize) -> Result<Vec<Vec<String>>> {
+    fn execute(&mut self, query: &str, params: &Parameters, output: &mut CypherOutput<'_, '_, '_>) -> Result<usize> {
+        let mut wire = Vec::new_in(System);
+        wire.extend_from_slice(b"CYPHER ");
+        macro_rules! parameter {
+            ($name:literal,$value:expr) => {
+                if query.contains(concat!("$", $name)) {
+                    wire.extend_from_slice(concat!($name, "=").as_bytes());
+                    serde_json::to_writer(&mut wire, $value).map_err(|e| e.to_string())?;
+                    wire.push(b' ');
+                }
+            };
+        }
+        parameter!("keys", params.keys.as_slice());
+        parameter!("start", &params.start);
+        parameter!("limit", &params.limit);
+        if query.contains("$vertices") {
+            wire.extend_from_slice(b"vertices=[");
+            for (i, row) in params.vertices.iter().enumerate() {
+                if i > 0 {
+                    wire.push(b',');
+                }
+                write!(wire, "{{id:'{}',version:{},edges:[", row.id, row.version).map_err(|e| e.to_string())?;
+                for (j, edge) in row.edges.iter().enumerate() {
+                    if j > 0 {
+                        wire.push(b',');
+                    }
+                    write!(wire, "{{slot:{},target:'{}'}}", edge.slot, edge.target).map_err(|e| e.to_string())?;
+                }
+                wire.extend_from_slice(b"]}");
+            }
+            wire.extend_from_slice(b"] ");
+        }
+        if query.contains("$patches") {
+            wire.extend_from_slice(b"patches=[");
+            for (i, row) in params.patches.iter().enumerate() {
+                if i > 0 {
+                    wire.push(b',');
+                }
+                write!(wire, "{{id:'{}',version:{},neighbor:", row.id, row.version).map_err(|e| e.to_string())?;
+                match row.neighbor {
+                    Some(key) => write!(wire, "'{key}'").map_err(|e| e.to_string())?,
+                    None => wire.extend_from_slice(b"null"),
+                };
+                wire.push(b'}');
+            }
+            wire.extend_from_slice(b"] ");
+        }
+        wire.extend_from_slice(query.as_bytes());
         let response: RedisValue = redis::cmd("GRAPH.QUERY")
             .arg("crudeval")
-            .arg(query)
+            .arg(wire.as_slice())
             .query(&mut self.0)
             .map_err(|e| e.to_string())?;
+        output.clear();
         let RedisValue::Array(parts) = response else {
             return Err("Invalid graph response".into());
         };
         if parts.len() == 1 {
-            return Ok(Vec::new());
+            return Ok(0);
         }
         let Some(RedisValue::Array(rows)) = parts.get(1) else {
             return Err("Missing graph result rows".into());
         };
-        rows.iter()
-            .map(|row| {
-                let RedisValue::Array(values) = row else {
-                    return Err("Invalid graph row".into());
-                };
-                if values.len() != columns {
-                    return Err("Wrong graph column count".into());
+        for row in rows {
+            let RedisValue::Array(cells) = row else {
+                return Err("Invalid graph row".into());
+            };
+            match output.shape {
+                Shape::Count => {
+                    output.count = scalar_i64(cells.first().ok_or("Missing count")?)?.ok_or("Null count")? as usize
                 }
-                values
-                    .iter()
-                    .map(|v| redis::from_redis_value::<String>(v.clone()).map_err(|e| e.to_string()))
-                    .collect()
-            })
-            .collect()
+                Shape::Keys => output.key(scalar_key(cells.first().ok_or("Missing key")?)?.ok_or("Null key")?)?,
+                Shape::Vertices => {
+                    if cells.len() != 5 {
+                        return Err("Wrong graph column count".into());
+                    }
+                    output.row(GraphRow {
+                        index: scalar_i64(&cells[0])?.ok_or("Missing row index")?,
+                        key: scalar_key(&cells[1])?,
+                        version: scalar_i64(&cells[2])?.map(|v| v as u64),
+                        target: scalar_key(&cells[3])?,
+                        slot: scalar_i64(&cells[4])?.map(|v| v as u32),
+                    })?;
+                }
+            }
+        }
+        output.finish()
     }
 }
-fn open(args: &CommonArgs, path: &Path) -> Result<Box<dyn Backend>> {
+fn open(args: &CommonArgs, path: &Path) -> Result<Box<dyn Backend, System>> {
     if args.reopen || args.drop_caches {
         return Err("Docker backends do not support --reopen or --drop-caches".into());
     }
@@ -93,38 +172,63 @@ fn open(args: &CommonArgs, path: &Path) -> Result<Box<dyn Backend>> {
     let client = Client::open(format!("redis://127.0.0.1:{}/", container.port)).map_err(|e| e.to_string())?;
     container.ready(|| {
         let mut c = FalkorDbConnection(client.get_connection().map_err(|e| e.to_string())?);
-        c.rows("RETURN 'ready' AS c0", 1).map(|_| ())
+        c.execute(
+            "RETURN 1 AS count",
+            &Parameters::default(),
+            &mut CypherOutput::new(Shape::Count, None, None),
+        )
+        .map(|_| ())
     })?;
     let mut connection = FalkorDbConnection(client.get_connection().map_err(|e| e.to_string())?);
-    if let Err(error) = connection.rows("CREATE INDEX FOR (v:Vertex) ON (v.id)", 0) {
+    if let Err(error) = connection.execute(
+        "CREATE INDEX FOR (v:Vertex) ON (v.id)",
+        &Parameters::default(),
+        &mut CypherOutput::new(Shape::Count, None, None),
+    ) {
         if !error.contains("'id' is already indexed") {
             return Err(error);
         }
     }
-    Ok(Box::new(FalkorDbBackend {
-        container,
-        client,
-        durability: args.durability,
-    }))
+    Ok(Box::new_in(
+        FalkorDbBackend {
+            container,
+            client,
+            durability: args.durability,
+        },
+        System,
+    ))
 }
 impl Backend for FalkorDbBackend {
-    fn metadata(&self) -> BTreeMap<String, Value> {
-        BTreeMap::from([
-            ("backend".into(), json!("falkordb")),
-            ("image".into(), json!("falkordb/falkordb:6.0.0")),
-            ("durability".into(), json!(self.durability)),
-        ])
+    fn metadata(&self) -> BTreeMap<String, Value, System> {
+        {
+            let mut metadata = BTreeMap::new_in(System);
+            metadata.extend([
+                ("backend".into(), json!("falkordb")),
+                ("image".into(), json!("falkordb/falkordb:6.0.0")),
+                ("durability".into(), json!(self.durability)),
+            ]);
+            metadata
+        }
     }
     fn capabilities(&self) -> BackendCapabilities {
         BackendCapabilities {
+            data_models: &[DataModel::Graph],
             ordered_ranges: true,
-            ..Default::default()
+            transactions: false,
+            batch_read: BatchMode::Native,
+            batch_insert: BatchMode::Native,
+            batch_update: BatchMode::Native,
+            batch_delete: BatchMode::Native,
+            bulk_load: BatchMode::Native,
         }
     }
-    fn session(&self) -> Result<Box<dyn BackendSession + '_>> {
-        Ok(Box::new(CypherSession(FalkorDbConnection(
-            self.client.get_connection().map_err(|e| e.to_string())?,
-        ))))
+    fn session(&self) -> Result<Box<dyn BackendSession + '_, System>> {
+        Ok(Box::new_in(
+            CypherSession::new(FalkorDbConnection(
+                self.client.get_connection().map_err(|e| e.to_string())?,
+            )),
+            System,
+        ))
     }
     fn flush(&self) -> Result<()> {
         redis::cmd("SAVE")
@@ -143,5 +247,23 @@ fn main() {
     if let Err(error) = run(cli.common, "falkordb/falkordb:6.0.0", open) {
         eprintln!("{error}");
         std::process::exit(1);
+    }
+}
+
+#[cfg(test)]
+#[test]
+#[ignore = "starts pinned Docker servers"]
+fn native_protocol_contract() {
+    for data_model in [DataModel::Graph] {
+        let path = tempfile::tempdir().unwrap();
+        let mut args = Cli::parse_from(["contract"]).common;
+        args.data_model = data_model;
+        args.durability = Durability::None;
+        let backend = open(&args, path.path()).unwrap();
+        match data_model {
+            DataModel::Documents => crudeval::assert_document_contract!(backend.as_ref()),
+            DataModel::Graph => crudeval::assert_graph_contract!(backend.as_ref()),
+            _ => unreachable!(),
+        };
     }
 }

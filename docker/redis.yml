@@ -10,20 +10,23 @@ services:
       timeout: 2s
       retries: 60
   valkey:
-    image: valkey/valkey:9.1.2
+    image: valkey/valkey-bundle:9.1.2
     profiles: [valkey]
     ports: ["127.0.0.1::6379"]
-    command: ["valkey-server", "--save", "", "--appendonly", "no"]
+    command: ["--save", "", "--appendonly", "no"]
   dragonfly:
     image: ghcr.io/dragonflydb/dragonfly:v2.0.0
     profiles: [dragonfly]
     ports: ["127.0.0.1::6379"]
-    command: ["--dir=/data", "--dbfilename=crudeval", "--snapshot_cron="]
+    command: ["--dir=/data", "--dbfilename=crudeval", "--snapshot_cron=", "--logtostderr"]
   garnet:
-    image: ghcr.io/microsoft/garnet:2.1.8
+    image: crudeval-garnet-json:2.1.8
+    build:
+      context: .
+      dockerfile: garnet-json.Dockerfile
     profiles: [garnet]
     ports: ["127.0.0.1::6379"]
-    command: ["--bind", "0.0.0.0", "--port", "6379", "--storage-tier", "--recover", "--logdir", "/data/log", "--checkpointdir", "/data/checkpoint", "--memory", "256m", "--index", "64m"]
+    command: ["--lua", "--lua-transaction-mode", "--loadmodulecs", "/app/modules/GarnetJSON.dll", "--extension-bin-paths", "/app/modules", "--bind", "0.0.0.0", "--port", "6379", "--storage-tier", "--recover", "--logdir", "/data/log", "--checkpointdir", "/data/checkpoint", "--memory", "256m", "--index", "64m"]
   kvrocks:
     image: apache/kvrocks:2.17.0
     profiles: [kvrocks]

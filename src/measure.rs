@@ -1,13 +1,18 @@
 //! Worker-local latency histograms and sampled process resource usage.
 
-use crate::Result;
+use std::{
+    alloc::System,
+    collections::BTreeMap,
+    sync::mpsc,
+    thread::JoinHandle,
+    time::{Duration, Instant},
+};
+
 use hdrhistogram::Histogram;
 use serde::Serialize;
-use std::collections::BTreeMap;
-use std::sync::mpsc;
-use std::thread::JoinHandle;
-use std::time::{Duration, Instant};
-use sysinfo::{ProcessesToUpdate, System};
+use sysinfo::{ProcessesToUpdate, System as ProcessSystem};
+
+use crate::{workload::Operation, Result};
 
 #[derive(Default, Serialize)]
 pub struct LatencySummary {
@@ -19,7 +24,6 @@ pub struct LatencySummary {
     pub max_ns: u64,
 }
 
-#[derive(Default)]
 pub struct WorkloadMeasurements {
     pub elapsed: Duration,
     pub calls: u64,
@@ -29,29 +33,77 @@ pub struct WorkloadMeasurements {
     pub aborted: u64,
     pub corrupted: u64,
     pub processed_bytes: u64,
-    pub histograms: BTreeMap<String, Histogram<u64>>,
-    pub timeline: Vec<u64>,
+    pub histograms: [Option<Histogram<u64>>; 9],
+    pub timeline_buffer_growths: u64,
+    pub timeline: Vec<u64, System>,
     pub error: Option<String>,
     pub hardware_counters: Option<crate::perf_counters::CounterSample>,
 }
 
-impl WorkloadMeasurements {
-    pub fn record(&mut self, operation: &str, latency: Duration, elapsed: Duration, entries: u64) -> Result<()> {
-        if !self.histograms.contains_key(operation) {
-            self.histograms
-                .insert(operation.to_owned(), Histogram::new(3).map_err(|e| e.to_string())?);
+impl Default for WorkloadMeasurements {
+    fn default() -> Self {
+        Self {
+            elapsed: Duration::ZERO,
+            calls: 0,
+            entries: 0,
+            missing: 0,
+            failed: 0,
+            aborted: 0,
+            corrupted: 0,
+            processed_bytes: 0,
+            histograms: std::array::from_fn(|_| None),
+            timeline_buffer_growths: 0,
+            timeline: Vec::new_in(System),
+            error: None,
+            hardware_counters: None,
         }
-        self.histograms
-            .get_mut(operation)
-            .unwrap()
+    }
+}
+impl WorkloadMeasurements {
+    pub fn new(
+        operations: impl IntoIterator<Item = Operation>,
+        transaction: bool,
+        timeline_seconds: usize,
+    ) -> Result<Self> {
+        let mut result = Self::default();
+        for operation in operations {
+            result.histograms[operation as usize] =
+                Some(Histogram::new_with_max(u64::MAX, 3).map_err(|e| e.to_string())?);
+        }
+        if transaction {
+            result.histograms[8] = Some(Histogram::new_with_max(u64::MAX, 3).map_err(|e| e.to_string())?);
+        }
+        result
+            .timeline
+            .try_reserve(timeline_seconds)
+            .map_err(|e| e.to_string())?;
+        Ok(result)
+    }
+    fn record_index(&mut self, index: usize, latency: Duration) -> Result<()> {
+        self.histograms[index]
+            .as_mut()
+            .ok_or("unprepared latency histogram")?
             .record(latency.as_nanos().min(u64::MAX as u128) as u64)
             .map_err(|e| e.to_string())?;
+        self.calls += 1;
+        Ok(())
+    }
+    pub fn record_attempt(&mut self, operation: Operation, latency: Duration) -> Result<()> {
+        self.record_index(operation as usize, latency)
+    }
+    pub fn record_commit(&mut self, latency: Duration) -> Result<()> {
+        self.record_index(8, latency)
+    }
+    pub fn publish(&mut self, elapsed: Duration, entries: u64, missing: u64, bytes: u64) {
+        self.entries += entries;
+        self.missing += missing;
+        self.processed_bytes += bytes;
         let second = elapsed.as_secs() as usize;
+        if second >= self.timeline.capacity() {
+            self.timeline_buffer_growths += 1;
+        }
         self.timeline.resize(self.timeline.len().max(second + 1), 0);
         self.timeline[second] += entries;
-        self.calls += 1;
-        self.entries += entries;
-        Ok(())
     }
 
     pub fn merge(&mut self, other: Self) -> Result<()> {
@@ -63,13 +115,16 @@ impl WorkloadMeasurements {
         self.aborted += other.aborted;
         self.corrupted += other.corrupted;
         self.processed_bytes += other.processed_bytes;
-        for (name, histogram) in other.histograms {
-            if let Some(existing) = self.histograms.get_mut(&name) {
-                existing.add(&histogram).map_err(|e| e.to_string())?;
-            } else {
-                self.histograms.insert(name, histogram);
+        for (existing, histogram) in self.histograms.iter_mut().zip(other.histograms) {
+            if let Some(histogram) = histogram {
+                if let Some(existing) = existing {
+                    existing.add(&histogram).map_err(|e| e.to_string())?;
+                } else {
+                    *existing = Some(histogram);
+                }
             }
         }
+        self.timeline_buffer_growths += other.timeline_buffer_growths;
         self.timeline.resize(self.timeline.len().max(other.timeline.len()), 0);
         for (second, count) in other.timeline.into_iter().enumerate() {
             self.timeline[second] += count;
@@ -88,20 +143,34 @@ impl WorkloadMeasurements {
     }
 
     pub fn latencies(&self) -> BTreeMap<String, LatencySummary> {
+        const NAMES: [&str; 9] = [
+            "insert",
+            "read",
+            "update",
+            "delete",
+            "range-read",
+            "read-modify-write",
+            "bulk-load",
+            "full-scan",
+            "commit",
+        ];
         self.histograms
             .iter()
-            .map(|(name, h)| {
-                (
-                    name.clone(),
-                    LatencySummary {
-                        count: h.len(),
-                        p50_ns: h.value_at_quantile(0.5),
-                        p90_ns: h.value_at_quantile(0.9),
-                        p99_ns: h.value_at_quantile(0.99),
-                        p999_ns: h.value_at_quantile(0.999),
-                        max_ns: h.max(),
-                    },
-                )
+            .enumerate()
+            .filter_map(|(index, h)| {
+                h.as_ref().filter(|h| !h.is_empty()).map(|h| {
+                    (
+                        NAMES[index].to_string(),
+                        LatencySummary {
+                            count: h.len(),
+                            p50_ns: h.value_at_quantile(0.5),
+                            p90_ns: h.value_at_quantile(0.9),
+                            p99_ns: h.value_at_quantile(0.99),
+                            p999_ns: h.value_at_quantile(0.999),
+                            max_ns: h.max(),
+                        },
+                    )
+                })
             })
             .collect()
     }
@@ -131,7 +200,7 @@ impl ResourceSampler {
         let (ready, initialized) = mpsc::sync_channel(0);
         let handle = std::thread::spawn(move || {
             let pid = sysinfo::get_current_pid().unwrap();
-            let mut system = System::new();
+            let mut system = ProcessSystem::new();
             system.refresh_processes(ProcessesToUpdate::Some(&[pid]), true);
             let initial = system.process(pid).map(|p| (p.accumulated_cpu_time(), p.disk_usage()));
             let start = Instant::now();
@@ -181,5 +250,28 @@ impl ResourceSampler {
     pub fn stop(self) -> Result<ResourceUsage> {
         let _ = self.stop.send(());
         self.handle.join().map_err(|_| "resource sampler panicked".into())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn transaction_measurements_reuse_histograms_and_timeline() {
+        let mut measurements = WorkloadMeasurements::new([Operation::Read], true, 3).unwrap();
+        crate::backend::tests::assert_no_global_allocations(|| {
+            for _ in 0..100 {
+                measurements
+                    .record_attempt(Operation::Read, Duration::from_micros(10))
+                    .unwrap();
+                measurements.record_commit(Duration::from_micros(20)).unwrap();
+                measurements.publish(Duration::from_secs(1), 1, 0, 32);
+            }
+        });
+        assert_eq!(measurements.calls, 200);
+        assert_eq!(measurements.entries, 100);
+        assert_eq!(measurements.timeline_buffer_growths, 0);
+        assert_eq!(measurements.timeline.as_slice(), &[0, 100]);
     }
 }

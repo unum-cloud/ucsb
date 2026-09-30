@@ -1,13 +1,18 @@
 //! Configuration reports, machine information, and atomic JSON output.
 
+use std::{
+    alloc::System,
+    collections::BTreeMap,
+    path::{Path, PathBuf},
+};
+
+use serde::Serialize;
+use serde_json::Value;
+
 use crate::{
     measure::{LatencySummary, ResourceUsage},
     BackendCapabilities, CommonArgs, Result,
 };
-use serde::Serialize;
-use serde_json::Value;
-use std::collections::BTreeMap;
-use std::path::{Path, PathBuf};
 
 #[derive(Serialize)]
 pub struct WorkloadReport {
@@ -24,7 +29,9 @@ pub struct WorkloadReport {
     pub corrupted: u64,
     pub processed_bytes: u64,
     pub latency: BTreeMap<String, LatencySummary>,
-    pub timeline_entries: Vec<u64>,
+    #[serde(serialize_with = "serialize_timeline")]
+    pub timeline_entries: Vec<u64, System>,
+    pub timeline_buffer_growths: u64,
     pub client_usage: ResourceUsage,
     pub server_usage: Option<Value>,
     pub hardware_counters: Option<crate::perf_counters::CounterSample>,
@@ -59,7 +66,8 @@ pub struct ConfigReport {
     pub started_unix_seconds: u64,
     pub machine: MachineInfo,
     pub workload: CommonArgs,
-    pub config: BTreeMap<String, Value>,
+    #[serde(serialize_with = "serialize_config")]
+    pub config: BTreeMap<String, Value, System>,
     pub capabilities: BackendCapabilities,
     pub phases: Vec<WorkloadReport>,
 }
@@ -104,7 +112,10 @@ pub fn write_report(directory: &Path, report: &ConfigReport) -> Result<PathBuf> 
         .get("backend")
         .and_then(Value::as_str)
         .unwrap_or("unknown");
-    let hash = config_hash(&(&report.workload, &report.config))?;
+    let hash = config_hash(&(
+        &report.workload,
+        report.config.iter().collect::<std::collections::BTreeMap<_, _>>(),
+    ))?;
     let path = directory.join(format!("{backend}-{hash}.json"));
     let temporary = path.with_extension(format!("{}.tmp", std::process::id()));
     let file = std::fs::File::create(&temporary).map_err(|e| e.to_string())?;
@@ -112,4 +123,24 @@ pub fn write_report(directory: &Path, report: &ConfigReport) -> Result<PathBuf> 
     file.sync_all().map_err(|e| e.to_string())?;
     std::fs::rename(&temporary, &path).map_err(|e| e.to_string())?;
     Ok(path)
+}
+
+fn serialize_config<S: serde::Serializer>(
+    value: &BTreeMap<String, Value, System>,
+    serializer: S,
+) -> std::result::Result<S::Ok, S::Error> {
+    use serde::ser::SerializeMap;
+
+    let mut map = serializer.serialize_map(Some(value.len()))?;
+    for (key, value) in value {
+        map.serialize_entry(key, value)?;
+    }
+    map.end()
+}
+
+fn serialize_timeline<S: serde::Serializer>(
+    value: &Vec<u64, System>,
+    serializer: S,
+) -> std::result::Result<S::Ok, S::Error> {
+    value.as_slice().serialize(serializer)
 }

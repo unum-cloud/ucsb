@@ -23,6 +23,7 @@ pub struct PerfCounters {
 impl PerfCounters {
     pub fn start() -> std::io::Result<Self> {
         use perf_event::{events::Hardware, Builder, Group};
+
         let mut group = Group::new()?;
         let cycles = group.add(&Builder::new(Hardware::CPU_CYCLES))?;
         let instructions = group.add(&Builder::new(Hardware::INSTRUCTIONS))?;

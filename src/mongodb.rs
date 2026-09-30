@@ -8,19 +8,27 @@
 //! cargo run --release --no-default-features --features mongodb-backend \
 //!     --bin crud-eval-mongodb -- --records 100K --threads 4 --durability buffered
 //! ```
+#![feature(allocator_ext, btreemap_alloc)]
+
+use std::{alloc::System, collections::BTreeMap, path::Path};
 
 use clap::{Parser, ValueEnum};
+use mongodb::{
+    bson::{doc, spec::BinarySubtype, Binary, Bson, Document},
+    sync::{Client, Collection, Database},
+};
+use serde_json::{json, Value};
+
 use crudeval::{
-    backend::{Backend, BackendCapabilities, BackendSession, DataModel, Durability, Key, RecordBatch, Result},
+    backend::{
+        Backend, BackendCapabilities, BackendSession, BatchMode, DataModel, DocumentInput, DocumentOutput,
+        DocumentPatch, DocumentRef, DocumentSession, Durability, Key, KeysOutput, RecordInput, RecordOutput, Result,
+        TransactionSession,
+    },
     docker::{ContainerHandle, NetworkHandle},
     run, CommonArgs,
 };
-use mongodb::{
-    bson::{self, doc, spec::BinarySubtype, Binary, Bson, Document},
-    sync::{Client, Collection},
-};
-use serde_json::{json, Value};
-use std::{collections::BTreeMap, path::Path};
+
 #[derive(Clone, Copy, Debug, ValueEnum)]
 enum Server {
     Mongodb,
@@ -45,6 +53,8 @@ struct MongoDbBackend {
 }
 struct MongoDbSession {
     collection: Collection<Document>,
+    database: Database,
+    rows: Vec<(Key, Document), System>,
     data_model: DataModel,
 }
 fn id(key: Key) -> Bson {
@@ -53,7 +63,7 @@ fn id(key: Key) -> Bson {
         bytes: key.as_bytes().to_vec(),
     })
 }
-fn open(args: &CommonArgs, path: &Path, server: Server) -> Result<Box<dyn Backend>> {
+fn open(args: &CommonArgs, path: &Path, server: Server) -> Result<Box<dyn Backend, System>> {
     if args.reopen || args.drop_caches {
         return Err("Docker backends do not support --reopen or --drop-caches".into());
     }
@@ -163,43 +173,59 @@ fn open(args: &CommonArgs, path: &Path, server: Server) -> Result<Box<dyn Backen
             .map(|_| ())
             .map_err(|e| e.to_string())
     })?;
-    Ok(Box::new(MongoDbBackend {
-        container,
-        postgres,
-        _network: network,
-        server,
-        image,
-        client,
-        data_model: args.data_model,
-        durability: args.durability,
-    }))
+    Ok(Box::new_in(
+        MongoDbBackend {
+            container,
+            postgres,
+            _network: network,
+            server,
+            image,
+            client,
+            data_model: args.data_model,
+            durability: args.durability,
+        },
+        System,
+    ))
 }
 impl Backend for MongoDbBackend {
-    fn metadata(&self) -> BTreeMap<String, Value> {
-        BTreeMap::from([
-            ("backend".into(), json!(format!("{:?}", self.server).to_lowercase())),
-            ("image".into(), json!(self.image)),
-            ("durability".into(), json!(self.durability)),
-            ("journal_or_wal_enabled".into(), json!(true)),
-            (
-                "batch_writes".into(),
-                json!({"insert":"native", "delete":"native", "update":"per document"}),
-            ),
-        ])
+    fn metadata(&self) -> BTreeMap<String, Value, System> {
+        {
+            let mut metadata = BTreeMap::new_in(System);
+            metadata.extend([
+                ("backend".into(), json!(format!("{:?}", self.server).to_lowercase())),
+                ("image".into(), json!(self.image)),
+                ("durability".into(), json!(self.durability)),
+                ("journal_or_wal_enabled".into(), json!(true)),
+                (
+                    "batch_writes".into(),
+                    json!({"insert":"native", "delete":"native", "update":"native update command"}),
+                ),
+            ]);
+            metadata
+        }
     }
     fn capabilities(&self) -> BackendCapabilities {
         BackendCapabilities {
+            data_models: &[DataModel::KeyValue, DataModel::Documents],
             ordered_ranges: true,
-            native_batch_read: true,
-            native_batch_write: false,
-            ..Default::default()
+            transactions: false,
+            batch_read: BatchMode::Native,
+            batch_insert: BatchMode::Native,
+            batch_update: BatchMode::Native,
+            batch_delete: BatchMode::Native,
+            bulk_load: BatchMode::Native,
         }
     }
-    fn session(&self) -> Result<Box<dyn BackendSession + '_>> {
-        Ok(Box::new(MongoDbSession {
-            collection: self.client.database("crudeval").collection("records"),
-            data_model: self.data_model,
-        }))
+    fn session(&self) -> Result<Box<dyn BackendSession + '_, System>> {
+        Ok(Box::new_in(
+            MongoDbSession {
+                collection: self.client.database("crudeval").collection("records"),
+                database: self.client.database("crudeval"),
+                rows: Vec::new_in(System),
+                data_model: self.data_model,
+            },
+            System,
+        ))
     }
     fn flush(&self) -> Result<()> {
         if let Some(postgres) = &self.postgres {
@@ -215,7 +241,11 @@ impl Backend for MongoDbBackend {
             .map_err(|e| e.to_string())
     }
     fn server_usage(&self) -> Result<Option<Value>> {
-        self.container.stats().map(Some)
+        let frontend = self.container.stats()?;
+        match &self.postgres {
+            Some(postgres) => Ok(Some(json!({"frontend":frontend,"storage":postgres.stats()?}))),
+            None => Ok(Some(frontend)),
+        }
     }
     fn disk_bytes(&self) -> Result<u64> {
         match &self.postgres {
@@ -224,93 +254,109 @@ impl Backend for MongoDbBackend {
         }
     }
 }
+fn document_key(doc: &Document) -> Result<Key> {
+    Key::from_slice(doc.get_binary_generic("_id").map_err(|e| e.to_string())?).map_err(|e| e.to_string())
+}
+fn document_ref(doc: &Document) -> Result<DocumentRef<'_>> {
+    Ok(DocumentRef {
+        score: doc.get_i64("score").map_err(|e| e.to_string())? as u64,
+        payload: doc.get_str("payload").map_err(|e| e.to_string())?,
+    })
+}
 impl MongoDbSession {
-    fn document(&self, key: Key, value: &[u8]) -> Result<Document> {
-        if self.data_model == DataModel::KeyValue {
-            Ok(doc! {"_id":id(key),"value":Binary{subtype:BinarySubtype::Generic,bytes:value.to_vec()}})
-        } else {
-            let value: Value = serde_json::from_slice(value).map_err(|e| e.to_string())?;
-            let mut doc = bson::to_document(&value).map_err(|e| e.to_string())?;
-            doc.insert("_id", id(key));
-            Ok(doc)
+    fn fetch(&mut self, keys: &[Key]) -> Result<()> {
+        self.rows.clear();
+        let ids: Vec<_> = keys.iter().map(|key| id(*key)).collect();
+        let cursor = self
+            .collection
+            .find(doc! {"_id":{"$in":ids}})
+            .run()
+            .map_err(|e| e.to_string())?;
+        for row in cursor {
+            let row = row.map_err(|e| e.to_string())?;
+            self.rows.push((document_key(&row)?, row));
         }
+        self.rows.sort_unstable_by_key(|row| row.0);
+        Ok(())
     }
-    fn value(&self, mut doc: Document) -> Result<Vec<u8>> {
-        if self.data_model == DataModel::KeyValue {
-            return doc.get_binary_generic("value").cloned().map_err(|e| e.to_string());
+    fn row(&self, key: Key) -> Option<&Document> {
+        self.rows
+            .binary_search_by_key(&key, |row| row.0)
+            .ok()
+            .map(|i| &self.rows[i].1)
+    }
+    fn write_updates(&self, updates: Vec<Document>) -> Result<usize> {
+        if updates.is_empty() {
+            return Ok(0);
         }
-        let key =
-            Key::from_slice(doc.get_binary_generic("_id").map_err(|e| e.to_string())?).map_err(|e| e.to_string())?;
-        doc.insert("_id", key.to_string());
-        serde_json::to_vec(&doc).map_err(|e| e.to_string())
+        let reply = self
+            .database
+            .run_command(doc! {"update":"records","updates":updates,"ordered":true})
+            .run()
+            .map_err(|e| e.to_string())?;
+        if reply.contains_key("writeErrors") {
+            return Err(format!("MongoDB update failed: {reply:?}"));
+        }
+        match reply.get("n") {
+            Some(Bson::Int32(n)) => Ok(*n as usize),
+            Some(Bson::Int64(n)) => Ok(*n as usize),
+            _ => Err("Missing MongoDB matched count".into()),
+        }
     }
 }
+impl TransactionSession for MongoDbSession {}
 impl BackendSession for MongoDbSession {
-    fn insert(&mut self, keys: &[Key], values: &RecordBatch) -> Result<usize> {
+    fn documents(&mut self) -> Option<&mut dyn DocumentSession> {
+        (self.data_model == DataModel::Documents).then_some(self)
+    }
+    fn insert(&mut self, keys: &[Key], values: &RecordInput<'_>) -> Result<usize> {
         if keys.is_empty() {
             return Ok(0);
         }
-        let docs = keys
-            .iter()
-            .enumerate()
-            .map(|(i, k)| self.document(*k, values.get(i).ok_or("Missing value")?))
-            .collect::<Result<Vec<_>>>()?;
+        let docs=keys.iter().enumerate().map(|(i,key)|Ok(doc! {"_id":id(*key),"value":Binary {subtype:BinarySubtype::Generic,bytes:values.get(i).ok_or("Missing value")?.to_vec()}})).collect::<Result<Vec<_>>>()?;
         self.collection
             .insert_many(docs)
             .run()
             .map(|r| r.inserted_ids.len())
             .map_err(|e| e.to_string())
     }
-    fn read(&mut self, keys: &[Key], out: &mut RecordBatch) -> Result<usize> {
+    fn read(&mut self, keys: &[Key], out: &mut RecordOutput<'_>) -> Result<usize> {
         out.clear();
-        let ids = keys.iter().map(|k| id(*k)).collect::<Vec<_>>();
-        let cursor = self
-            .collection
-            .find(doc! {"_id":{"$in":ids}})
-            .run()
-            .map_err(|e| e.to_string())?;
-        let mut values = BTreeMap::new();
-        for doc in cursor {
-            let doc = doc.map_err(|e| e.to_string())?;
-            let key = Key::from_slice(doc.get_binary_generic("_id").map_err(|e| e.to_string())?)
-                .map_err(|e| e.to_string())?;
-            values.insert(key, self.value(doc)?);
-        }
+        self.fetch(keys)?;
+        let mut found = 0;
         for key in keys {
-            out.push(values.get(key).map(Vec::as_slice));
+            let value = self
+                .row(*key)
+                .map(|doc| {
+                    doc.get_binary_generic("value")
+                        .map(Vec::as_slice)
+                        .map_err(|e| e.to_string())
+                })
+                .transpose()?;
+            found += usize::from(value.is_some());
+            out.push(value)?;
         }
-        Ok(values.len())
+        Ok(found)
     }
-    fn update(&mut self, keys: &[Key], values: &RecordBatch) -> Result<usize> {
-        let mut count = 0;
-        for (i, key) in keys.iter().enumerate() {
-            let doc = self.document(*key, values.get(i).ok_or("Missing value")?)?;
-            let field = if self.data_model == DataModel::Documents {
-                "score"
-            } else {
-                "value"
-            };
-            let value = doc.get(field).ok_or("Missing update field")?.clone();
-            let mut fields = Document::new();
-            fields.insert(field, value);
-            count += self
-                .collection
-                .update_one(doc! {"_id":id(*key)}, doc! {"$set":fields})
-                .run()
-                .map_err(|e| e.to_string())?
-                .matched_count as usize;
-        }
-        Ok(count)
+    fn update(&mut self, keys: &[Key], values: &RecordInput<'_>) -> Result<usize> {
+        let updates=keys.iter().enumerate().map(|(i,key)|Ok(doc! {"q":{"_id":id(*key)},"u":{"$set":{"value":Binary {subtype:BinarySubtype::Generic,bytes:values.get(i).ok_or("Missing value")?.to_vec()}}},"upsert":false})).collect::<Result<Vec<_>>>()?;
+        self.write_updates(updates)
     }
     fn delete(&mut self, keys: &[Key]) -> Result<usize> {
-        let ids = keys.iter().map(|k| id(*k)).collect::<Vec<_>>();
+        let ids: Vec<_> = keys.iter().map(|key| id(*key)).collect();
         self.collection
             .delete_many(doc! {"_id":{"$in":ids}})
             .run()
             .map(|r| r.deleted_count as usize)
             .map_err(|e| e.to_string())
     }
-    fn range_read(&mut self, start: Key, limit: usize, keys: &mut Vec<Key>, out: &mut RecordBatch) -> Result<usize> {
+    fn range_read(
+        &mut self,
+        start: Key,
+        limit: usize,
+        keys: &mut KeysOutput<'_>,
+        out: &mut RecordOutput<'_>,
+    ) -> Result<usize> {
         keys.clear();
         out.clear();
         if limit == 0 {
@@ -325,11 +371,76 @@ impl BackendSession for MongoDbSession {
             .map_err(|e| e.to_string())?;
         for doc in cursor {
             let doc = doc.map_err(|e| e.to_string())?;
-            keys.push(
-                Key::from_slice(doc.get_binary_generic("_id").map_err(|e| e.to_string())?)
-                    .map_err(|e| e.to_string())?,
-            );
-            out.push(Some(&self.value(doc)?));
+            keys.push(document_key(&doc)?)?;
+            out.push(Some(doc.get_binary_generic("value").map_err(|e| e.to_string())?))?;
+        }
+        Ok(keys.len())
+    }
+}
+impl DocumentSession for MongoDbSession {
+    fn insert(&mut self, keys: &[Key], values: &DocumentInput<'_>) -> Result<usize> {
+        if keys.is_empty() {
+            return Ok(0);
+        }
+        let docs = keys
+            .iter()
+            .enumerate()
+            .map(|(i, key)| {
+                let value = values.get(i).ok_or("Missing document")?;
+                Ok(doc! {"_id":id(*key),"score":value.score as i64,"payload":value.payload})
+            })
+            .collect::<Result<Vec<_>>>()?;
+        self.collection
+            .insert_many(docs)
+            .run()
+            .map(|r| r.inserted_ids.len())
+            .map_err(|e| e.to_string())
+    }
+    fn read(&mut self, keys: &[Key], out: &mut DocumentOutput<'_>) -> Result<usize> {
+        out.clear();
+        self.fetch(keys)?;
+        let mut found = 0;
+        for key in keys {
+            let value = self.row(*key).map(document_ref).transpose()?;
+            found += usize::from(value.is_some());
+            out.push(value)?;
+        }
+        Ok(found)
+    }
+    fn update(&mut self, keys: &[Key], patches: &[DocumentPatch]) -> Result<usize> {
+        let updates = keys
+            .iter()
+            .zip(patches)
+            .map(|(key, patch)| doc! {"q":{"_id":id(*key)},"u":{"$set":{"score":patch.score as i64}},"upsert":false})
+            .collect();
+        self.write_updates(updates)
+    }
+    fn delete(&mut self, keys: &[Key]) -> Result<usize> {
+        BackendSession::delete(self, keys)
+    }
+    fn range_read(
+        &mut self,
+        start: Key,
+        limit: usize,
+        keys: &mut KeysOutput<'_>,
+        out: &mut DocumentOutput<'_>,
+    ) -> Result<usize> {
+        keys.clear();
+        out.clear();
+        if limit == 0 {
+            return Ok(0);
+        }
+        let cursor = self
+            .collection
+            .find(doc! {"_id":{"$gte":id(start)}})
+            .sort(doc! {"_id":1})
+            .limit(limit as i64)
+            .run()
+            .map_err(|e| e.to_string())?;
+        for doc in cursor {
+            let doc = doc.map_err(|e| e.to_string())?;
+            keys.push(document_key(&doc)?)?;
+            out.push(Some(document_ref(&doc)?))?;
         }
         Ok(keys.len())
     }
@@ -341,5 +452,25 @@ fn main() {
     }) {
         eprintln!("{error}");
         std::process::exit(1);
+    }
+}
+
+#[cfg(test)]
+#[test]
+#[ignore = "starts pinned Docker servers"]
+fn native_protocol_contract() {
+    for server in [Server::Mongodb, Server::Ferretdb] {
+        for data_model in [DataModel::Documents] {
+            let path = tempfile::tempdir().unwrap();
+            let mut args = Cli::parse_from(["contract"]).common;
+            args.data_model = data_model;
+            args.durability = Durability::Buffered;
+            let backend = open(&args, path.path(), server).unwrap();
+            match data_model {
+                DataModel::Documents => crudeval::assert_document_contract!(backend.as_ref()),
+                DataModel::Graph => crudeval::assert_graph_contract!(backend.as_ref()),
+                _ => unreachable!(),
+            };
+        }
     }
 }

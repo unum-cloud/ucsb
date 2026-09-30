@@ -9,20 +9,27 @@
 //!     --bin crud-eval-rocksdb -- --records 100K --threads 4
 //! ```
 
-use clap::Parser;
-use crudeval::{backend::*, run, CommonArgs};
-use rocksdb::{
-    Direction, IngestExternalFileOptions, IteratorMode, Options, SstFileWriter, WriteBatch, WriteOptions, DB,
-};
-use serde_json::json;
+#![feature(allocator_ext, btreemap_alloc)]
+
 use std::{
+    alloc::System,
     collections::BTreeMap,
     path::{Path, PathBuf},
-    sync::{
-        atomic::{AtomicBool, AtomicU64, Ordering},
-        Mutex,
-    },
+    sync::atomic::{AtomicBool, AtomicU64, Ordering},
 };
+
+use clap::Parser;
+use rocksdb::{IngestExternalFileOptions, Options, SstFileWriter, WriteBatch, WriteOptions, DB};
+use serde_json::json;
+
+use crudeval::{
+    backend::{
+        directory_bytes, Backend, BackendCapabilities, BackendSession, BatchMode, DataModel, Durability, Key,
+        KeysOutput, RecordInput, RecordOutput, Result, TransactionSession,
+    },
+    run, CommonArgs,
+};
+
 #[derive(Parser)]
 struct Cli {
     #[command(flatten)]
@@ -35,7 +42,7 @@ struct RocksDbBackend {
     path: PathBuf,
     durability: Durability,
     write_buffer_size: usize,
-    writes: Mutex<()>,
+    write_options: WriteOptions,
     sst_id: AtomicU64,
     ingested: AtomicBool,
 }
@@ -48,46 +55,47 @@ impl RocksDbBackend {
         options.create_if_missing(true);
         options.set_write_buffer_size(write_buffer_size);
         let db = DB::open(&options, path).map_err(|e| e.to_string())?;
+        let mut write_options = WriteOptions::default();
+        write_options.disable_wal(durability == Durability::None);
+        write_options.set_sync(durability == Durability::Flushed);
         Ok(Self {
             db,
+            write_options,
             path: path.into(),
             durability,
             write_buffer_size,
-            writes: Mutex::new(()),
             sst_id: AtomicU64::new(0),
             ingested: AtomicBool::new(false),
         })
     }
-    fn write_options(&self) -> WriteOptions {
-        let mut options = WriteOptions::default();
-        options.disable_wal(self.durability == Durability::None);
-        options.set_sync(self.durability == Durability::Flushed);
-        options
-    }
 }
 impl Backend for RocksDbBackend {
-    fn metadata(&self) -> BTreeMap<String, serde_json::Value> {
-        BTreeMap::from([
+    fn metadata(&self) -> BTreeMap<String, serde_json::Value, System> {
+        let mut metadata = BTreeMap::new_in(System);
+        metadata.extend([
             ("backend".into(), json!("rocksdb")),
             ("client_version".into(), json!("rocksdb 0.25.0")),
             ("library_version".into(), json!("11.8.1")),
             ("compact_after_ingestion".into(), json!(true)),
             ("durability".into(), json!(self.durability)),
             ("write_buffer_size".into(), json!(self.write_buffer_size)),
-            ("conditional_writes".into(), json!("serialized")),
-        ])
+            ("conditional_writes".into(), json!("disjoint_deletes")),
+        ]);
+        metadata
     }
     fn capabilities(&self) -> BackendCapabilities {
         BackendCapabilities {
             ordered_ranges: true,
-            native_batch_read: true,
-            native_batch_write: true,
-            native_bulk_load: true,
+            batch_read: BatchMode::Native,
+            batch_insert: BatchMode::Native,
+            batch_update: BatchMode::Native,
+            batch_delete: BatchMode::Native,
+            bulk_load: BatchMode::Native,
             ..Default::default()
         }
     }
-    fn session(&self) -> Result<Box<dyn BackendSession + '_>> {
-        Ok(Box::new(RocksDbSession(self)))
+    fn session(&self) -> Result<Box<dyn BackendSession + '_, System>> {
+        Ok(Box::new_in(RocksDbSession(self), System))
     }
     fn flush(&self) -> Result<()> {
         self.db.flush().map_err(|e| e.to_string())?;
@@ -102,30 +110,67 @@ impl Backend for RocksDbBackend {
     }
 }
 struct RocksDbSession<'a>(&'a RocksDbBackend);
+impl TransactionSession for RocksDbSession<'_> {}
+
 impl BackendSession for RocksDbSession<'_> {
-    fn insert(&mut self, keys: &[Key], values: &RecordBatch) -> Result<usize> {
+    fn insert(&mut self, keys: &[Key], values: &RecordInput<'_>) -> Result<usize> {
+        if let [key] = keys {
+            self.0
+                .db
+                .put_opt(
+                    key.as_bytes(),
+                    values.get(0).ok_or("missing input value")?,
+                    &self.0.write_options,
+                )
+                .map_err(|e| e.to_string())?;
+            return Ok(1);
+        }
         let mut batch = WriteBatch::default();
         for (i, key) in keys.iter().enumerate() {
             batch.put(key.as_bytes(), values.get(i).ok_or("missing input value")?);
         }
         self.0
             .db
-            .write_opt(batch, &self.0.write_options())
+            .write_opt(batch, &self.0.write_options)
             .map_err(|e| e.to_string())?;
         Ok(keys.len())
     }
-    fn read(&mut self, keys: &[Key], output: &mut RecordBatch) -> Result<usize> {
+    fn read(&mut self, keys: &[Key], output: &mut RecordOutput<'_>) -> Result<usize> {
         output.clear();
+        if let [key] = keys {
+            let value = self.0.db.get_pinned(key.as_bytes()).map_err(|e| e.to_string())?;
+            output.push(value.as_deref())?;
+            return Ok(usize::from(value.is_some()));
+        }
         let mut count = 0;
         for value in self.0.db.multi_get(keys.iter().map(Key::as_bytes)) {
             let value = value.map_err(|e| e.to_string())?;
             count += usize::from(value.is_some());
-            output.push(value.as_deref());
+            output.push(value.as_deref())?;
         }
         Ok(count)
     }
-    fn update(&mut self, keys: &[Key], values: &RecordBatch) -> Result<usize> {
-        let _guard = self.0.writes.lock().map_err(|e| e.to_string())?;
+    fn update(&mut self, keys: &[Key], values: &RecordInput<'_>) -> Result<usize> {
+        if let [key] = keys {
+            if self
+                .0
+                .db
+                .get_pinned(key.as_bytes())
+                .map_err(|e| e.to_string())?
+                .is_none()
+            {
+                return Ok(0);
+            }
+            self.0
+                .db
+                .put_opt(
+                    key.as_bytes(),
+                    values.get(0).ok_or("missing input value")?,
+                    &self.0.write_options,
+                )
+                .map_err(|e| e.to_string())?;
+            return Ok(1);
+        }
         let mut batch = WriteBatch::default();
         let mut count = 0;
         for (i, key) in keys.iter().enumerate() {
@@ -142,12 +187,27 @@ impl BackendSession for RocksDbSession<'_> {
         }
         self.0
             .db
-            .write_opt(batch, &self.0.write_options())
+            .write_opt(batch, &self.0.write_options)
             .map_err(|e| e.to_string())?;
         Ok(count)
     }
     fn delete(&mut self, keys: &[Key]) -> Result<usize> {
-        let _guard = self.0.writes.lock().map_err(|e| e.to_string())?;
+        if let [key] = keys {
+            if self
+                .0
+                .db
+                .get_pinned(key.as_bytes())
+                .map_err(|e| e.to_string())?
+                .is_none()
+            {
+                return Ok(0);
+            }
+            self.0
+                .db
+                .delete_opt(key.as_bytes(), &self.0.write_options)
+                .map_err(|e| e.to_string())?;
+            return Ok(1);
+        }
         let mut batch = WriteBatch::default();
         let mut count = 0;
         for key in keys {
@@ -164,26 +224,31 @@ impl BackendSession for RocksDbSession<'_> {
         }
         self.0
             .db
-            .write_opt(batch, &self.0.write_options())
+            .write_opt(batch, &self.0.write_options)
             .map_err(|e| e.to_string())?;
         Ok(count)
     }
-    fn range_read(&mut self, start: Key, limit: usize, keys: &mut Vec<Key>, output: &mut RecordBatch) -> Result<usize> {
+    fn range_read(
+        &mut self,
+        start: Key,
+        limit: usize,
+        keys: &mut KeysOutput<'_>,
+        output: &mut RecordOutput<'_>,
+    ) -> Result<usize> {
         keys.clear();
         output.clear();
-        for row in self
-            .0
-            .db
-            .iterator(IteratorMode::From(start.as_bytes(), Direction::Forward))
-            .take(limit)
-        {
-            let (key, value) = row.map_err(|e| e.to_string())?;
-            keys.push(Key::from_slice(&key).map_err(|e| e.to_string())?);
-            output.push(Some(&value));
+        let mut cursor = self.0.db.raw_iterator();
+        cursor.seek(start.as_bytes());
+        while keys.len() < limit {
+            let Some((key, value)) = cursor.item() else { break };
+            keys.push(Key::from_slice(key).map_err(|e| e.to_string())?)?;
+            output.push(Some(value))?;
+            cursor.next();
         }
+        cursor.status().map_err(|e| e.to_string())?;
         Ok(keys.len())
     }
-    fn bulk_load(&mut self, keys: &[Key], values: &RecordBatch) -> Result<usize> {
+    fn bulk_load(&mut self, keys: &[Key], values: &RecordInput<'_>) -> Result<usize> {
         if keys.is_empty() {
             return Ok(0);
         }
@@ -223,11 +288,14 @@ fn main() -> Result<()> {
             if args.data_model != DataModel::KeyValue {
                 return Err("RocksDB supports only kv data_model".into());
             }
-            Ok(Box::new(RocksDbBackend::open(
-                path,
-                args.durability,
-                usize::try_from(cli.write_buffer_size).map_err(|_| "write buffer size exceeds platform limit")?,
-            )?))
+            Ok(Box::new_in(
+                RocksDbBackend::open(
+                    path,
+                    args.durability,
+                    usize::try_from(cli.write_buffer_size).map_err(|_| "write buffer size exceeds platform limit")?,
+                )?,
+                System,
+            ))
         },
     )
 }

@@ -1,0 +1,8 @@
+services:
+  surrealdb:
+    image: surrealdb/surrealdb:v3.3.0
+    ports: ["127.0.0.1::8000"]
+    command: ["start", "--bind", "0.0.0.0:8000", "--user", "crudeval", "--pass", "crudeval", "surrealkv:/data/db?sync=every"]
+    volumes: ["surreal-data:/data"]
+volumes:
+  surreal-data:
