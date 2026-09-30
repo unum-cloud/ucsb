@@ -1,8 +1,14 @@
 /target/
 /data/
 /results/
+/figures/
+/plots/
 /build/
 /build_debug/
 /build_release/
+/.ruff_cache/
+__pycache__/
+*.pyc
+*.pyo
 .DS_Store
 *.tmp
