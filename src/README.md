@@ -6,20 +6,26 @@ The shared runner owns workload execution, validation, measurement, and reports.
 
 ## Responsibilities
 
-| Source | Responsibility |
-| :-- | :-- |
-| `bench.rs` | `CommonArgs`, configuration sweeps, data manifests, worker coordination, entry budgets, transaction boundaries |
-| `backend.rs` | `Backend`, `BackendSession`, `BackendCapabilities`, `RecordBatch`, `Key`, `DataModel`, `Durability` |
-| `workload.rs` | Explicit workload names, operation shares, batch sizes, checked count and size parsing |
-| `data.rs` | `KeySpace`, `RandomGenerator`, distributions, deterministic value pool |
-| `model.rs` | `RecordGenerator`: key-value payloads, documents, graph adjacency, verification |
-| `measure.rs` | `WorkloadMeasurements`, `LatencySummary`, `ResourceUsage`, `ResourceSampler` |
-| `output.rs` | `WorkloadReport`, `ConfigReport`, `MachineInfo`, configuration hashes, atomic report writes |
-| `perf_counters.rs` | Optional Linux counters for benchmark worker threads |
-| `docker.rs` | `ContainerHandle` and `NetworkHandle` lifecycle, readiness, server resource snapshots |
-| `cypher.rs` | Shared graph operations for Neo4j, Memgraph, and FalkorDB |
-| `rocksdb.rs`, `lmdb.rs`, `redb.rs`, `fjall.rs`, `sqlite.rs` | Embedded engine binaries |
-| `redis.rs`, `mongodb.rs`, `postgres.rs`, `neo4j.rs`, `falkordb.rs` | Server binaries and their supported server variants |
+The shared runner and data model live in:
+
+- [`bench.rs`](bench.rs): `CommonArgs`, configuration sweeps, data manifests, worker coordination, entry budgets, and transaction boundaries.
+- [`backend.rs`](backend.rs): backend/session traits, capabilities, typed batch buffers, keys, data models, and durability policies.
+- [`workload.rs`](workload.rs): workload names, operation shares, batch sizes, and checked count/size parsing.
+- [`data.rs`](data.rs): `KeySpace`, random distributions, and the deterministic value pool.
+- [`model.rs`](model.rs): key-value, document, and graph generation and verification.
+
+Measurement and infrastructure are split into:
+
+- [`measure.rs`](measure.rs): workload measurements, latency summaries, and process resource sampling.
+- [`output.rs`](output.rs): reports, machine information, configuration hashes, and atomic report writes.
+- [`perf_counters.rs`](perf_counters.rs): optional Linux counters for benchmark worker threads.
+- [`docker.rs`](docker.rs): container/network lifecycle, readiness, and server resource snapshots.
+- [`cypher.rs`](cypher.rs): shared graph operations for Neo4j, Memgraph, and FalkorDB.
+
+Each backend has its own binary:
+
+- Embedded engines: [`rocksdb.rs`](rocksdb.rs), [`lmdb.rs`](lmdb.rs), [`redb.rs`](redb.rs), [`fjall.rs`](fjall.rs), [`sqlite.rs`](sqlite.rs), and [`turso.rs`](turso.rs).
+- Database servers and variants: [`redis.rs`](redis.rs), [`mongodb.rs`](mongodb.rs), [`postgres.rs`](postgres.rs), [`neo4j.rs`](neo4j.rs), [`falkordb.rs`](falkordb.rs), and [`surrealdb.rs`](surrealdb.rs).
 
 ## Vocabulary and contracts
 
@@ -28,13 +34,14 @@ Each worker creates and uses its own `BackendSession`; sessions need not impleme
 Storage operations are `insert`, `read`, `update`, `delete`, `bulk_load`, `range_read`, and `expand_neighbors`.
 Methods return affected record counts; updates and deletes never create missing records.
 
-`RecordBatch` stores contiguous value bytes, row boundaries, and presence flags.
+`RecordBatch`, `DocumentBatch`, and `GraphBatch` own allocator-aware storage.
+Their input views borrow typed slices; their output views append into bounded caller-provided storage and return an error on overflow.
 Point reads retain request order and a position for every missing key; an empty value is present.
 `range_read` uses an inclusive lower bound and returns ascending, unique keys with aligned values.
 A full scan partitions the live key range into disjoint contiguous worker shards.
 
 `Key` is a UUID whose big-endian bytes preserve integer order.
-`KeySpace` reserves globally unique insert ranges and publishes them only after successful writes or commits.
+`KeySpace` reserves globally unique insert ranges and publishes them only after successful writes or commits, tracking the earliest uncommitted reservation per worker.
 Deletes claim the oldest live keys.
 The data manifest records the live floor and next key after successful mutating workloads; interrupted mutations require a fresh bulk load.
 Backend options participate in directory identity, preventing different server choices or engine settings from sharing a dataset.
@@ -46,13 +53,14 @@ Read-modify-write derives the next value from the value actually read.
 
 ## Capabilities and measurement
 
-`BackendCapabilities` describes the implemented adapter, including ordered ranges, transactions, native batches, and native bulk loading.
+`BackendCapabilities` describes implemented modalities, ordered ranges, transactions, and per-operation `BatchMode` values: native, pipelined, or per-record.
 Unsupported range workloads are reported as skipped and the remaining chain continues.
-LMDB, redb, SQLite, and PostgreSQL expose explicit transactions; the other adapters reject `--transaction-size`.
+LMDB, redb, SQLite, Turso, and PostgreSQL expose explicit transactions; the other adapters reject `--transaction-size`.
 Redis-family adapters do not expose ordered ranges.
 RocksDB uses SST ingestion for bulk loading.
-SQLite and MongoDB support key-value records and documents; PostgreSQL also supports graphs.
-Neo4j, Memgraph, and FalkorDB support graph workloads.
+SQLite, Turso, Redis-family servers, and MongoDB support key-value records and documents; PostgreSQL also supports graphs.
+SurrealDB exposes documents and graphs.
+Neo4j, Memgraph, and FalkorDB support graph workloads through typed, parameterized Cypher operations.
 
 Throughput counts successful records, while latency distributions group storage calls by operation.
 Transaction commits are timed and uncommitted records do not count as successful throughput.
@@ -101,6 +109,7 @@ Focused tests beside the shared implementation cover:
 - Small entry budgets, disjoint full scans, read-modify-write, commit accounting, and skipped workloads.
 - Duration-limited arrival rates, persisted key ranges, backend configuration isolation, and interrupted mutation refusal.
 
-For a live server check, run its binary against the pinned image with a small dataset and inspect the JSON report.
-Confirm zero failed and corrupted entries, expected capability skips, and container cleanup after exit.
-Container smoke checks require Docker and are separate from the unit test suite.
+`scripts/check-servers.sh` runs the ignored native server contracts and the supported server/modality workload chains.
+The contracts check document integer precision and missing updates, plus exact two-hop graph results, stable edge slots, and incident-edge deletion.
+The workload checks require zero failed or corrupted entries and permit explicit capability skips.
+These checks require Docker and are separate from the default unit test suite.
