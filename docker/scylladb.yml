@@ -1,0 +1,8 @@
+services:
+  scylladb:
+    image: scylladb/scylla:2026.3.2
+    ports: ["127.0.0.1::9042"]
+    command: ["--developer-mode", "1", "--overprovisioned", "1", "--broadcast-rpc-address", "127.0.0.1"]
+    volumes: ["scylla-data:/var/lib/scylla"]
+volumes:
+  scylla-data:

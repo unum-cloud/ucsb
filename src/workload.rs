@@ -207,7 +207,7 @@ mod tests {
         for invalid in ["18446744073709551615K", "1.5K", "-1", "+1", "K", "0", "1KB"] {
             assert!(parse_count(invalid).is_err());
         }
-        for invalid in ["0", "1K", "1KB", "24B", "+1KB"] {
+        for invalid in ["0", "1K", "1KiB", "24B", "+1KB"] {
             assert!(parse_size(invalid).is_err());
         }
         for invalid in ["23", "1024..24", "24.."] {

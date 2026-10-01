@@ -25,7 +25,7 @@ use crudeval::{
         DocumentPatch, DocumentRef, DocumentSession, Durability, Key, KeysOutput, RecordInput, RecordOutput, Result,
         TransactionSession,
     },
-    docker::{ContainerHandle, NetworkHandle},
+    docker::{ContainerHandle, NetworkHandle, Startup},
     run, BetweenWorkloads, CommonArgs,
 };
 
@@ -94,7 +94,7 @@ fn open(args: &CommonArgs, path: &Path, server: Server) -> Result<Box<dyn Backen
         } else {
             "off"
         };
-        let postgres = ContainerHandle::start_with_network(
+        let postgres = ContainerHandle::start_with(
             "ghcr.io/ferretdb/postgres-documentdb:17-0.107.0-ferretdb-2.7.0",
             5432,
             &path.join("postgres"),
@@ -111,7 +111,10 @@ fn open(args: &CommonArgs, path: &Path, server: Server) -> Result<Box<dyn Backen
                 "-c",
                 &format!("synchronous_commit={sync}"),
             ],
-            Some(network),
+            &Startup {
+                network: Some(network),
+                ..Startup::default()
+            },
         )?;
         postgres.ready(|| {
             postgres
@@ -137,7 +140,7 @@ fn open(args: &CommonArgs, path: &Path, server: Server) -> Result<Box<dyn Backen
     } else {
         vec![]
     };
-    let container = ContainerHandle::start_with_network(
+    let container = ContainerHandle::start_with(
         image,
         27017,
         &path.join("mongo"),
@@ -148,7 +151,10 @@ fn open(args: &CommonArgs, path: &Path, server: Server) -> Result<Box<dyn Backen
         },
         &env,
         &[],
-        network.as_ref(),
+        &Startup {
+            network: network.as_ref(),
+            ..Startup::default()
+        },
     )?;
     let uri = match server {
         Server::Mongodb => format!(

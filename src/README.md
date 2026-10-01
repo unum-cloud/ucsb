@@ -25,7 +25,7 @@ Measurement and infrastructure are split into:
 Each backend has its own binary:
 
 - Embedded engines: [`rocksdb.rs`](rocksdb.rs), [`lmdb.rs`](lmdb.rs), [`redb.rs`](redb.rs), [`fjall.rs`](fjall.rs), [`sqlite.rs`](sqlite.rs), and [`turso.rs`](turso.rs).
-- Database servers and variants: [`redis.rs`](redis.rs), [`mongodb.rs`](mongodb.rs), [`postgres.rs`](postgres.rs), [`neo4j.rs`](neo4j.rs), [`falkordb.rs`](falkordb.rs), and [`surrealdb.rs`](surrealdb.rs).
+- Database servers and variants: [`redis.rs`](redis.rs), [`mongodb.rs`](mongodb.rs), [`postgres.rs`](postgres.rs), [`neo4j.rs`](neo4j.rs), [`falkordb.rs`](falkordb.rs), [`surrealdb.rs`](surrealdb.rs), and [`scylladb.rs`](scylladb.rs).
 
 ## Vocabulary and contracts
 
@@ -56,9 +56,9 @@ Read-modify-write derives the next value from the value actually read.
 `BackendCapabilities` describes implemented modalities, ordered ranges, transactions, and per-operation `BatchMode` values: native, pipelined, or per-record.
 Unsupported range workloads are reported as skipped and the remaining chain continues.
 LMDB, redb, SQLite, Turso, and PostgreSQL expose explicit transactions; the other adapters reject `--calls-per-transaction`.
-Redis-family adapters do not expose ordered ranges.
+Redis-family and ScyllaDB adapters do not expose ordered ranges.
 RocksDB uses SST ingestion for bulk loading.
-SQLite, Turso, Redis-family servers, and MongoDB support key-value records and documents; PostgreSQL also supports graphs.
+SQLite, Turso, Redis-family servers, MongoDB, and ScyllaDB support key-value records and documents; PostgreSQL also supports graphs.
 SurrealDB exposes documents and graphs.
 Neo4j, Memgraph, and FalkorDB support graph workloads through typed, parameterized Cypher operations.
 

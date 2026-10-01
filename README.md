@@ -21,7 +21,7 @@ cargo run --release --no-default-features --features rocksdb-backend \
 SQLite is the default Cargo feature.
 Every other binary has its own `<engine>-backend` feature; engine code is compiled only when selected.
 Server binaries require a running Docker daemon and pull a pinned image on first use.
-They publish a random port on localhost, wait for a successful database request, and remove their own containers when the run ends.
+They publish a random port on localhost, or the `--port` a binary takes, wait for a successful database request, and remove their own containers when the run ends.
 Database files remain in the run's data directory.
 
 ```sh
@@ -52,10 +52,11 @@ cargo run --release --no-default-features --features neo4j-backend \
 | `crud-eval-falkordb`                                            |           |           |   ✓    |
 | `crud-eval-turso`, embedded Turso 0.8.1                         |     ✓     |     ✓     |        |
 | `crud-eval-surrealdb`, SurrealDB 3.3.0                          |           |     ✓     |   ✓    |
+| `crud-eval-scylladb`, ScyllaDB 2026.3.2                         |     ✓     |     ✓     |        |
 
 Every binary's settings, engine-specific ones included, are listed under "Settings" below.
 Reports include effective durability and distinguish native batches, protocol pipelines, and per-record loops for each operation.
-Redis has no ordered range operation; range reads and full scans are reported as skipped.
+Redis and ScyllaDB have no ordered range operation; range reads and full scans are reported as skipped.
 A data model unsupported by the selected binary is rejected explicitly.
 The matrix describes adapter coverage, not every upstream engine capability.
 Redis-family documents use native JSON commands; Valkey needs its JSON bundle, and Garnet needs its JSON module.
@@ -64,6 +65,11 @@ Turso uses the embedded Rust engine, not libSQL or the hosted service; buffered 
 Its tables use a UUID index over an ordinary rowid table because the pinned engine's experimental `WITHOUT ROWID` support cannot execute the full mutation workload.
 Neo4j checks internal vertex revisions around adjacency reads, with up to eight measured attempts; metadata records the extra round trips and revision storage.
 SurrealDB splits large native insert batches to fit its RPC request limit and reports the transaction boundaries between chunks.
+ScyllaDB runs one prepared CQL statement per record at `LOCAL_QUORUM` on a single replica, keeping up to 256 in flight per worker instead of sending multi-partition `BATCH` statements.
+Its updates and deletes read the key first, so they never create or count a missing record; the check and the write are not atomic.
+Documents are typed `score bigint` and `payload text` columns, and updates set the `score` column.
+Durability `none` disables the keyspace's `durable_writes`, `buffered` uses periodic commit log sync, and `flushed` uses batch sync.
+ScyllaDB needs direct I/O on its data directory, which Docker Desktop's file sharing on macOS does not provide; run it on Linux.
 
 ## Workloads
 
@@ -144,8 +150,9 @@ These are deterministic benchmark identifiers, not generated UUIDv4 or UUIDv7 va
 | MongoDB and FerretDB                                    | 16-byte BSON Binary `_id` with the generic subtype, rather than the UUID subtype |
 | Neo4j, Memgraph, FalkorDB                               | Canonical 36-character UUID strings in the vertex `id` property                  |
 | SurrealDB                                               | Canonical 36-character UUID strings as native record identifiers                 |
+| ScyllaDB                                                | 16-byte `blob` partition key, rather than CQL's native `uuid` type               |
 
-Binary keys and canonical strings preserve the same integer ordering; Redis-family adapters do not expose ordered ranges.
+Binary keys and canonical strings preserve the same integer ordering; Redis-family and ScyllaDB adapters do not expose ordered ranges.
 Documents and graph payloads also render identifiers as canonical strings where their JSON representation requires them.
 The logical 16-byte width does not imply equal physical index size or serialization cost across engines.
 Sequential insertion favors ordered-key locality; this workload does not measure random-UUID insertion behavior.
@@ -200,6 +207,8 @@ A bad value prints `--flag="value" does not parse, expected …` and exits with 
 | `--write-buffer-size`     | `128MB`              | `crud-eval-rocksdb`: memtable size before a flush                                                      |
 | `--server`                | per binary           | `crud-eval-redis`, `-mongodb`, `-neo4j`: which server speaks the protocol                              |
 | `--dragonfly-threads`     | automatic            | `crud-eval-redis --server dragonfly`: I/O threads, when the automatic choice exceeds the memory budget |
+| `--port`                  | random               | `crud-eval-scylladb`: host port for CQL on localhost                                                   |
+| `--startup-time-limit`    | `120s`               | `crud-eval-scylladb`: time limit for container start and readiness                                     |
 
 ## Configuration and reports
 
@@ -299,7 +308,7 @@ Run `scripts/check.sh` for unit tests and lint checks, and `scripts/check-server
 The implemented backend matrix above describes current support, not the full set of candidates considered during planning.
 UStore v1 remains deferred until its Rust dependency is public; its LevelDB engine is consequently absent too.
 Native WiredTiger was deliberately excluded to avoid a separate C build and submodule; MongoDB exercises WiredTiger through a different interface and is not a substitute for a direct engine benchmark.
-ScyllaDB, Cassandra, FoundationDB, Aerospike, SplinterDB, and Haura remain later candidates, with no adapters or placeholder binaries in this crate.
+Cassandra, FoundationDB, Aerospike, SplinterDB, and Haura remain later candidates, with no adapters or placeholder binaries in this crate.
 
 The following planned capabilities remain incomplete:
 

@@ -9,12 +9,32 @@ use std::{
     time::{Duration, Instant},
 };
 
-use crate::backend::Result;
+use crate::{backend::Result, Port};
+
+/// Where a container is published and how long it may take to start.
+pub struct Startup<'a> {
+    pub network: Option<&'a NetworkHandle>,
+    /// Host port on localhost; `None` lets Docker pick a free one.
+    pub host_port: Option<Port>,
+    /// Time limit for container start and readiness, counted from its creation.
+    pub time_limit: Duration,
+}
+
+impl Default for Startup<'_> {
+    fn default() -> Self {
+        Self {
+            network: None,
+            host_port: None,
+            time_limit: Duration::from_secs(90),
+        }
+    }
+}
 
 pub struct ContainerHandle {
     id: String,
     pub port: u16,
     storage: String,
+    deadline: Instant,
 }
 
 fn docker<I, S>(args: I) -> Result<String>
@@ -48,21 +68,22 @@ impl ContainerHandle {
         env: &[(&str, &str)],
         command: &[&str],
     ) -> Result<Self> {
-        Self::start_with_network(image, port, path, storage, env, command, None)
+        Self::start_with(image, port, path, storage, env, command, &Startup::default())
     }
 
-    pub fn start_with_network(
+    pub fn start_with(
         image: &str,
         port: u16,
         path: &Path,
         storage: &str,
         env: &[(&str, &str)],
         command: &[&str],
-        network: Option<&NetworkHandle>,
+        startup: &Startup<'_>,
     ) -> Result<Self> {
         std::fs::create_dir_all(path).map_err(|e| e.to_string())?;
         let path = path.canonicalize().map_err(|e| e.to_string())?;
-        let publish = format!("127.0.0.1::{port}");
+        let host_port = startup.host_port.map_or_else(String::new, |port| port.to_string());
+        let publish = format!("127.0.0.1:{host_port}:{port}");
         let mount = format!("type=bind,src={},dst={storage}", path.display());
         let mut args = Vec::with_capacity_in(6 + env.len() * 2 + command.len(), System);
         args.extend([
@@ -72,7 +93,7 @@ impl ContainerHandle {
             "--mount".into(),
             mount,
         ]);
-        if let Some(network) = network {
+        if let Some(network) = startup.network {
             args.extend(["--network".into(), network.id.clone()]);
         }
         for (key, value) in env {
@@ -86,6 +107,7 @@ impl ContainerHandle {
             id,
             port: 0,
             storage: storage.into(),
+            deadline: Instant::now() + startup.time_limit,
         };
         docker(["start", &container.id])?;
         let mut published_port = 0;
@@ -111,13 +133,12 @@ impl ContainerHandle {
     }
 
     pub fn ready(&self, mut probe: impl FnMut() -> Result<()>) -> Result<()> {
-        let deadline = Instant::now() + Duration::from_secs(90);
         loop {
             match probe() {
                 Ok(()) => return Ok(()),
                 Err(error) => {
                     let running = docker(["inspect", "--format", "{{.State.Running}}", &self.id])?;
-                    if running != "true" || Instant::now() >= deadline {
+                    if running != "true" || Instant::now() >= self.deadline {
                         let state = docker(["inspect", "--format", "{{json .State}}", &self.id]).unwrap_or_default();
                         let logs = docker(["logs", "--tail", "20", &self.id]).unwrap_or_default();
                         return Err(format!("Server did not become ready: {error}\n{state}\n{logs}"));

@@ -69,6 +69,11 @@ name = "crud-eval-surrealdb"
 path = "src/surrealdb.rs"
 required-features = ["surrealdb-backend"]
 
+[[bin]]
+name = "crud-eval-scylladb"
+path = "src/scylladb.rs"
+required-features = ["scylladb-backend"]
+
 [dependencies]
 clap = { version = "4.6", features = ["derive"] }
 serde = { version = "1", features = ["derive"] }
@@ -96,6 +101,8 @@ postgres = { version = "0.19", optional = true, features = [
     "with-serde_json-1",
 ] }
 neo4rs = { version = "0.8", optional = true }
+scylla = { version = "1.9", optional = true }
+futures = { version = "0.3", optional = true }
 tokio = { version = "1", optional = true, features = [
     "rt-multi-thread",
     "time",
@@ -128,6 +135,7 @@ mongodb-backend = ["tier2", "dep:mongodb"]
 postgres-backend = ["tier2", "dep:postgres"]
 neo4j-backend = ["tier2", "dep:neo4rs", "dep:tokio"]
 falkordb-backend = ["tier2", "dep:redis"]
+scylladb-backend = ["tier2", "dep:scylla", "dep:futures", "dep:tokio"]
 
 [profile.release]
 lto = "thin"

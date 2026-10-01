@@ -1,8 +1,8 @@
 #!/bin/sh
 set -eu
 cd "$(dirname "$0")/.."
-cargo build --no-default-features --features redis-backend,mongodb-backend,postgres-backend,neo4j-backend,falkordb-backend,surrealdb-backend
-cargo test --no-default-features --features redis-backend,mongodb-backend,postgres-backend,neo4j-backend,falkordb-backend,surrealdb-backend --bins native_protocol_contract -- --ignored
+cargo build --no-default-features --features redis-backend,mongodb-backend,postgres-backend,neo4j-backend,falkordb-backend,surrealdb-backend,scylladb-backend
+cargo test --no-default-features --features redis-backend,mongodb-backend,postgres-backend,neo4j-backend,falkordb-backend,surrealdb-backend,scylladb-backend --bins native_protocol_contract -- --ignored
 python3 - <<'PY'
 import json
 import subprocess
@@ -28,6 +28,8 @@ for server in ("neo4j", "memgraph"):
 cases.append(("falkordb", [], "graph", "none", "falkordb"))
 for model in ("documents", "graph"):
     cases.append(("surrealdb", [], model, "flushed", f"surrealdb-{model}"))
+for model in ("key-value", "documents"):
+    cases.append(("scylladb", [], model, "none", f"scylladb-{model}"))
 
 for backend, extra, model, durability, label in cases:
     output = root / label

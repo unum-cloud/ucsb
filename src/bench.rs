@@ -158,7 +158,7 @@ use std::{
     alloc::System,
     fmt,
     hash::{BuildHasher, Hasher, RandomState},
-    num::NonZeroUsize,
+    num::{NonZeroU16, NonZeroUsize},
     ops::RangeInclusive,
     sync::{
         atomic::{AtomicBool, Ordering},
@@ -302,6 +302,31 @@ impl fmt::Display for Bytes {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         formatter.write_str(&spell_size(self.0))
     }
+}
+
+/// A TCP port; `0` is rejected at parse time.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize)]
+pub struct Port(pub NonZeroU16);
+
+impl From<Port> for u16 {
+    fn from(port: Port) -> u16 {
+        port.0.get()
+    }
+}
+
+impl fmt::Display for Port {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(formatter, "{}", self.0)
+    }
+}
+
+/// Parses a TCP port from 1 to 65535.
+pub fn parse_port(text: &str) -> Result<Port> {
+    parse_count(text)
+        .and_then(|port| u16::try_from(port).ok())
+        .and_then(NonZeroU16::new)
+        .map(Port)
+        .ok_or_else(|| "expected a port from 1 to 65535".into())
 }
 
 /// `parse_count` for clap.

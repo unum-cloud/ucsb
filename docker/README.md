@@ -10,6 +10,7 @@ Use the files for inspecting an engine's startup configuration or running it ind
 - [`neo4j.yml`](neo4j.yml): Neo4j, with an optional `memgraph` profile.
 - [`falkordb.yml`](falkordb.yml): FalkorDB.
 - [`surrealdb.yml`](surrealdb.yml): SurrealDB.
+- [`scylladb.yml`](scylladb.yml): ScyllaDB.
 
 ```sh
 docker compose -f docker/redis.yml up -d redis
