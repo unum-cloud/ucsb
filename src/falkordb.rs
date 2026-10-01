@@ -22,7 +22,7 @@ use crate::cypher::{CypherConnection, CypherOutput, CypherSession, GraphRow, Par
 use crudeval::{
     backend::{Backend, BackendCapabilities, BackendSession, BatchMode, DataModel, Durability, Key, Result},
     docker::ContainerHandle,
-    run, CommonArgs,
+    run, BetweenWorkloads, CommonArgs,
 };
 
 #[derive(Parser)]
@@ -143,8 +143,8 @@ impl CypherConnection for FalkorDbConnection {
     }
 }
 fn open(args: &CommonArgs, path: &Path) -> Result<Box<dyn Backend, System>> {
-    if args.reopen || args.drop_caches {
-        return Err("Docker backends do not support --reopen or --drop-caches".into());
+    if args.between_workloads != BetweenWorkloads::Keep {
+        return Err("Docker backends support only --between-workloads keep".into());
     }
 
     if args.data_model != DataModel::Graph {
@@ -243,8 +243,8 @@ impl Backend for FalkorDbBackend {
     }
 }
 fn main() {
-    let cli = Cli::parse();
-    if let Err(error) = run(cli.common, "falkordb/falkordb:6.0.0", open) {
+    let cli: Cli = crudeval::parse_cli();
+    if let Err(error) = run(cli.common, "falkordb/falkordb:6.0.0", &[], open) {
         eprintln!("{error}");
         std::process::exit(1);
     }

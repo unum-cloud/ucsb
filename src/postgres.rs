@@ -23,7 +23,7 @@ use crudeval::{
         GraphSession, Key, KeysOutput, RecordInput, RecordOutput, Result, TransactionSession, VertexRef,
     },
     docker::ContainerHandle,
-    run, CommonArgs,
+    run, BetweenWorkloads, CommonArgs,
 };
 
 #[derive(Parser)]
@@ -45,12 +45,8 @@ struct PostgresSession {
     edges: Vec<GraphEdge, System>,
 }
 fn open(args: &CommonArgs, path: &Path) -> Result<Box<dyn Backend, System>> {
-    if args.reopen || args.drop_caches {
-        return Err("Docker backends do not support --reopen or --drop-caches".into());
-    }
-
-    if args.data_model == DataModel::Documents && args.field != "/score" {
-        return Err("Document updates currently require --field /score".into());
+    if args.between_workloads != BetweenWorkloads::Keep {
+        return Err("Docker backends support only --between-workloads keep".into());
     }
     let sync = if args.durability == Durability::Flushed {
         "on"
@@ -416,8 +412,8 @@ impl GraphSession for PostgresSession {
     }
 }
 fn main() {
-    let cli = Cli::parse();
-    if let Err(error) = run(cli.common, "postgres:18.6", open) {
+    let cli: Cli = crudeval::parse_cli();
+    if let Err(error) = run(cli.common, "postgres:18.6", &[], open) {
         eprintln!("{error}");
         std::process::exit(1);
     }

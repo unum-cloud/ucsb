@@ -20,84 +20,146 @@ pub use crate::backend::{
     Backend, BackendCapabilities, BackendSession, DataModel, Durability, Key, RecordBatch, Result,
 };
 
+/// Version of the report layout, bumped when a field changes meaning.
+const REPORT_SCHEMA_VERSION: u32 = 2;
+/// Version of the adapters' observable behaviour, recorded in each report.
+const ADAPTER_REVISION: u32 = 2;
+/// Version of the data-directory identity, bumped when its inputs change.
+const IDENTITY_VERSION: u32 = 2;
+/// Version of the `.crudeval` manifest layout.
+const MANIFEST_FORMAT: u32 = 1;
+
+/// What happens to an embedded database between two workloads.
+#[derive(clap::ValueEnum, Clone, Copy, Debug, PartialEq, Eq, serde::Serialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum BetweenWorkloads {
+    Keep,
+    Reopen,
+    /// Reopen and drop the host page cache; Linux only.
+    ReopenAndDropCaches,
+}
+
+/// How much of each read is checked.
+#[derive(clap::ValueEnum, Clone, Copy, Debug, PartialEq, Eq, serde::Serialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum Verify {
+    /// Payload values and structure.
+    Values,
+    /// Structure only, to measure the cost of value checks separately.
+    Structure,
+}
+
+/// Attempted entries per ordinary workload: a count, or a percentage of the initial records.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum EntryBudget {
+    Count(u64),
+    Percent(f64),
+}
+
+impl EntryBudget {
+    fn entries(self, records: u64) -> u64 {
+        match self {
+            Self::Count(count) => count,
+            Self::Percent(percent) => ((records as f64 * percent / 100.0).ceil() as u64).max(1),
+        }
+    }
+}
+
+impl fmt::Display for EntryBudget {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Count(count) => write!(formatter, "{count}"),
+            Self::Percent(percent) => write!(formatter, "{percent}%"),
+        }
+    }
+}
+
+impl serde::Serialize for EntryBudget {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error> {
+        serializer.collect_str(self)
+    }
+}
+
 #[derive(Args, Clone, Debug, serde::Serialize)]
 pub struct CommonArgs {
     /// Initial record counts; comma-separated values form a sweep.
     #[arg(long, value_delimiter = ',', default_value = "100K", value_parser = workload::parse_count)]
     pub records: Vec<u64>,
-    /// Worker counts; comma-separated values form a sweep.
-    #[arg(long, value_delimiter = ',', default_value = "1")]
-    pub threads: Vec<usize>,
+    /// Worker counts, 0 for all cores; comma-separated values form a sweep.
+    #[arg(long, value_delimiter = ',', default_value = "1", value_parser = parse_threads_flag)]
+    pub threads: Vec<Threads>,
     /// Ordered comma-separated workload names.
-    #[arg(long, default_value = workload::DEFAULT_WORKLOADS)]
-    pub workloads: String,
+    #[arg(long, value_delimiter = ',', default_value = workload::DEFAULT_WORKLOADS, value_parser = |text: &str| text.parse::<Workload>())]
+    pub workloads: Vec<Workload>,
     /// Override key sampling for the selected workloads.
     #[arg(long, value_enum)]
     pub distribution: Option<data::Distribution>,
     /// Attempted entries per ordinary workload, as a count or percentage.
-    #[arg(long, default_value = "10%")]
-    pub entries: String,
-    /// Time limit instead of an entry budget, such as 30s or 2m.
-    #[arg(long)]
-    pub duration: Option<String>,
-    /// Binary payload size or range, such as 1KiB or 100B..1KiB.
-    #[arg(long, default_value = "1KiB")]
-    pub value_size: String,
+    #[arg(long, default_value = "10%", value_parser = parse_entries_flag)]
+    pub entries: EntryBudget,
+    /// Time limit instead of an entry budget, such as 30s or 500ms.
+    #[arg(long, value_parser = parse_duration_flag)]
+    pub time_limit: Option<Duration>,
+    /// Binary payload size or range, such as 1KB or 100..1KB.
+    #[arg(long, default_value = "1KB", value_parser = workload::parse_value_size)]
+    #[serde(serialize_with = "serialize_value_size")]
+    pub value_size: RangeInclusive<Bytes>,
     /// Parent directory for isolated, marked benchmark databases.
     #[arg(long, default_value = "data")]
     pub data_dir: PathBuf,
     /// Directory for JSON reports.
     #[arg(long, default_value = "results")]
     pub output: PathBuf,
-    /// Seed for data and per-worker random generators.
-    #[arg(long, default_value_t = 42)]
-    pub seed: u64,
+    /// Seed for data and per-worker random generators, or `random` to draw one.
+    #[arg(long, default_value = "42", value_parser = parse_seed_flag)]
+    pub seed: Seed,
     /// Requested write durability; adapters report their effective settings.
     #[arg(long, value_enum, default_value = "none")]
     pub durability: Durability,
     /// Storage model to exercise.
     #[arg(long, value_enum, default_value = "key-value")]
     pub data_model: DataModel,
-    /// Document field to update; currently /score.
-    #[arg(long, default_value = "/score")]
-    pub field: String,
     /// Outgoing graph degree, capped at the initial population minus one.
-    #[arg(long, default_value_t = 8)]
+    #[arg(long, default_value = "8", value_parser = parse_count_flag)]
     pub degree: usize,
-    /// Calls per transaction; zero leaves transaction boundaries to the adapter.
-    #[arg(long, default_value_t = 0)]
-    pub transaction_size: usize,
+    /// Calls per transaction; unset leaves transaction boundaries to the adapter.
+    #[arg(long, value_parser = parse_count_flag)]
+    pub calls_per_transaction: Option<usize>,
     /// Aggregate scheduled calls per second across workers.
-    #[arg(long)]
-    pub rate: Option<f64>,
-    /// Disable value verification while retaining structural checks.
-    #[arg(long)]
-    pub no_verify: bool,
+    #[arg(long, value_parser = parse_rate_flag)]
+    pub calls_per_second: Option<f64>,
+    /// Check payload values and structure, or structure only.
+    #[arg(long, value_enum, default_value = "values")]
+    pub verify: Verify,
     /// Record Linux worker hardware counters; requires the perf-counters feature.
     #[arg(long)]
     pub perf_counters: bool,
-    /// Reopen an embedded database between workloads.
-    #[arg(long)]
-    pub reopen: bool,
-    /// Reopen and drop the host page cache between workloads; Linux only.
-    #[arg(long)]
-    pub drop_caches: bool,
+    /// Keep an embedded database open between workloads, reopen it, or also drop the page cache.
+    #[arg(long, value_enum, default_value = "keep")]
+    pub between_workloads: BetweenWorkloads,
 }
 
+/// Runs every configuration; `backend_settings` are echoed after the common settings as "- Name: value".
 pub fn run(
     args: CommonArgs,
     backend_options: impl serde::Serialize,
+    backend_settings: &[(&str, String)],
     open: impl Fn(&CommonArgs, &Path) -> Result<Box<dyn Backend, System>>,
 ) -> Result<()> {
     run_benchmarks(
         args,
         serde_json::to_value(backend_options).map_err(|e| e.to_string())?,
+        backend_settings,
         open,
     )
 }
 
 use std::{
     alloc::System,
+    fmt,
+    hash::{BuildHasher, Hasher, RandomState},
+    num::NonZeroUsize,
+    ops::RangeInclusive,
     sync::{
         atomic::{AtomicBool, Ordering},
         Barrier, OnceLock,
@@ -113,37 +175,204 @@ use crate::{
 
 pub mod model;
 
-fn duration(value: &str) -> Result<Duration> {
-    let (number, scale) = if let Some(n) = value.strip_suffix("ms") {
-        (n, 0.001)
-    } else if let Some(n) = value.strip_suffix('s') {
-        (n, 1.0)
-    } else if let Some(n) = value.strip_suffix('m') {
-        (n, 60.0)
-    } else {
-        (value, 1.0)
+/// Parses the command line; a bad value prints `--name="value" does not parse, expected ...` and exits with 1.
+pub fn parse_cli<T: clap::Parser>() -> T {
+    use clap::error::{ContextKind, ContextValue, ErrorKind};
+
+    let error = match T::try_parse() {
+        Ok(cli) => return cli,
+        Err(error) if !error.use_stderr() => error.exit(),
+        Err(error) => error,
     };
-    let seconds = number.parse::<f64>().map_err(|_| "invalid duration")? * scale;
-    if !seconds.is_finite() || seconds <= 0.0 {
-        return Err("duration must be positive and finite".into());
-    }
-    Duration::try_from_secs_f64(seconds).map_err(|e| e.to_string())
+    let context = |kind| match error.get(kind) {
+        Some(ContextValue::String(text)) => text.as_str(),
+        _ => "",
+    };
+    let expected = match (
+        error.kind(),
+        std::error::Error::source(&error),
+        error.get(ContextKind::ValidValue),
+    ) {
+        (ErrorKind::ValueValidation, Some(expected), _) => expected.to_string(),
+        (ErrorKind::InvalidValue, _, Some(ContextValue::Strings(values))) if !values.is_empty() => {
+            format!("expected one of {}", values.join(", "))
+        }
+        (ErrorKind::InvalidValue, _, _) => "expected a non-empty value".into(),
+        _ => {
+            eprint!("{error}");
+            std::process::exit(1)
+        }
+    };
+    let flag = context(ContextKind::InvalidArg).split(' ').next().unwrap_or_default();
+    eprintln!(
+        "{flag}=\"{}\" does not parse, {expected}",
+        context(ContextKind::InvalidValue)
+    );
+    std::process::exit(1)
 }
 
-fn entry_budget(value: &str, records: u64) -> Result<u64> {
-    let count = if let Some(percent) = value.strip_suffix('%') {
-        let percent = percent.parse::<f64>().map_err(|_| "invalid entry percentage")?;
-        if !percent.is_finite() || percent <= 0.0 || percent > 100.0 {
-            return Err("entry percentage must be in (0, 100]".into());
-        }
-        ((records as f64 * percent / 100.0).ceil() as u64).max(1)
-    } else {
-        workload::parse_count(value)?
-    };
-    if count == 0 {
-        return Err("entries must be positive".into());
+/// Parses a 32-bit unsigned integer, or `random` as 32 bits from the OS entropy source.
+pub fn parse_seed(text: &str) -> Option<Seed> {
+    if text == "random" {
+        return Some(Seed(RandomState::new().build_hasher().finish() as u32));
     }
-    Ok(count)
+    let digits = !text.is_empty() && text.bytes().all(|byte| byte.is_ascii_digit());
+    digits.then(|| text.parse().ok().map(Seed)).flatten()
+}
+
+/// Parses a thread count like `8`, or `0` as `all_cores`.
+pub fn parse_threads(text: &str, all_cores: NonZeroUsize) -> Option<Threads> {
+    match text {
+        "0" => Some(Threads(all_cores)),
+        _ => parse_count(text).and_then(NonZeroUsize::new).map(Threads),
+    }
+}
+
+/// Parses a positive whole number in ASCII digits, like `128`; zero is `None`.
+pub fn parse_count(text: &str) -> Option<usize> {
+    let digits = !text.is_empty() && text.bytes().all(|byte| byte.is_ascii_digit());
+    digits.then(|| text.parse().ok()).flatten().filter(|&count| count != 0)
+}
+
+/// Parses a duration like `200ms` or `10s`; a bare number, a fraction or zero is `None`.
+pub fn parse_duration(text: &str) -> Option<Duration> {
+    match text.strip_suffix("ms") {
+        Some(count) => parse_count(count).map(|count| Duration::from_millis(count as u64)),
+        None => parse_count(text.strip_suffix('s')?).map(|count| Duration::from_secs(count as u64)),
+    }
+}
+
+/// Spells a duration the way `parse_duration` reads it: `1s`, `1500ms`.
+pub fn spell_duration(duration: Duration) -> String {
+    let milliseconds = duration.as_millis();
+    match milliseconds % 1000 {
+        0 => format!("{}s", milliseconds / 1000),
+        _ => format!("{milliseconds}ms"),
+    }
+}
+
+/// Spells a size the way `parse_size` reads it: `256MB`, `1000`.
+pub fn spell_size(bytes: u64) -> String {
+    let (mut count, mut unit) = (bytes, "");
+    for larger in ["KB", "MB", "GB", "TB"] {
+        if count == 0 || count % 1024 != 0 {
+            break;
+        }
+        count /= 1024;
+        unit = larger;
+    }
+    format!("{count}{unit}")
+}
+
+/// A 32-bit run seed, an integer or drawn from the OS for `random`.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize)]
+pub struct Seed(pub u32);
+
+impl From<Seed> for u64 {
+    fn from(seed: Seed) -> u64 {
+        u64::from(seed.0)
+    }
+}
+
+impl fmt::Display for Seed {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(formatter, "{}", self.0)
+    }
+}
+
+/// A thread count; `0` in the variable resolves to every core when read, so it is never zero.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize)]
+pub struct Threads(pub NonZeroUsize);
+
+impl Threads {
+    pub const ONE: Threads = Threads(NonZeroUsize::MIN);
+}
+
+impl fmt::Display for Threads {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(formatter, "{}", self.0)
+    }
+}
+
+/// A size in bytes, never an element count; prints the way `parse_size` reads it.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, PartialOrd, Ord, serde::Serialize)]
+pub struct Bytes(pub u64);
+
+impl fmt::Display for Bytes {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter.write_str(&spell_size(self.0))
+    }
+}
+
+/// `parse_count` for clap.
+pub fn parse_count_flag(text: &str) -> Result<usize> {
+    parse_count(text).ok_or_else(|| "expected a positive count".into())
+}
+
+/// `parse_threads` for clap, with `0` resolved to every available core.
+pub fn parse_threads_flag(text: &str) -> Result<Threads> {
+    let all_cores = std::thread::available_parallelism().unwrap_or(NonZeroUsize::MIN);
+    parse_threads(text, all_cores).ok_or_else(|| "expected a count, 0 for all cores".into())
+}
+
+/// `parse_seed` for clap.
+pub fn parse_seed_flag(text: &str) -> Result<Seed> {
+    parse_seed(text).ok_or_else(|| "expected an unsigned integer or random".into())
+}
+
+/// `parse_duration` for clap.
+pub fn parse_duration_flag(text: &str) -> Result<Duration> {
+    parse_duration(text).ok_or_else(|| "expected a duration like 200ms or 10s".into())
+}
+
+/// Parses an unsigned decimal like `1000` or `2.5`; signs, exponents and non-finite spellings are `None`.
+fn parse_decimal(text: &str) -> Option<f64> {
+    let digits = text.starts_with(|c: char| c.is_ascii_digit())
+        && text.bytes().all(|byte| byte.is_ascii_digit() || byte == b'.');
+    digits.then(|| text.parse().ok()).flatten()
+}
+
+fn parse_rate_flag(text: &str) -> Result<f64> {
+    parse_decimal(text)
+        .filter(|rate| *rate > 0.0)
+        .ok_or_else(|| "expected a positive rate like 1000 or 2.5".into())
+}
+
+fn parse_entries_flag(text: &str) -> Result<EntryBudget> {
+    let budget = match text.strip_suffix('%') {
+        Some(percent) => parse_decimal(percent)
+            .filter(|percent| *percent > 0.0 && *percent <= 100.0)
+            .map(EntryBudget::Percent),
+        None => workload::parse_count(text).ok().map(EntryBudget::Count),
+    };
+    budget.ok_or_else(|| "expected a positive count like 10K or a percentage like 10%".into())
+}
+
+/// Spells a payload size or range the way `--value-size` reads it.
+fn spell_value_size(sizes: &RangeInclusive<Bytes>) -> String {
+    match sizes.start() == sizes.end() {
+        true => sizes.start().to_string(),
+        false => format!("{}..{}", sizes.start(), sizes.end()),
+    }
+}
+
+fn serialize_value_size<S: serde::Serializer>(
+    sizes: &RangeInclusive<Bytes>,
+    serializer: S,
+) -> std::result::Result<S::Ok, S::Error> {
+    serializer.collect_str(&spell_value_size(sizes))
+}
+
+/// Spells a `clap::ValueEnum` value the way the command line takes it.
+pub fn spell_value<T: clap::ValueEnum>(value: &T) -> String {
+    value
+        .to_possible_value()
+        .map_or_else(String::new, |value| value.get_name().to_owned())
+}
+
+/// Joins values with commas, the way list flags read them.
+fn spell_list<T: fmt::Display>(values: &[T]) -> String {
+    values.iter().map(T::to_string).collect::<Vec<_>>().join(",")
 }
 
 fn drop_page_cache() -> Result<()> {
@@ -156,7 +385,7 @@ fn drop_page_cache() -> Result<()> {
     }
     #[cfg(not(target_os = "linux"))]
     {
-        Err("--drop-caches requires Linux".into())
+        Err("--between-workloads reopen-and-drop-caches requires Linux".into())
     }
 }
 
@@ -175,7 +404,7 @@ impl DataManifest {
             .map_err(|e| format!("unowned benchmark directory {}: {e}", path.display()))?;
         let manifest: Self = serde_json::from_slice(&bytes)
             .map_err(|e| format!("invalid benchmark manifest {}: {e}", path.display()))?;
-        if manifest.format != 1 || manifest.identity != identity || manifest.floor > manifest.next {
+        if manifest.format != MANIFEST_FORMAT || manifest.identity != identity || manifest.floor > manifest.next {
             return Err(format!("benchmark manifest configuration mismatch: {}", path.display()));
         }
         Ok(manifest)
@@ -192,27 +421,15 @@ impl DataManifest {
 fn run_benchmarks(
     args: CommonArgs,
     backend_options: serde_json::Value,
+    backend_settings: &[(&str, String)],
     open: impl Fn(&CommonArgs, &Path) -> Result<Box<dyn Backend, System>>,
 ) -> Result<()> {
-    if args.records.is_empty() || args.records.contains(&0) || args.threads.is_empty() || args.threads.contains(&0) {
-        return Err("records and threads must be positive".into());
-    }
-    if args.rate.is_some_and(|r| !r.is_finite() || r <= 0.0) {
-        return Err("rate must be positive and finite".into());
-    }
-    if args.data_model == DataModel::Documents && args.field != "/score" {
-        return Err("document updates currently support --field /score".into());
-    }
     if args.perf_counters && !cfg!(all(target_os = "linux", feature = "perf-counters")) {
         return Err("--perf-counters requires Linux and the perf-counters feature".into());
     }
-    let sizes = workload::parse_value_size(&args.value_size)?;
-    let duration = args.duration.as_deref().map(duration).transpose()?;
-    let mut workloads = args
-        .workloads
-        .split(',')
-        .map(str::parse::<Workload>)
-        .collect::<Result<Vec<_>>>()?;
+    let to_usize = |bytes: Bytes| usize::try_from(bytes.0).map_err(|_| "--value-size exceeds platform limit");
+    let sizes = to_usize(*args.value_size.start())?..=to_usize(*args.value_size.end())?;
+    let mut workloads = args.workloads.clone();
     if let Some(distribution) = args.distribution {
         for workload in &mut workloads {
             if workload.name == "read-latest-95-insert-5" && distribution != data::Distribution::Latest {
@@ -240,21 +457,54 @@ fn run_benchmarks(
     {
         return Err("bulk-load must be the first workload".into());
     }
-    if args.drop_caches && !cfg!(target_os = "linux") {
-        return Err("--drop-caches requires Linux".into());
+    if args.between_workloads == BetweenWorkloads::ReopenAndDropCaches && !cfg!(target_os = "linux") {
+        return Err("--between-workloads reopen-and-drop-caches requires Linux".into());
+    }
+    let unset = || "none".to_owned();
+    eprintln!("- Records: {}", spell_list(&args.records));
+    eprintln!("- Threads: {}", spell_list(&args.threads));
+    eprintln!("- Workloads: {}", spell_list(&args.workloads));
+    eprintln!(
+        "- Distribution: {}",
+        args.distribution.as_ref().map_or_else(unset, spell_value)
+    );
+    match args.time_limit {
+        Some(time_limit) => eprintln!("- Time limit: {}", spell_duration(time_limit)),
+        None => eprintln!("- Entries: {}", args.entries),
+    }
+    eprintln!("- Value size: {}", spell_value_size(&args.value_size));
+    eprintln!("- Data dir: {}", args.data_dir.display());
+    eprintln!("- Output: {}", args.output.display());
+    eprintln!("- Seed: {}", args.seed);
+    eprintln!("- Durability: {}", spell_value(&args.durability));
+    eprintln!("- Data model: {}", spell_value(&args.data_model));
+    eprintln!("- Degree: {}", args.degree);
+    eprintln!(
+        "- Calls per transaction: {}",
+        args.calls_per_transaction.map_or_else(unset, |calls| calls.to_string())
+    );
+    eprintln!(
+        "- Calls per second: {}",
+        args.calls_per_second.map_or_else(unset, |calls| calls.to_string())
+    );
+    eprintln!("- Verify: {}", spell_value(&args.verify));
+    eprintln!("- Perf counters: {}", args.perf_counters);
+    eprintln!("- Between workloads: {}", spell_value(&args.between_workloads));
+    for (name, value) in backend_settings {
+        eprintln!("- {name}: {value}");
     }
     let executable = std::env::current_exe().map_err(|e| e.to_string())?;
     let engine = executable.file_stem().and_then(|s| s.to_str()).unwrap_or("crudeval");
     for &records in &args.records {
         for &threads in &args.threads {
-            let budget = entry_budget(&args.entries, records)?;
+            let budget = args.entries.entries(records);
             let mut config = args.clone();
             config.records = vec![records];
             config.threads = vec![threads];
             let identity = output::config_hash(&(
-                2u32,
+                IDENTITY_VERSION,
                 records,
-                threads,
+                threads.0.get(),
                 args.data_model,
                 args.durability,
                 args.seed,
@@ -274,7 +524,7 @@ fn run_benchmarks(
                 }
                 std::fs::create_dir_all(&path).map_err(|e| e.to_string())?;
                 let manifest = DataManifest {
-                    format: 1,
+                    format: MANIFEST_FORMAT,
                     identity,
                     floor: 0,
                     next: 0,
@@ -290,11 +540,11 @@ fn run_benchmarks(
                 manifest
             };
             let mut backend = open(&config, &path)?;
-            if args.transaction_size > 0 && !backend.capabilities().transactions {
-                return Err("this backend does not support --transaction-size".into());
+            if args.calls_per_transaction.is_some() && !backend.capabilities().transactions {
+                return Err("this backend does not support --calls-per-transaction".into());
             }
             let mut report = output::ConfigReport {
-                schema_version: 2,
+                schema_version: REPORT_SCHEMA_VERSION,
                 started_unix_seconds: SystemTime::now()
                     .duration_since(UNIX_EPOCH)
                     .unwrap_or_default()
@@ -306,7 +556,7 @@ fn run_benchmarks(
                 phases: Vec::new(),
             };
             report.config.insert("key_bytes".into(), 16.into());
-            report.config.insert("adapter_revision".into(), 2.into());
+            report.config.insert("adapter_revision".into(), ADAPTER_REVISION.into());
             report.config.insert(
                 "latency_scope".into(),
                 "attempted calls, including failures and rolled-back transactions".into(),
@@ -325,7 +575,8 @@ fn run_benchmarks(
                 );
             }
             let keyspace = KeySpace::restore(manifest.floor..manifest.next)?;
-            let model = model::RecordGenerator::new(args.data_model, args.seed, sizes.clone(), records, args.degree)?;
+            let model =
+                model::RecordGenerator::new(args.data_model, args.seed.into(), sizes.clone(), records, args.degree)?;
             eprintln!(
                 "{} · {records} records · {threads} threads · {:?}",
                 engine, args.data_model
@@ -335,10 +586,10 @@ fn run_benchmarks(
                 "workload", "entries/s", "p99 (µs)", "missing"
             );
             for (index, workload) in workloads.iter().enumerate() {
-                if index > 0 && (args.reopen || args.drop_caches) {
+                if index > 0 && args.between_workloads != BetweenWorkloads::Keep {
                     backend.flush()?;
                     drop(backend);
-                    if args.drop_caches {
+                    if args.between_workloads == BetweenWorkloads::ReopenAndDropCaches {
                         drop_page_cache()?;
                     }
                     backend = open(&config, &path)?;
@@ -366,7 +617,15 @@ fn run_benchmarks(
                 let mut phase = if skipped {
                     empty_phase(workload, "skipped", Some("ordered ranges unsupported".into()))
                 } else {
-                    execute_phase(backend.as_ref(), &config, workload, &keyspace, &model, budget, duration)?
+                    execute_phase(
+                        backend.as_ref(),
+                        &config,
+                        workload,
+                        &keyspace,
+                        &model,
+                        budget,
+                        args.time_limit,
+                    )?
                 };
                 let flush_start = Instant::now();
                 if phase.status != "skipped" {
@@ -439,9 +698,9 @@ fn execute_phase(
     keyspace: &KeySpace,
     model: &model::RecordGenerator,
     budget: u64,
-    duration: Option<Duration>,
+    time_limit: Option<Duration>,
 ) -> Result<output::WorkloadReport> {
-    let threads = args.threads[0];
+    let threads = args.threads[0].0.get();
     keyspace.workers(threads);
     let barrier = Barrier::new(threads);
     let start = OnceLock::new();
@@ -467,7 +726,8 @@ fn execute_phase(
                     workload,
                     model,
                     target,
-                    duration.filter(|_| !matches!(workload.operations[0].0, Operation::BulkLoad | Operation::FullScan)),
+                    time_limit
+                        .filter(|_| !matches!(workload.operations[0].0, Operation::BulkLoad | Operation::FullScan)),
                 );
                 if barrier.wait().is_leader() {
                     let _ = start.set(Instant::now());
@@ -481,7 +741,7 @@ fn execute_phase(
                         keyspace,
                         model,
                         budget,
-                        duration,
+                        time_limit,
                         thread,
                         *start.get().unwrap(),
                         cancelled,
@@ -872,14 +1132,14 @@ impl WorkerBuffers {
         workload: &Workload,
         generator: &model::RecordGenerator,
         target: u64,
-        duration: Option<Duration>,
+        time_limit: Option<Duration>,
     ) -> Result<Self> {
         let batch = workload
             .range_size
             .as_ref()
             .map_or(workload.batch_size, |range| *range.end())
             .max(workload.batch_size);
-        let rows = if duration.is_some() {
+        let rows = if time_limit.is_some() {
             batch
         } else {
             batch.min(target.max(1) as usize)
@@ -893,7 +1153,7 @@ impl WorkerBuffers {
         let mut selected = Vec::with_capacity_in(slots, System);
         selected.resize(slots, u64::MAX);
         let histogram_names = workload.operations.iter().map(|(operation, _)| *operation);
-        let timeline = match duration {
+        let timeline = match time_limit {
             Some(limit) => usize::try_from(limit.as_secs())
                 .ok()
                 .and_then(|seconds| seconds.checked_add(2))
@@ -905,7 +1165,7 @@ impl WorkerBuffers {
             keys: Vec::with_capacity_in(rows, System),
             scanned,
             selected,
-            measurements: WorkloadMeasurements::new(histogram_names, args.transaction_size > 0, timeline)?,
+            measurements: WorkloadMeasurements::new(histogram_names, args.calls_per_transaction.is_some(), timeline)?,
         })
     }
     fn select(&mut self, key: u64) -> bool {
@@ -939,13 +1199,13 @@ fn run_worker(
     keyspace: &KeySpace,
     generator: &model::RecordGenerator,
     budget: u64,
-    duration: Option<Duration>,
+    time_limit: Option<Duration>,
     thread: usize,
     start: Instant,
     cancelled: &AtomicBool,
     mut buffers: WorkerBuffers,
 ) -> WorkloadMeasurements {
-    let threads = args.threads[0] as u64;
+    let threads = args.threads[0].0.get() as u64;
     let bulk_load = workload.operations[0].0 == Operation::BulkLoad;
     let full_scan = workload.operations[0].0 == Operation::FullScan;
     let mut snapshot = keyspace.live();
@@ -959,8 +1219,8 @@ fn run_worker(
     let target = total / threads + u64::from((thread as u64) < total % threads);
     let mut scan_start = snapshot.start + (total / threads) * thread as u64 + (thread as u64).min(total % threads);
     let scan_end = scan_start + target;
-    let timed = duration.filter(|_| !bulk_load && !full_scan);
-    let mut rng = RandomGenerator::new(derive_seed(args.seed, &workload.name, thread));
+    let timed = time_limit.filter(|_| !bulk_load && !full_scan);
+    let mut rng = RandomGenerator::new(derive_seed(args.seed.into(), &workload.name, thread));
     let mut pending = PendingCounts::default();
     let mut attempted = 0;
     let mut calls = 0u64;
@@ -987,7 +1247,7 @@ fn run_worker(
             {
                 break;
             }
-            let scheduled = if let Some(rate) = args.rate {
+            let scheduled = if let Some(rate) = args.calls_per_second {
                 let seconds = (calls as f64 * threads as f64 + thread as f64) / rate;
                 let seconds = timed.map_or(seconds, |limit| seconds.min(limit.as_secs_f64()));
                 let delay =
@@ -1093,7 +1353,7 @@ fn run_worker(
                     .records
                     .prepare(generator, &buffers.keys, operation, snapshot.start, &mut rng)?;
             }
-            if args.transaction_size > 0 && !in_transaction {
+            if args.calls_per_transaction.is_some() && !in_transaction {
                 session.transaction().begin()?;
                 in_transaction = true;
             }
@@ -1112,11 +1372,13 @@ fn run_worker(
                         let result = buffers.records.read(&mut session, &buffers.keys);
                         storage_time += before.elapsed();
                         let found = result?;
-                        if let Err(error) =
-                            buffers
-                                .records
-                                .verify(generator, &buffers.keys, found, snapshot.start, !args.no_verify)
-                        {
+                        if let Err(error) = buffers.records.verify(
+                            generator,
+                            &buffers.keys,
+                            found,
+                            snapshot.start,
+                            args.verify == Verify::Values,
+                        ) {
                             buffers.measurements.corrupted += 1;
                             return Err(error);
                         }
@@ -1149,7 +1411,7 @@ fn run_worker(
                     }
                 }
             })();
-            let latency = if args.rate.is_some() {
+            let latency = if args.calls_per_second.is_some() {
                 scheduled.elapsed()
             } else if operation == Operation::ReadModifyWrite {
                 storage_time
@@ -1170,7 +1432,7 @@ fn run_worker(
                     &buffers.keys,
                     affected as usize,
                     snapshot.start,
-                    !args.no_verify,
+                    args.verify == Verify::Values,
                 ) {
                     buffers.measurements.corrupted += 1;
                     return Err(error);
@@ -1201,11 +1463,13 @@ fn run_worker(
                     {
                         return Err("full scan crossed its shard or skipped an existing key".into());
                     }
-                    if let Err(error) =
-                        buffers
-                            .records
-                            .verify(generator, keys, affected as usize, snapshot.start, !args.no_verify)
-                    {
+                    if let Err(error) = buffers.records.verify(
+                        generator,
+                        keys,
+                        affected as usize,
+                        snapshot.start,
+                        args.verify == Verify::Values,
+                    ) {
                         buffers.measurements.corrupted += 1;
                         return Err(error);
                     }
@@ -1225,7 +1489,7 @@ fn run_worker(
             } else {
                 buffers.records.bytes(operation, affected as usize)
             };
-            if args.transaction_size > 0 {
+            if args.calls_per_transaction.is_some() {
                 pending.entries += affected;
                 pending.missing += count - affected;
                 pending.bytes += bytes;
@@ -1239,9 +1503,9 @@ fn run_worker(
             }
             attempted += count;
             calls += 1;
-            if args.transaction_size > 0 {
+            if args.calls_per_transaction.is_some() {
                 transaction_calls += 1;
-                if transaction_calls == args.transaction_size {
+                if Some(transaction_calls) == args.calls_per_transaction {
                     commit(
                         &mut session,
                         keyspace,
@@ -1471,6 +1735,9 @@ mod tests {
         argv.extend_from_slice(extra);
         Cli::parse_from(argv).args
     }
+    fn workloads(names: &str) -> Vec<Workload> {
+        names.split(',').map(|name| name.parse().unwrap()).collect()
+    }
     fn model() -> model::RecordGenerator {
         model::RecordGenerator::new(DataModel::KeyValue, 42, 32..=32, 7, 0).unwrap()
     }
@@ -1503,7 +1770,7 @@ mod tests {
     }
     #[test]
     fn transactions_publish_after_commit_and_failed_commits_publish_nothing() {
-        let args = args(&["--transaction-size", "2"]);
+        let args = args(&["--calls-per-transaction", "2"]);
         let model = model();
         for fail_commit in [false, true] {
             let backend = Memory {
@@ -1566,29 +1833,29 @@ mod tests {
         ]);
         args.data_dir = temp.path().join("data");
         args.output = temp.path().join("results");
-        run(args.clone(), (), |_, _| Ok(Box::new_in(backend.clone(), System))).unwrap();
+        run(args.clone(), (), &[], |_, _| Ok(Box::new_in(backend.clone(), System))).unwrap();
         assert_eq!(backend.rows.lock().unwrap().keys().next().unwrap().as_u128(), 2);
-        args.workloads = "full-scan,batch-insert-1".into();
-        run(args.clone(), (), |_, _| Ok(Box::new_in(backend.clone(), System))).unwrap();
+        args.workloads = workloads("full-scan,batch-insert-1");
+        run(args.clone(), (), &[], |_, _| Ok(Box::new_in(backend.clone(), System))).unwrap();
         assert_eq!(backend.rows.lock().unwrap().len(), 9);
-        assert!(run(args.clone(), "different-server", |_, _| Ok(Box::new_in(
+        assert!(run(args.clone(), "different-server", &[], |_, _| Ok(Box::new_in(
             backend.clone(),
             System
         )))
         .unwrap_err()
         .contains("no existing"));
-        args.workloads = "batch-insert-1".into();
-        args.transaction_size = 1;
+        args.workloads = workloads("batch-insert-1");
+        args.calls_per_transaction = Some(1);
         backend.fail_commit = true;
-        assert!(run(args.clone(), (), |_, _| Ok(Box::new_in(backend.clone(), System))).is_err());
-        args.workloads = "read".into();
-        assert!(run(args, (), |_, _| Ok(Box::new_in(backend.clone(), System)))
+        assert!(run(args.clone(), (), &[], |_, _| Ok(Box::new_in(backend.clone(), System))).is_err());
+        args.workloads = workloads("read");
+        assert!(run(args, (), &[], |_, _| Ok(Box::new_in(backend.clone(), System)))
             .unwrap_err()
             .contains("interrupted"));
     }
 
     #[test]
-    fn skipped_ranges_do_not_stop_the_chain_and_rate_respects_duration() {
+    fn skipped_ranges_do_not_stop_the_chain_and_rate_respects_time_limit() {
         let temp = tempfile::tempdir().unwrap();
         let backend = Memory::default();
         let mut args = args(&[
@@ -1599,9 +1866,9 @@ mod tests {
         ]);
         args.data_dir = temp.path().join("data");
         args.output = temp.path().join("results");
-        run(args.clone(), (), |_, _| Ok(Box::new_in(backend.clone(), System))).unwrap();
+        run(args.clone(), (), &[], |_, _| Ok(Box::new_in(backend.clone(), System))).unwrap();
         assert_eq!(backend.rows.lock().unwrap().len(), 8);
-        args.rate = Some(0.01);
+        args.calls_per_second = Some(0.01);
         let keys = KeySpace::new(8);
         let started = Instant::now();
         let result = execute_phase(

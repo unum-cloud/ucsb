@@ -33,8 +33,9 @@ use crudeval::{
 struct Cli {
     #[command(flatten)]
     common: CommonArgs,
-    #[arg(long, default_value = "1TiB", value_parser = crudeval::workload::parse_count)]
-    map_size: u64,
+    /// Largest database the memory map can hold, like 1TB.
+    #[arg(long, default_value = "1TB", value_parser = crudeval::workload::parse_size)]
+    map_size: crudeval::Bytes,
 }
 struct LmdbBackend {
     env: Env,
@@ -45,9 +46,6 @@ struct LmdbBackend {
 }
 impl LmdbBackend {
     fn open(path: &Path, durability: Durability, map_size: usize) -> Result<Self> {
-        if map_size == 0 {
-            return Err("map size must be positive".into());
-        }
         std::fs::create_dir_all(path).map_err(|e| e.to_string())?;
         let mut options = EnvOpenOptions::new();
         options.map_size(map_size).max_readers(4096);
@@ -237,20 +235,26 @@ impl TransactionSession for LmdbSession<'_> {
 }
 
 fn main() -> Result<()> {
-    let cli = Cli::parse();
-    run(cli.common, json!({"map_size": cli.map_size}), move |args, path| {
-        if args.data_model != DataModel::KeyValue {
-            return Err("LMDB supports only kv data_model".into());
-        }
-        Ok(Box::new_in(
-            LmdbBackend::open(
-                path,
-                args.durability,
-                usize::try_from(cli.map_size).map_err(|_| "map size exceeds platform limit")?,
-            )?,
-            System,
-        ))
-    })
+    let cli: Cli = crudeval::parse_cli();
+    let settings = [("Map size", cli.map_size.to_string())];
+    run(
+        cli.common,
+        json!({"map_size": cli.map_size}),
+        &settings,
+        move |args, path| {
+            if args.data_model != DataModel::KeyValue {
+                return Err("LMDB supports only kv data_model".into());
+            }
+            Ok(Box::new_in(
+                LmdbBackend::open(
+                    path,
+                    args.durability,
+                    usize::try_from(cli.map_size.0).map_err(|_| "map size exceeds platform limit")?,
+                )?,
+                System,
+            ))
+        },
+    )
 }
 
 #[cfg(test)]

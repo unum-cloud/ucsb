@@ -27,7 +27,7 @@ use crudeval::{
         GraphSession, Key, KeysOutput, Result, TransactionSession, VertexRef,
     },
     docker::ContainerHandle,
-    run, CommonArgs,
+    run, BetweenWorkloads, CommonArgs,
 };
 
 const IMAGE: &str = "surrealdb/surrealdb:v3.3.0";
@@ -192,8 +192,8 @@ impl SurrealSession {
     }
 }
 fn open(args: &CommonArgs, path: &Path) -> Result<Box<dyn Backend, System>> {
-    if args.reopen || args.drop_caches {
-        return Err("Docker backends do not support --reopen or --drop-caches".into());
+    if args.between_workloads != BetweenWorkloads::Keep {
+        return Err("Docker backends support only --between-workloads keep".into());
     }
     if args.data_model == DataModel::KeyValue {
         return Err("SurrealDB supports documents and native graphs".into());
@@ -253,7 +253,7 @@ impl Backend for SurrealBackend {
             ),
             (
                 "batch_execution".into(),
-                json!("native inserts chunked below 4 MiB RPC limit, one transaction per chunk; native document/vertex/relation inserts; scalar and graph updates execute in server FOR loops"),
+                json!("native inserts chunked below 4 MB RPC limit, one transaction per chunk; native document/vertex/relation inserts; scalar and graph updates execute in server FOR loops"),
             ),
         ]);
         result
@@ -321,7 +321,7 @@ impl DocumentSession for SurrealSession {
                         })
                         .sum::<usize>();
                 if size > RPC_PAYLOAD_LIMIT {
-                    return Err("Document exceeds the SurrealDB 4 MiB RPC request limit".into());
+                    return Err("Document exceeds the SurrealDB 4 MB RPC request limit".into());
                 }
                 if bytes + size > RPC_PAYLOAD_LIMIT {
                     break;
@@ -437,7 +437,7 @@ impl GraphSession for SurrealSession {
                 let value = values.get(index).ok_or("Missing vertex")?;
                 let size = 128 + value.edges.len() * 128;
                 if size > RPC_PAYLOAD_LIMIT {
-                    return Err("Vertex adjacency exceeds the SurrealDB 4 MiB RPC request limit".into());
+                    return Err("Vertex adjacency exceeds the SurrealDB 4 MB RPC request limit".into());
                 }
                 if bytes + size > RPC_PAYLOAD_LIMIT {
                     break;
@@ -540,8 +540,8 @@ impl GraphSession for SurrealSession {
     }
 }
 fn main() {
-    let cli = Cli::parse();
-    if let Err(error) = run(cli.common, IMAGE, open) {
+    let cli: Cli = crudeval::parse_cli();
+    if let Err(error) = run(cli.common, IMAGE, &[], open) {
         eprintln!("{error}");
         std::process::exit(1);
     }

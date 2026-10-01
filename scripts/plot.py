@@ -53,10 +53,10 @@ def main():
         ),
         (
             "memory",
-            "Peak client RSS (MiB)",
+            "Peak client RSS (MB)",
             lambda p: p["client_usage"]["rss_max_bytes"] / 2**20,
         ),
-        ("disk", "Database size (MiB)", lambda p: p["disk_bytes"] / 2**20),
+        ("disk", "Database size (MB)", lambda p: p["disk_bytes"] / 2**20),
     ]
     workloads = list(
         dict.fromkeys((model, phase["workload"]) for _, model, phase in rows)

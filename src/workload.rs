@@ -4,9 +4,16 @@ use std::{fmt, ops::RangeInclusive, str::FromStr};
 
 use serde::Serialize;
 
-use crate::data::{Distribution, RandomGenerator};
+use crate::{
+    data::{Distribution, RandomGenerator},
+    Bytes,
+};
+
+/// Smallest payload: the 16-byte key plus the 8-byte version every value starts with.
+const MIN_VALUE_SIZE: Bytes = Bytes(24);
 
 pub const DEFAULT_WORKLOADS: &str = "bulk-load,read,batch-read-256,range-read-256,full-scan,read-50-update-50,read-latest-95-insert-5,batch-insert-1000,delete-oldest";
+const EXPECTED_WORKLOADS: &str = "expected comma-separated workloads: bulk-load, read, full-scan, read-50-update-50, read-95-update-5, read-latest-95-insert-5, range-read-95-insert-5, read-50-read-modify-write-50, delete-oldest, batch-read-N, range-read-N, batch-insert-N or bulk-load-N";
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize)]
 #[serde(rename_all = "kebab-case")]
@@ -36,7 +43,7 @@ impl Operation {
     }
 }
 
-#[derive(Clone, Debug, Serialize)]
+#[derive(Clone, Debug)]
 pub struct Workload {
     pub name: String,
     pub operations: Vec<(Operation, u32)>,
@@ -61,6 +68,12 @@ impl Workload {
 impl fmt::Display for Workload {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str(&self.name)
+    }
+}
+
+impl Serialize for Workload {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        serializer.serialize_str(&self.name)
     }
 }
 
@@ -109,12 +122,11 @@ impl FromStr for Workload {
                 ]
                 .into_iter()
                 .find_map(|(prefix, operation)| name.strip_prefix(prefix).map(|n| (prefix, n, operation)))
-                .ok_or_else(|| format!("unknown workload: {name}"))?;
-                result.batch_size =
-                    usize::try_from(parse_count(count)?).map_err(|_| "batch size exceeds platform limit")?;
-                if result.batch_size == 0 {
-                    return Err("batch size must be positive".into());
-                }
+                .ok_or(EXPECTED_WORKLOADS)?;
+                result.batch_size = parse_count(count)
+                    .ok()
+                    .and_then(|count| usize::try_from(count).ok())
+                    .ok_or(EXPECTED_WORKLOADS)?;
                 result.name = format!("{prefix}{}", result.batch_size);
                 vec![(operation, 100)]
             }
@@ -123,36 +135,43 @@ impl FromStr for Workload {
     }
 }
 
-pub fn parse_count(input: &str) -> Result<u64, String> {
-    let split = input.find(|c: char| !c.is_ascii_digit()).unwrap_or(input.len());
-    let value: u64 = input[..split]
-        .parse()
-        .map_err(|_| format!("invalid integer: {input}"))?;
-    let multiplier = match &input[split..] {
-        "" | "B" => 1,
-        "K" | "KB" => 1_000,
-        "M" | "MB" => 1_000_000,
-        "G" | "GB" => 1_000_000_000,
-        "T" | "TB" => 1_000_000_000_000,
-        "KiB" => 1 << 10,
-        "MiB" => 1 << 20,
-        "GiB" => 1 << 30,
-        "TiB" => 1 << 40,
-        _ => return Err(format!("invalid size suffix: {input}")),
-    };
-    value
-        .checked_mul(multiplier)
-        .ok_or_else(|| format!("integer overflow: {input}"))
+/// Parses a count like `10000` or `10K`: `K`, `M`, `G`, `T` are powers of 1000 in any case, and zero is rejected.
+pub fn parse_count(text: &str) -> Result<u64, String> {
+    let split = text.find(|c: char| !c.is_ascii_digit()).unwrap_or(text.len());
+    let exponent = ["", "k", "m", "g", "t"]
+        .iter()
+        .position(|unit| text[split..].eq_ignore_ascii_case(unit));
+    let count = exponent.and_then(|exponent| {
+        text[..split]
+            .parse::<u64>()
+            .ok()?
+            .checked_mul(1000u64.pow(exponent as u32))
+    });
+    count
+        .filter(|&count| count != 0)
+        .ok_or_else(|| "expected a positive count".into())
 }
 
-pub fn parse_value_size(input: &str) -> Result<RangeInclusive<usize>, String> {
+/// Parses a size like `64MB`: bare bytes, or `KB`, `MB`, `GB`, `TB` in any case; zero is rejected.
+pub fn parse_size(text: &str) -> Result<Bytes, String> {
+    let split = text.find(|c: char| !c.is_ascii_digit()).unwrap_or(text.len());
+    let level = ["", "kb", "mb", "gb", "tb"]
+        .iter()
+        .position(|unit| text[split..].eq_ignore_ascii_case(unit));
+    let bytes = level.and_then(|level| text[..split].parse::<u64>().ok()?.checked_mul(1u64 << (10 * level)));
+    bytes
+        .filter(|&bytes| bytes != 0)
+        .map(Bytes)
+        .ok_or_else(|| "expected a size like 4096, 64KB or 1GB".into())
+}
+
+/// Parses a payload size like `1KB` or an ascending range like `100..1KB`, each end at least `MIN_VALUE_SIZE`.
+pub fn parse_value_size(input: &str) -> Result<RangeInclusive<Bytes>, String> {
     let (min, max) = input.split_once("..").unwrap_or((input, input));
-    let min = usize::try_from(parse_count(min)?).map_err(|_| "value size exceeds platform limit")?;
-    let max = usize::try_from(parse_count(max)?).map_err(|_| "value size exceeds platform limit")?;
-    if min < 24 || min > max {
-        return Err("value sizes must be at least 24 bytes and the range must be ascending".into());
+    match (parse_size(min), parse_size(max)) {
+        (Ok(min), Ok(max)) if MIN_VALUE_SIZE <= min && min <= max => Ok(min..=max),
+        _ => Err("expected a size like 1KB or a range like 100..1KB, of at least 24 bytes".into()),
     }
-    Ok(min..=max)
 }
 
 #[cfg(test)]
@@ -183,9 +202,13 @@ mod tests {
     #[test]
     fn sizes_are_checked() {
         assert_eq!(parse_count("1M").unwrap(), 1_000_000);
-        assert_eq!(parse_value_size("24B..1KiB").unwrap(), 24..=1024);
-        for invalid in ["18446744073709551615K", "1.5K", "-1", "K"] {
+        assert_eq!(parse_size("64mb").unwrap(), Bytes(64 << 20));
+        assert_eq!(parse_value_size("24..1KB").unwrap(), Bytes(24)..=Bytes(1024));
+        for invalid in ["18446744073709551615K", "1.5K", "-1", "+1", "K", "0", "1KB"] {
             assert!(parse_count(invalid).is_err());
+        }
+        for invalid in ["0", "1K", "1KB", "24B", "+1KB"] {
+            assert!(parse_size(invalid).is_err());
         }
         for invalid in ["23", "1024..24", "24.."] {
             assert!(parse_value_size(invalid).is_err());

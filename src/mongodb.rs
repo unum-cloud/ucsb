@@ -26,7 +26,7 @@ use crudeval::{
         TransactionSession,
     },
     docker::{ContainerHandle, NetworkHandle},
-    run, CommonArgs,
+    run, BetweenWorkloads, CommonArgs,
 };
 
 #[derive(Clone, Copy, Debug, ValueEnum)]
@@ -64,15 +64,12 @@ fn id(key: Key) -> Bson {
     })
 }
 fn open(args: &CommonArgs, path: &Path, server: Server) -> Result<Box<dyn Backend, System>> {
-    if args.reopen || args.drop_caches {
-        return Err("Docker backends do not support --reopen or --drop-caches".into());
+    if args.between_workloads != BetweenWorkloads::Keep {
+        return Err("Docker backends support only --between-workloads keep".into());
     }
 
     if args.data_model == DataModel::Graph {
         return Err("MongoDB supports kv and docs modalities".into());
-    }
-    if args.data_model == DataModel::Documents && args.field != "/score" {
-        return Err("Document updates currently require --field /score".into());
     }
     if args.durability == Durability::None && matches!(server, Server::Mongodb) {
         return Err("MongoDB cannot disable journaling; choose --durability buffered or flushed".into());
@@ -446,8 +443,9 @@ impl DocumentSession for MongoDbSession {
     }
 }
 fn main() {
-    let cli = Cli::parse();
-    if let Err(error) = run(cli.common, format!("{:?}", cli.server), |args, path| {
+    let cli: Cli = crudeval::parse_cli();
+    let settings = [("Server", crudeval::spell_value(&cli.server))];
+    if let Err(error) = run(cli.common, format!("{:?}", cli.server), &settings, |args, path| {
         open(args, path, cli.server)
     }) {
         eprintln!("{error}");

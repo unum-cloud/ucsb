@@ -468,8 +468,8 @@ async fn finish_batch(connection: &Connection, local: bool, result: Result<usize
 }
 
 fn main() -> Result<()> {
-    let cli = Cli::parse();
-    run(cli.common, (), |args, path| {
+    let cli: Cli = crudeval::parse_cli();
+    run(cli.common, (), &[], |args, path| {
         if args.data_model == DataModel::Graph {
             return Err("Turso graph workloads are unsupported".into());
         }

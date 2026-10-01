@@ -23,7 +23,7 @@ use crate::cypher::{CypherConnection, CypherOutput, CypherSession, GraphRow, Par
 use crudeval::{
     backend::{Backend, BackendCapabilities, BackendSession, BatchMode, DataModel, Durability, Key, Result},
     docker::ContainerHandle,
-    run, CommonArgs,
+    run, BetweenWorkloads, CommonArgs,
 };
 
 #[derive(Clone, Copy, Debug, ValueEnum)]
@@ -233,8 +233,8 @@ impl CypherConnection for Neo4jConnection {
 }
 
 fn open(args: &CommonArgs, path: &Path, server: Server) -> Result<Box<dyn Backend, System>> {
-    if args.reopen || args.drop_caches {
-        return Err("Docker backends do not support --reopen or --drop-caches".into());
+    if args.between_workloads != BetweenWorkloads::Keep {
+        return Err("Docker backends support only --between-workloads keep".into());
     }
 
     if args.data_model != DataModel::Graph {
@@ -354,8 +354,9 @@ impl Backend for Neo4jBackend {
     }
 }
 fn main() {
-    let cli = Cli::parse();
-    if let Err(error) = run(cli.common, format!("{:?}", cli.server), |args, path| {
+    let cli: Cli = crudeval::parse_cli();
+    let settings = [("Server", crudeval::spell_value(&cli.server))];
+    if let Err(error) = run(cli.common, format!("{:?}", cli.server), &settings, |args, path| {
         open(args, path, cli.server)
     }) {
         eprintln!("{error}");

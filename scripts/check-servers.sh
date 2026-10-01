@@ -32,7 +32,7 @@ for model in ("documents", "graph"):
 for backend, extra, model, durability, label in cases:
     output = root / label
     command = [f"target/debug/crud-eval-{backend}", *extra, "--records", "64", "--threads", "2",
-               "--entries", "32", "--value-size", "32B", "--data-model", model,
+               "--entries", "32", "--value-size", "32", "--data-model", model,
                "--durability", durability, "--data-dir", str(output / "data"),
                "--output", str(output / "reports")]
     print(label, flush=True)

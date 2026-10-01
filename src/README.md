@@ -55,7 +55,7 @@ Read-modify-write derives the next value from the value actually read.
 
 `BackendCapabilities` describes implemented modalities, ordered ranges, transactions, and per-operation `BatchMode` values: native, pipelined, or per-record.
 Unsupported range workloads are reported as skipped and the remaining chain continues.
-LMDB, redb, SQLite, Turso, and PostgreSQL expose explicit transactions; the other adapters reject `--transaction-size`.
+LMDB, redb, SQLite, Turso, and PostgreSQL expose explicit transactions; the other adapters reject `--calls-per-transaction`.
 Redis-family adapters do not expose ordered ranges.
 RocksDB uses SST ingestion for bulk loading.
 SQLite, Turso, Redis-family servers, and MongoDB support key-value records and documents; PostgreSQL also supports graphs.

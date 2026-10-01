@@ -162,8 +162,8 @@ impl BackendSession for FjallSession<'_> {
     }
 }
 fn main() -> Result<()> {
-    let cli = Cli::parse();
-    run(cli.common, (), |args, path| {
+    let cli: Cli = crudeval::parse_cli();
+    run(cli.common, (), &[], |args, path| {
         if args.data_model != DataModel::KeyValue {
             return Err("fjall supports only kv data_model".into());
         }

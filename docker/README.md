@@ -21,12 +21,16 @@ Ports bind to localhost with dynamically assigned host ports.
 Named volumes survive `down`; pass `--volumes` only when their data is no longer needed.
 The sample configurations prioritize benchmark operation over durable write acknowledgment; the Rust binaries expose explicit durability policies and record their effective settings.
 
-Garnet uses the native GarnetJSON module compiled from the same pinned 2.1.8 source release. The Redis benchmark builds `crudeval-garnet-json:2.1.8` automatically when the image is absent. To build it explicitly:
+Garnet uses the native GarnetJSON module compiled from the same pinned 2.1.8 source release.
+The Redis benchmark builds `crudeval-garnet-json:2.1.8` automatically when the image is absent.
+To build it explicitly:
 
 ```sh
 docker build -f docker/garnet-json.Dockerfile -t crudeval-garnet-json:2.1.8 docker
 ```
 
-Valkey uses the bundle image with its native JSON module. `surrealdb.yml` starts SurrealDB 3.3.0 with SurrealKV and `sync=every`; its document and graph adapter requires `--durability flushed`.
+Valkey uses the bundle image with its native JSON module.
+`surrealdb.yml` starts SurrealDB 3.3.0 with SurrealKV and `sync=every`; its document and graph adapter requires `--durability flushed`.
 
-Dragonfly chooses its I/O thread count from the available CPUs by default. On memory-constrained hosts, use `--server dragonfly --dragonfly-threads 4`; the selected count is recorded in the report and dataset identity.
+Dragonfly chooses its I/O thread count from the available CPUs by default.
+On memory-constrained hosts, use `--server dragonfly --dragonfly-threads 4`; the selected count is recorded in the report and dataset identity.

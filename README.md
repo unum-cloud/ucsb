@@ -38,25 +38,22 @@ cargo run --release --no-default-features --features neo4j-backend \
 
 ## Backends
 
-| Before: UCSB       | Now: CrudEval                                                   | Key-value | Documents | Graphs |
-| :----------------- | :-------------------------------------------------------------- | :-------: | :-------: | :----: |
-| RocksDB            | `crud-eval-rocksdb`, RocksDB 11.8.1                             |     ✓     |           |        |
-| LMDB               | `crud-eval-lmdb`, through `heed`                                |     ✓     |           |        |
-| LevelDB            | Deferred to UStore v1's LevelDB engine                          |           |           |        |
-| WiredTiger         | Covered through MongoDB; no native submodule                    |           |           |        |
-| UStore's old C API | Deferred until UStore v1 has a public Rust dependency           |           |           |        |
-| Redis              | `crud-eval-redis`, Redis, Valkey, Dragonfly, Garnet, or Kvrocks |     ✓     |     ✓     |        |
-| MongoDB            | `crud-eval-mongodb`, MongoDB or FerretDB                        |     ✓     |     ✓     |        |
-| —                  | `crud-eval-redb`                                                |     ✓     |           |        |
-| —                  | `crud-eval-fjall`                                               |     ✓     |           |        |
-| —                  | `crud-eval-sqlite`                                              |     ✓     |     ✓     |        |
-| —                  | `crud-eval-postgres`                                            |     ✓     |     ✓     |   ✓    |
-| —                  | `crud-eval-neo4j`, Neo4j or Memgraph                            |           |           |   ✓    |
-| —                  | `crud-eval-falkordb`                                            |           |           |   ✓    |
-| —                  | `crud-eval-turso`, embedded Turso 0.8.1                         |     ✓     |     ✓     |        |
-| —                  | `crud-eval-surrealdb`, SurrealDB 3.3.0                          |           |     ✓     |   ✓    |
+| Backend                                                         | Key-value | Documents | Graphs |
+| :-------------------------------------------------------------- | :-------: | :-------: | :----: |
+| `crud-eval-rocksdb`, RocksDB 11.8.1                             |     ✓     |           |        |
+| `crud-eval-lmdb`, through `heed`                                |     ✓     |           |        |
+| `crud-eval-redis`, Redis, Valkey, Dragonfly, Garnet, or Kvrocks |     ✓     |     ✓     |        |
+| `crud-eval-mongodb`, MongoDB or FerretDB                        |     ✓     |     ✓     |        |
+| `crud-eval-redb`                                                |     ✓     |           |        |
+| `crud-eval-fjall`                                               |     ✓     |           |        |
+| `crud-eval-sqlite`                                              |     ✓     |     ✓     |        |
+| `crud-eval-postgres`                                            |     ✓     |     ✓     |   ✓    |
+| `crud-eval-neo4j`, Neo4j or Memgraph                            |           |           |   ✓    |
+| `crud-eval-falkordb`                                            |           |           |   ✓    |
+| `crud-eval-turso`, embedded Turso 0.8.1                         |     ✓     |     ✓     |        |
+| `crud-eval-surrealdb`, SurrealDB 3.3.0                          |           |     ✓     |   ✓    |
 
-Run each binary with `--help` for its engine-specific settings.
+Every binary's settings, engine-specific ones included, are listed under "Settings" below.
 Reports include effective durability and distinguish native batches, protocol pipelines, and per-record loops for each operation.
 Redis has no ordered range operation; range reads and full scans are reported as skipped.
 A data model unsupported by the selected binary is rejected explicitly.
@@ -67,7 +64,6 @@ Turso uses the embedded Rust engine, not libSQL or the hosted service; buffered 
 Its tables use a UUID index over an ordinary rowid table because the pinned engine's experimental `WITHOUT ROWID` support cannot execute the full mutation workload.
 Neo4j checks internal vertex revisions around adjacency reads, with up to eight measured attempts; metadata records the extra round trips and revision storage.
 SurrealDB splits large native insert batches to fit its RPC request limit and reports the transaction boundaries between chunks.
-`--dragonfly-threads` sets Dragonfly's I/O thread count when its automatic choice exceeds the available memory budget.
 
 ## Workloads
 
@@ -102,23 +98,23 @@ Bulk-load keys ascend within each batch; concurrent workers may submit batches o
 `--entries 10%` sets each ordinary phase's attempted entry budget relative to the initial record count.
 A final partial batch uses the remaining budget.
 Bulk load always loads `--records`; full scan covers the current live keyspace.
-`--duration 30s` replaces the ordinary phases' entry budget with a time limit.
+`--time-limit 30s` replaces the ordinary phases' entry budget with a time limit, in whole `ms` or `s`.
 The limit stops new work; in-flight operations and the final transaction commit may finish afterward.
 
 ```sh
 cargo run --release --bin crud-eval-sqlite -- \
-    --records 100K --threads 4 --entries 20K --value-size 100B..1KiB \
+    --records 100K --threads 4 --entries 20K --value-size 100..1KB \
     --workloads bulk-load,read-95-update-5,read-50-read-modify-write-50 \
-    --transaction-size 32 --durability flushed
+    --calls-per-transaction 32 --durability flushed
 ```
 
-`--rate` specifies aggregate scheduled logical operations per second across workers, with one operation in flight per worker.
+`--calls-per-second` sets aggregate scheduled logical operations per second across workers, with one operation in flight per worker.
 It sets an arrival schedule, not a guaranteed achieved rate or an entry rate.
 Rate-controlled latency starts at the intended arrival time, including preparation and queueing when workers fall behind.
 Without a rate, latency measures adapter calls only; read-modify-write sums its read and write call times.
 Phase throughput includes workload generation, verification, and transaction boundaries, but excludes setup and the separately reported flush.
-`--no-verify` disables value verification for measuring that cost separately.
-Transactions commit within the measured phase, every `--transaction-size` logical operations per worker, including a final partial group.
+`--verify structure` skips value verification, to measure that cost separately.
+Transactions commit within the measured phase, every `--calls-per-transaction` logical operations per worker, including a final partial group.
 Commit latency has its own histogram.
 Backends without grouped transactions reject that option.
 
@@ -159,7 +155,7 @@ One shared keyspace allocates disjoint insert ranges and exposes only a contiguo
 Each thread has a seeded generator; concurrency still makes mixed-workload interleavings nondeterministic.
 Zipfian sampling retains UCSB's θ=0.99, fixed large domain, and FNV scramble using double precision.
 
-Binary values have a 24-byte UUID/version header and a deterministic body drawn from a 64 MiB pool built before measurement.
+Binary values have a 24-byte UUID/version header and a deterministic body drawn from a 64 MB pool built before measurement.
 Reads verify the requested key, expected length, and every body byte.
 Documents contain `_id`, mutable integer `score`, and an immutable hex payload derived from the binary value.
 Generated scores and graph versions stay within the nonnegative signed 64-bit range shared by the engines.
@@ -172,6 +168,39 @@ Adjacency reads are checked against the deterministic graph model, accounting fo
 Two-hop results are checked for duplicates, exclusion of the starting vertex, and the requested bound; the verifier does not independently replay a concurrent graph traversal.
 Verification checks content consistency, not a complete concurrent history: a valid stale value can pass, and document reads do not prove that the latest score update was observed.
 
+## Settings
+
+Every binary takes the common flags; the engine flags apply only to the binary named.
+Comma-separated values form a sweep where the meaning says so.
+Each run prints every setting at the start, as `- Name: value` in the same grammar the flag reads.
+A bad value prints `--flag="value" does not parse, expected …` and exits with status 1.
+
+| Flag                      | Default              | Meaning                                                                                                |
+| :------------------------ | :------------------- | :----------------------------------------------------------------------------------------------------- |
+| `--records`               | `100K`               | Initial record counts, with decimal `K`/`M`/`G`/`T`; a sweep                                           |
+| `--threads`               | `1`                  | Worker counts, `0` for all cores; a sweep                                                              |
+| `--workloads`             | the nine-phase chain | Ordered workload names, run as one chain                                                               |
+| `--distribution`          | per workload         | Key sampling override: `uniform`, `zipf` or `latest`                                                   |
+| `--entries`               | `10%`                | Attempted entries per ordinary phase, a count like `20K` or a share of records                         |
+| `--time-limit`            | unset                | Time limit per ordinary phase instead of `--entries`, like `30s` or `500ms`                            |
+| `--value-size`            | `1KB`                | Binary payload size or range like `100..1KB`, at least 24 bytes                                        |
+| `--data-dir`              | `data`               | Parent directory for marked benchmark databases                                                        |
+| `--output`                | `results`            | Directory for JSON reports                                                                             |
+| `--seed`                  | `42`                 | Seed for data and per-worker generators, or `random`                                                   |
+| `--durability`            | `none`               | Requested write durability: `none`, `buffered` or `flushed`                                            |
+| `--data-model`            | `key-value`          | `key-value`, `documents` or `graph`                                                                    |
+| `--degree`                | `8`                  | Outgoing graph degree, capped at the initial population minus one                                      |
+| `--calls-per-transaction` | unset                | Logical operations per transaction; unset leaves boundaries to the adapter                             |
+| `--calls-per-second`      | unset                | Aggregate scheduled operations per second across workers                                               |
+| `--verify`                | `values`             | `values` checks payloads and structure, `structure` skips payload checks                               |
+| `--perf-counters`         | off                  | Record worker hardware counters; Linux and the `perf-counters` feature only                            |
+| `--between-workloads`     | `keep`               | `keep`, `reopen`, or `reopen-and-drop-caches` (Linux only), embedded engines only                      |
+| `--cache-size`            | `64MB`               | `crud-eval-sqlite`: page cache per session                                                             |
+| `--map-size`              | `1TB`                | `crud-eval-lmdb`: largest database the memory map can hold                                             |
+| `--write-buffer-size`     | `128MB`              | `crud-eval-rocksdb`: memtable size before a flush                                                      |
+| `--server`                | per binary           | `crud-eval-redis`, `-mongodb`, `-neo4j`: which server speaks the protocol                              |
+| `--dragonfly-threads`     | automatic            | `crud-eval-redis --server dragonfly`: I/O threads, when the automatic choice exceeds the memory budget |
+
 ## Configuration and reports
 
 | Old interface                        | New interface                                        |
@@ -181,18 +210,17 @@ Verification checks content consistency, not a complete concurrent history: a va
 | `run.py -sz 100MB,1GB -th 1,8`       | `--records 100K,1M --threads 1,8`                    |
 | Workload JSON files                  | `--workloads` and explicit workload names            |
 | Engine `.cfg` files                  | Typed engine-specific CLI options                    |
-| `operations_count`                   | `--entries` or `--duration`                          |
+| `operations_count`                   | `--entries` or `--time-limit`                        |
 | `value_length`                       | `--value-size`                                       |
-| `run.py -dp`                         | `--drop-caches`, Linux only                          |
+| `run.py -dp`                         | `--between-workloads reopen-and-drop-caches`         |
 | Nested merged Google Benchmark files | One `<backend>-<config-hash>.json` per configuration |
 
-`--data-dir` defaults to `data/` and `--output` to `results/`.
 A chain beginning with bulk load replaces only its own marked benchmark directory.
 Unmarked existing directories are never cleared.
 A chain without bulk load reuses that configuration's data and restores the live key range saved after its last successful phase.
 Interrupted or failed mutations leave the dataset marked dirty; reload it before another run.
 Do not run two copies of the same configuration against the same data directory concurrently.
-The server adapters currently reject `--reopen` and `--drop-caches`; embedded adapters close and reopen between phases when requested.
+The server adapters accept only `--between-workloads keep`; embedded adapters close and reopen between phases when requested.
 Dropping the page cache requires Linux permissions and affects the whole host.
 It does not provide a separate process or machine for each phase.
 
@@ -233,12 +261,14 @@ src/<engine>.rs            One binary per storage adapter
 scripts/plot.py            Report visualization
 ```
 
-Directory guides describe [source contracts](src/README.md), [test coverage](src/README.md#tests), [plotting](scripts/README.md), [standalone server configurations](docker/README.md), and [artwork](assets/README.md).
+Directory guides describe [source contracts](src/README.md), [test coverage](src/README.md#tests), [plotting](scripts/README.md), and [standalone server configurations](docker/README.md).
 
 ## API and allocation ownership
 
-The shared runner is the center of the backend design. Embedded engines and server adapters implement the same lifecycle contract and provide worker-local sessions.
-Key-value operations use borrowed flat byte batches. `DocumentSession` receives typed scores and payloads; `GraphSession` receives UUIDs, versions, and flat edges with stable slots.
+The shared runner is the center of the backend design.
+Embedded engines and server adapters implement the same lifecycle contract and provide worker-local sessions.
+Key-value operations use borrowed flat byte batches.
+`DocumentSession` receives typed scores and payloads; `GraphSession` receives UUIDs, versions, and flat edges with stable slots.
 Read methods fill bounded caller-owned buffers and preserve positions for missing records.
 Document updates pass only score patches, and graph updates pass only a version and slot-zero target.
 JSON and BSON are database wire representations, not the shared record interface.
@@ -300,7 +330,8 @@ Compaction reads selected files and their overlapping inputs from the next level
 The levels are logical file sets, not separate storage devices; the new L1 row shows a later state of the same level.
 Once the new files are installed and old readers no longer need the inputs, obsolete files can be reclaimed.
 An update can supersede older versions, but snapshots may still need them; a delete marker must remain while an older covered value could otherwise resurface.
-The diagram omits active snapshots. Other policies make different tradeoffs; see the [RocksDB leveled-compaction guide](https://github.com/facebook/rocksdb/wiki/Leveled-Compaction).
+The diagram omits active snapshots.
+Other policies make different tradeoffs; see the [RocksDB leveled-compaction guide](https://github.com/facebook/rocksdb/wiki/Leveled-Compaction).
 
 Compaction rewrites existing data, increasing host writes relative to application writes, and can outlast the foreground workload.
 The [RocksDB tuning guide](https://github.com/facebook/rocksdb/wiki/RocksDB-Tuning-Guide) explains this write amplification and its tradeoffs with read and space amplification.

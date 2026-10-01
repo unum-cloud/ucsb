@@ -29,22 +29,23 @@ use crudeval::{
         DocumentPatch, DocumentRef, DocumentSession, Durability, Key, KeysOutput, RecordInput, RecordOutput, Result,
         TransactionSession,
     },
-    run, CommonArgs,
+    run, Bytes, CommonArgs,
 };
 
 #[derive(Parser)]
 struct Cli {
     #[command(flatten)]
     common: CommonArgs,
-    #[arg(long, default_value_t = 64)]
-    cache_mib: u32,
+    /// Page cache per session, like 64MB.
+    #[arg(long, default_value = "64MB", value_parser = crudeval::workload::parse_size)]
+    cache_size: Bytes,
 }
 
 struct SqliteBackend {
     path: PathBuf,
     durability: Durability,
     docs: bool,
-    cache_mib: u32,
+    cache_size: u64,
     keeper: Mutex<Connection>,
 }
 struct SqliteSession {
@@ -69,11 +70,11 @@ impl SqliteBackend {
             )
             .map_err(|e| e.to_string())?;
         connection
-            .pragma_update(None, "cache_size", -(i64::from(self.cache_mib) * 1024))
+            .pragma_update(None, "cache_size", -((self.cache_size >> 10) as i64))
             .map_err(|e| e.to_string())?;
         Ok(connection)
     }
-    fn open(path: &Path, durability: Durability, docs: bool, cache_mib: u32) -> Result<Self> {
+    fn open(path: &Path, durability: Durability, docs: bool, cache_size: u64) -> Result<Self> {
         std::fs::create_dir_all(path).map_err(|e| e.to_string())?;
         let path = path.join("sqlite.db");
         let keeper = Connection::open(&path).map_err(|e| e.to_string())?;
@@ -85,7 +86,7 @@ impl SqliteBackend {
             path,
             durability,
             docs,
-            cache_mib,
+            cache_size,
             keeper: Mutex::new(keeper),
         })
     }
@@ -110,7 +111,7 @@ impl Backend for SqliteBackend {
                 "document_storage".into(),
                 json!(if self.docs { "JSONB" } else { "none" }),
             ),
-            ("cache_mib_per_session".into(), json!(self.cache_mib)),
+            ("cache_size_per_session".into(), json!(self.cache_size)),
         ]);
         metadata
     }
@@ -413,24 +414,27 @@ impl DocumentSession for SqliteSession {
 }
 
 fn main() -> Result<()> {
-    let cli = Cli::parse();
-    run(cli.common, json!({"cache_mib": cli.cache_mib}), move |args, path| {
-        if args.data_model == DataModel::Graph {
-            return Err("SQLite graph data_model is unsupported".into());
-        }
-        if args.data_model == DataModel::Documents && args.field != "/score" {
-            return Err("SQLite document updates support only /score".into());
-        }
-        Ok(Box::new_in(
-            SqliteBackend::open(
-                path,
-                args.durability,
-                args.data_model == DataModel::Documents,
-                cli.cache_mib,
-            )?,
-            System,
-        ))
-    })
+    let cli: Cli = crudeval::parse_cli();
+    let settings = [("Cache size", cli.cache_size.to_string())];
+    run(
+        cli.common,
+        json!({"cache_size": cli.cache_size}),
+        &settings,
+        move |args, path| {
+            if args.data_model == DataModel::Graph {
+                return Err("SQLite graph data_model is unsupported".into());
+            }
+            Ok(Box::new_in(
+                SqliteBackend::open(
+                    path,
+                    args.durability,
+                    args.data_model == DataModel::Documents,
+                    cli.cache_size.0,
+                )?,
+                System,
+            ))
+        },
+    )
 }
 
 #[cfg(test)]

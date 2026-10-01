@@ -27,15 +27,16 @@ use crudeval::{
         directory_bytes, Backend, BackendCapabilities, BackendSession, BatchMode, DataModel, Durability, Key,
         KeysOutput, RecordInput, RecordOutput, Result, TransactionSession,
     },
-    run, CommonArgs,
+    run, Bytes, CommonArgs,
 };
 
 #[derive(Parser)]
 struct Cli {
     #[command(flatten)]
     common: CommonArgs,
-    #[arg(long, default_value = "128MiB", value_parser = crudeval::workload::parse_count)]
-    write_buffer_size: u64,
+    /// Memtable size before a flush, like 128MB.
+    #[arg(long, default_value = "128MB", value_parser = crudeval::workload::parse_size)]
+    write_buffer_size: Bytes,
 }
 struct RocksDbBackend {
     db: DB,
@@ -280,10 +281,11 @@ impl BackendSession for RocksDbSession<'_> {
     }
 }
 fn main() -> Result<()> {
-    let cli = Cli::parse();
+    let cli: Cli = crudeval::parse_cli();
     run(
         cli.common,
         json!({"write_buffer_size": cli.write_buffer_size}),
+        &[("Write buffer size", cli.write_buffer_size.to_string())],
         move |args, path| {
             if args.data_model != DataModel::KeyValue {
                 return Err("RocksDB supports only kv data_model".into());
@@ -292,7 +294,7 @@ fn main() -> Result<()> {
                 RocksDbBackend::open(
                     path,
                     args.durability,
-                    usize::try_from(cli.write_buffer_size).map_err(|_| "write buffer size exceeds platform limit")?,
+                    usize::try_from(cli.write_buffer_size.0).map_err(|_| "write buffer size exceeds platform limit")?,
                 )?,
                 System,
             ))

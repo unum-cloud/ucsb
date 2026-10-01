@@ -10,7 +10,7 @@
 //! ```
 #![feature(allocator_ext, btreemap_alloc)]
 
-use std::{alloc::System, collections::BTreeMap, path::Path};
+use std::{alloc::System, collections::BTreeMap, num::NonZeroU16, path::Path};
 
 use clap::{Parser, ValueEnum};
 use redis::{Client, Connection};
@@ -23,7 +23,7 @@ use crudeval::{
         TransactionSession,
     },
     docker::ContainerHandle,
-    run, CommonArgs,
+    run, BetweenWorkloads, CommonArgs,
 };
 
 #[derive(Clone, Copy, Debug, ValueEnum)]
@@ -41,8 +41,8 @@ struct Cli {
     #[arg(long, value_enum, default_value = "redis")]
     server: Server,
     /// Dragonfly I/O threads; defaults to the server's automatic selection.
-    #[arg(long,value_parser=clap::value_parser!(u16).range(1..))]
-    dragonfly_threads: Option<u16>,
+    #[arg(long, value_parser = |text: &str| crudeval::parse_count(text).and_then(|count| u16::try_from(count).ok().and_then(NonZeroU16::new)).ok_or("expected a positive count"))]
+    dragonfly_threads: Option<NonZeroU16>,
 }
 struct RedisBackend {
     container: ContainerHandle,
@@ -50,7 +50,7 @@ struct RedisBackend {
     server: Server,
     durability: Durability,
     image: &'static str,
-    dragonfly_threads: Option<u16>,
+    dragonfly_threads: Option<NonZeroU16>,
     data_model: DataModel,
 }
 struct RedisSession {
@@ -65,13 +65,13 @@ fn open(
     args: &CommonArgs,
     path: &Path,
     server: Server,
-    dragonfly_threads: Option<u16>,
+    dragonfly_threads: Option<NonZeroU16>,
 ) -> Result<Box<dyn Backend, System>> {
     if dragonfly_threads.is_some() && !matches!(server, Server::Dragonfly) {
         return Err("--dragonfly-threads requires --server dragonfly".into());
     }
-    if args.reopen || args.drop_caches {
-        return Err("Docker backends do not support --reopen or --drop-caches".into());
+    if args.between_workloads != BetweenWorkloads::Keep {
+        return Err("Docker backends support only --between-workloads keep".into());
     }
 
     if args.data_model == DataModel::Graph {
@@ -439,10 +439,19 @@ impl DocumentSession for RedisSession {
     }
 }
 fn main() {
-    let cli = Cli::parse();
+    let cli: Cli = crudeval::parse_cli();
+    let settings = [
+        ("Server", crudeval::spell_value(&cli.server)),
+        (
+            "Dragonfly threads",
+            cli.dragonfly_threads
+                .map_or_else(|| "auto".into(), |threads| threads.to_string()),
+        ),
+    ];
     if let Err(error) = run(
         cli.common,
         json!({"server":format!("{:?}",cli.server),"dragonfly_threads":cli.dragonfly_threads}),
+        &settings,
         |args, path| open(args, path, cli.server, cli.dragonfly_threads),
     ) {
         eprintln!("{error}");
@@ -471,7 +480,7 @@ fn native_protocol_contract() {
                 &args,
                 path.path(),
                 server,
-                matches!(server, Server::Dragonfly).then_some(4),
+                matches!(server, Server::Dragonfly).then_some(NonZeroU16::new(4).unwrap()),
             )
             .unwrap();
             match data_model {
